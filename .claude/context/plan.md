@@ -49,34 +49,90 @@ probability is published, every economy claim is machine-verified, and the only 
 FOMO. If a future idea needs one of these, the idea is wrong for Triple7.
 
 **Current priority directives (set 2026-07; re-order here as the game evolves):**
-1. ⭐ **Phase 8 — staged Match-3 animations.** HIGH priority, first among all open work. v1
-   resolves cascades instantly (§12.3); replacing that with staged swap→clear→fall→refill
-   animation is the single biggest feel win available.
-2. **Phase 31 — generated art pipeline** (OpenRouter, Nano Banana 2): real sprite art for fruits,
-   slot symbols, coins and destination backdrops, generated at dev time, shipped as static files.
-3. **Phase 32 — holiday destinations**: theming as an unlockable progression layer.
+1. **Phase 8 — remaining Match-3 Juice polish.** The top priority from the previous pass
+   (staged swap→clear→fall→refill cascade animation, replacing v1's instant resolve) **shipped**
+   — the cascade recorder plays pop→fall per chain link with per-step floaters, verified against
+   `resolveMove()` staying byte-identical whether or not a view is watching (§12.3). Remaining:
+   screen-shake/particle bursts on Burst/Rainbow (Phase 20 territory), a "fresh rain" reshuffle
+   animation (still instant), hint-nudge polish.
+2. **Phase 21 Depth Pass, Phase 25 Performance, Phase 26 Testing & QA, Phase 30 Community** are
+   the biggest remaining gaps with zero or near-zero real progress — good next targets.
+3. **Phase 32 — holiday destinations**: MVP shipped (3 of 7 destinations, palette-only, Passport
+   UI); the other four destinations, generated backdrop art, game-surface reskins, ambience
+   layering and souvenirs/stamps remain.
+4. **Phase 31 — generated art pipeline**: the core sprite set is comprehensive (fruits, slot
+   symbols, coins, all 28 charms, UI icons, logo/favicon) with a working white-card post-process
+   and graceful canvas fallback; a per-asset provenance/licensing manifest (31.9) and destination
+   backdrop art remain.
 
 ### Status Ledger — repo vs vision
 
-Legend: ✅ core shipped (audit, then finish the phase) · 🟡 partially shipped · 🔭 pure vision ·
-⭐ current top priority.
+Legend: ✅ core shipped (audit, then finish the phase) · 🟡 partially shipped · 🔭 pure vision.
 Update this table as work lands on `main`; it is the honest boundary between game and dream.
+(Updated 2026-07-25 — an autonomous pass audited and advanced several 🟡/🔭 phases; see the
+git log for the exact commits. Every status below reflects code actually on `main`, not intent.)
 
 | Phase | Status | Phase | Status | Phase | Status |
 |---|---|---|---|---|---|
 | 1 Foundation | ✅ | 11 Dozer Physics | ✅ | 21 Depth Pass | 🔭 |
 | 2 Core Engine | 🟡 | 12 Dozer Gameplay | 🟡 | 22 Onboarding | 🔭 |
-| 3 Visual Language | 🟡 | 13 Hub & Interlinking | ✅ | 23 Accessibility | 🔭 |
-| 4 RNG & Fairness | 🟡 | 14 Grove & Offline | ✅ | 24 Balancing Tools | 🔭 |
+| 3 Visual Language | 🟡 | 13 Hub & Interlinking | ✅ | 23 Accessibility | 🟡 |
+| 4 RNG & Fairness | ✅ | 14 Grove & Offline | ✅ | 24 Balancing Tools | 🟡 |
 | 5 Economy Core | ✅ | 15 Charms | ✅ | 25 Performance | 🔭 |
-| 6 Save System | ✅ | 16 Shop & Upgrades | ✅ | 26 Testing & QA | 🔭 |
-| 7 Match-3 Core | ✅ | 17 Achievements | ✅ | 27 Deploy & Docs | 🔭 |
-| 8 Match-3 Juice | 🟡 ⭐ | 18 Automation | 🟡 | 28 Endgame | 🔭 |
-| 9 Slot Core | ✅ | 19 Audio | 🟡 | 29 Live-ish Content | 🔭 |
+| 6 Save System | ✅ | 16 Shop & Upgrades | ✅ | 26 Testing & QA | 🟡 |
+| 7 Match-3 Core | ✅ | 17 Achievements | ✅ | 27 Deploy & Docs | 🟡 |
+| 8 Match-3 Juice | 🟡 | 18 Automation | 🟡 | 28 Endgame | 🔭 |
+| 9 Slot Core | ✅ | 19 Audio | 🟡 | 29 Live-ish Content | 🟡 |
 | 10 Slot Presentation | ✅ | 20 Particles & Feel | 🟡 | 30 Community & v2 | 🔭 |
-| 31 Generated Art | 🔭 | 32 Destinations | 🔭 |  |  |
+| 31 Generated Art | 🟡 | 32 Destinations | 🟡 |  |  |
 
-All 3,200 tasks are unchecked; check them off as work lands on `main`.
+**What changed this pass, phase by phase** (audit trail — trust this over the table alone):
+- **4 RNG & Fairness → ✅**: match3/slots/dozer/charms now run on independent, save-persisted
+  mulberry32 streams (Feature 4.2/4.5) instead of one shared instance; `docs/fairness.md` (Feature
+  4.7) publishes every odds table and the decide-before-present rule. Both of Phase 4's named
+  Deliverables are now true. Not done: `?seed=` debug reproduction (4.5's other half), the
+  boot-time distribution self-check (4.10), the deterministic replay harness (4.9).
+- **12 Dozer Gameplay**: table persistence landed (Feature 12.9 exactly, including deleting the
+  README's old restock caveat) — a reload no longer forfeits an in-flight table. Rest of the
+  phase unaudited this pass.
+- **18 Automation**: reserve thresholds landed (Feature 18.5) — Auto-Spinner/Auto-Dropper respect
+  player-set floors. No automation panel UI (18.6) yet; autos are still shop-upgrade rows.
+- **20 Particles & Feel**: HUD currency count-up landed (Feature 20.5). No pooled particle engine,
+  splashes, or coin-glint rain yet — the bulk of the phase.
+- **23 Accessibility (🔭→🟡)**: real ARIA tabs pattern (roles, aria-selected, aria-controls),
+  keyboard 1-6 + arrow-key tab navigation, a visible `:focus-visible` ring, and a polite aria-live
+  toast region. Not done: in-game keyboard play for match-3/slots/dozer (23.1/23.2), a full
+  contrast/CVD audit (23.4/23.5), screen-reader pass on the DOM UI beyond tabs (23.3).
+- **24 Balancing Tools (🔭→🟡)**: `tools/simulate.js` now asserts an inflation ceiling (§11.8: fully
+  maxed slot upgrades currently land at 357% RTP against a 400% ceiling) and prints jackpot
+  drought odds (§10.3). Not done: the CLI workbench, upgrade-sweep simulator, progression bot,
+  geometry tuner, `docs/tuning.md`.
+- **26 Testing & QA (🔭→🟡)**: added regression tests for RNG stream isolation + persistence, dozer
+  table round-trip, the cascade recorder's non-interference with `resolveMove()`, reserve
+  sanitization, and the daily bonus/destinations logic (30 tests total, up from 20). Not done:
+  Playwright journeys, cross-browser/mobile passes, board fuzzing at the 10k scale, save migration
+  fixtures.
+- **27 Deploy & Docs (🔭→🟡)**: `CONTRIBUTING.md`, `NOTICE`, `.editorconfig`/`.gitattributes`, and a
+  README pass (fixed the now-false "zero assets" claim, linked the fairness doc). Not done:
+  versioning/changelog/tagged release, media assets, SEO meta tags, a Lighthouse pass.
+- **29 Live-ish Content (🔭→🟡)**: the date-seeded determinism core (Feature 29.1) plus one honest
+  reward on top — "Daily Squeeze," a UTC-day-seeded 77-210 J gift, once per day, zero penalty for
+  missing a day. Not done: season palettes, weekly charm rotation, golden hours, the event
+  calendar UI.
+- **31 Generated Art (🔭→🟡, stale entry corrected)**: this was marked 🔭 but the sprite pipeline
+  had already shipped in an earlier pass — corrected here, not new work. The full match-3/slot/
+  coin/charm/UI/logo sprite set exists with a working canvas fallback (Feature 31.3-31.8
+  substantially done). Not done: a per-asset provenance/licensing manifest (31.9), destination
+  backdrop art, formal regeneration QA (31.10).
+- **32 Destinations (🔭→🟡)**: MVP shipped — data model, 3 of 7 destinations (Sunny Cove/Turquoise
+  Lagoon/Citrus Sunset), one-time Stargem-fare unlocking, a Passport UI, sky/sun palette retheming
+  via newly-tokenized CSS custom properties. Deliberately deferred: the other four destinations,
+  economy-adjacent "flavors" (32.7 — skipped by design this pass to avoid touching RTP), game-
+  surface reskins, souvenirs/stamps, season/theme-pack composition.
+
+All 3,200 tasks are unchecked; check them off as work lands on `main`. (The audit above is the
+honest per-phase summary; treating any phase above as 100% done from its ✅/🟡 alone would violate
+this document's own rule — verify against the code.)
 
 ## 0. How to Use This Document (Agile Handoff Protocol)
 
