@@ -9,12 +9,56 @@ dew drops, glass-candy fruit. Pure static site (index.html + classic JS files, n
 GitHub Actions) hosted on GitHub Pages; Node.js is used only for dev tools (`npm start` static
 server, `npm run simulate` Monte-Carlo economy verifier, `npm test` logic tests).
 
-This document is the single source of truth for scope, math, and execution order. It contains nine
-preamble sections (research, art, design, math, architecture) followed by 30 numbered phases; each
-phase has exactly 10 features and each feature exactly 10 todos (3,000 todos total).
+This document is the single source of truth for scope, math, and execution order — written as an
+**agile handoff document**: it is designed to be executed by any competent implementer, human or AI,
+without access to the original authors. It contains a handoff protocol (§0), reference sections
+(research, art, design, math, architecture §1–§9, algorithms §10, industry pitfalls §11, judgment
+notes §12), followed by **30 phases (epics) × 10 features (stories) × 10 tasks = 3,000 tasks**.
 
 **Scope note: Phases 1–14 describe the shipped v1 scope. Phases 15–30 are the growth roadmap.**
-All todos are unchecked; check them off as work lands on `main`.
+All tasks are unchecked; check them off as work lands on `main`.
+
+## 0. How to Use This Document (Agile Handoff Protocol)
+
+Read this section first; it defines the vocabulary and the rules everything below assumes.
+
+**Agile mapping:**
+
+| Plan element | Agile term | Description lives in | Count |
+|---|---|---|---|
+| `## Phase N` | Epic | `Goal:` (intent) + `Deliverable:` (definition of done) | 30 |
+| `### Feature N.M` | Story | `Story:` line under the heading (intent + acceptance) | 300 |
+| `- [ ]` line | Task | the line itself — one concrete, commit-sized unit | 3,000 |
+
+**Execution order.** Phases are dependency-ordered; execute top to bottom. Within a phase, read all
+10 stories before starting — they are ordered but lightly coupled. Within a story, tasks are ordered.
+Phases 1–14 describe code that already exists in this repository (v1): for those, treat each task as
+a verification checklist — confirm the behavior exists in the named file, implement anything missing,
+then check the box. Phases 15–30 are new work.
+
+**Definition of done.**
+- *Task*: implemented; `node --check` clean on touched files; covered by a test when the task names one.
+- *Story*: all 10 tasks checked AND the `Story:` sentence is observably true in the running game.
+- *Epic*: `Deliverable:` line is true, `npm test` is green, and `npm run simulate` still ends in
+  “✅ ALL PUBLISHED ECONOMY CLAIMS VERIFIED”.
+
+**Hard invariants — no change in any phase may violate these:**
+1. Every economy stage stays EV-positive: slot EV ≥ 1.0 S/spin, dozer E[G/drop] ≥ 1.0 G, match-3 juice/move > 0.
+2. Outcomes are decided *before* presentation begins; animation may never alter a result (§11.2).
+3. No backward currency conversion — G→S and S→J must remain impossible.
+4. No build step: `index.html` + classic `<script>` files must run from `file://` and GitHub Pages as-is.
+5. No runtime network calls, no telemetry; saves live in the player's browser only.
+6. Save compatibility: an older exported code must always import (write a migration, never break parsing).
+7. Every tuned number lives in `js/data.js`; logic reads constants and never hardcodes them.
+8. Free forever: no ads, no purchases, no dark patterns (no streak pressure, no FOMO-exclusive power).
+
+**When ambiguous:** prefer the existing pattern in the codebase; prefer the constant over the
+literal; prefer the simulator's measurement over this document's prose — rerun `npm run simulate`
+and update the prose to match reality. §10 gives you the algorithms, §11 the traps others fell
+into, §12 the judgment calls we already thought through.
+
+**Verification commands:** `npm test` (logic units) · `npm run simulate` (economy proof) ·
+`npm start` (play at localhost:7777) · `node --check js/*.js` (syntax).
 
 ## 1. Research Summary
 
@@ -398,6 +442,355 @@ no currency exceeding 10¹² in a week), so every balance change is verified bef
 
 ---
 
+## 10. Mathematical Algorithm Compendium
+
+Every algorithm the implementer needs, with the exact formulas and reference snippets. File paths
+point at the shipped v1 implementation; keep new code consistent with these.
+
+### 10.1 Seeded PRNG — mulberry32 (`js/rng.js`)
+
+32-bit state, uniform floats in [0,1), period ≈ 2³², passes gjrand smallcrush — ample for a game.
+Seed once per session from `crypto.getRandomValues`; never reseed per spin (see §11.1).
+
+```js
+function mulberry32(seed) {
+  var a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+```
+
+Reproducibility rule: all randomness flows through one `Rng` instance so a fixed seed replays a
+session; the Node simulator relies on this (seeds 777001–777004).
+
+### 10.2 Weighted sampling (`Rng.prototype.weighted`)
+
+Linear scan over cumulative weights — O(n), n ≤ 64 everywhere in Triple7:
+
+```js
+var roll = rng.float() * totalWeight;
+for (var i = 0; i < items.length; i++) {
+  roll -= items[i].w;
+  if (roll < 0) return items[i];
+}
+```
+
+P(item i) = wᵢ / Σw. If a future table grows past ~10³ entries, switch to the alias method (O(1)
+per draw, O(n) build) — not needed at current scale.
+
+### 10.3 Slot mathematics (`js/slots.js`)
+
+**Exact RTP by enumeration.** Three independent reels, symbol s on one reel with probability
+p_s = w_s / 64. Enumerate all 6³ symbol triples (equivalently 64³ stops):
+
+RTP = Σ over triples (a,b,c) of  p_a · p_b · p_c · pay(a,b,c)
+
+```js
+for (a) for (b) for (c) {
+  var p = (w[a]/64) * (w[b]/64) * (w[c]/64);
+  ev += p * evaluate([a, b, c]).sun;      // evaluate(): triple → pair-7 → pair-cherry → 0
+}
+```
+
+Useful closed forms (base weights — cherry 22, lemon 17, melon 10, berry 8, star 5, seven 2):
+- P(three of s) = p_s³ — e.g. jackpot (2/64)³ = 1/32,768.
+- P(exactly two of s) = 3 · p_s² · (1 − p_s)  (binomial, order matters across 3 reels).
+- Base EV = **1.18401 S/spin**, hit rate = **30.11 %** (verify: `npm run simulate`).
+
+**Volatility.** Var = Σ p·pay² − EV² ≈ 28.8 → σ ≈ 5.4 S per spin. The jackpot term dominates
+variance; that is intentional (rare spikes, steady baseline).
+
+**Drought odds.** P(no jackpot in n spins) = (1 − 1/32768)ⁿ; e.g. n = 10,000 → ≈ 73.7 %.
+Surface such numbers honestly (Phase 24.1 prints them) — players trust published odds.
+
+### 10.4 Match-3 algorithms (`js/match3.js`)
+
+**Run detection** — one pass per row and per column, run-length counting of equal fruit
+(rainbows excluded from auto-matching); merge overlapping runs into one clear-set:
+
+```js
+// per line: extend run while fruit equal; on break, if runLength >= 3 mark cells
+```
+
+**Deadlock check** — simulate every candidate swap (right + down neighbor per cell, ~112 for 8×8),
+test `findMatches() > 0`, undo. Any hit = a legal move exists; zero hits → reshuffle (shuffle the
+same multiset of tiles, reject boards with pre-matches or no moves, ≤ 60 attempts, else regenerate).
+
+**Spawn bias** — refill draws uniform fruit but re-rolls up to 8× while the spawn would complete a
+vertical/horizontal run with already-placed neighbors: keeps surprise cascades special, not constant.
+
+**Payout formula** — cascade chain k (1-indexed), Combo Kettle level ℓ:
+
+juice(move) = Σ_k tiles_k · (1 + 0.5 · (1 + 0.1ℓ) · (k − 1)) + 3·(bursts made) + 7·(rainbows made)
+
+Measured baseline: ≈ 6.6 J per random valid move (simulator section 2); human play is strictly better.
+
+### 10.5 Dozer physics & economy (`js/dozer.js`)
+
+**Conservation economy.** At steady state (table population constant), E[coins leaving] per coin
+dropped = 1. With side-gutter loss fraction s and per-drop special chance c of average value E[V]:
+
+E[G per drop] = (1 − s) · (1 + c · E[V])   →  measured s ≈ 0.06–0.08, E[V] ≈ 4.7 G → ≈ 1.25 G.
+
+**Solver** — circle–circle, equal mass, per 60 Hz step, 3 iterations:
+
+```js
+var d = Math.sqrt(dx*dx + dz*dz), nx = dx/d, nz = dz/d;
+var pen = (rA + rB - d) * 0.5;              // 50% positional correction each
+a.x -= nx*pen*0.5; a.z -= nz*pen*0.5; b.x += nx*pen*0.5; b.z += nz*pen*0.5;
+var vn = (b.vx-a.vx)*nx + (b.vz-a.vz)*nz;   // impulse only when approaching
+if (vn < 0) { var j = -(1 + RESTITUTION) * vn * 0.5; a.vx -= nx*j; ... }
+```
+
+**Pusher** — kinematic wall: face z(t) = MIN + (TRAVEL/2)·(1 − cos(2πt/PERIOD)); any coin
+overlapping the face is displaced to face+r with vz ≥ PUSH_SPEED. Coins never push the wall back.
+
+**Damping as friction** — per-step factor d applied at 60 Hz ⇒ per-second decay d⁶⁰
+(0.93⁶⁰ ≈ 0.013: coins stop in well under a second unless pushed — the arcade "no bounce" feel).
+
+**Geometry rule of thumb** — the table must saturate: START_COINS near the loose-packing capacity of
+the rest area (≈ area / (2r)²), pusher travel ≥ ~25 % of table depth. Undersaturated tables absorb
+drops instead of paying out (this bug was found and fixed by simulation — keep `npm run simulate`
+as the tuning oracle).
+
+### 10.6 Idle economy curves (`js/state.js`, `js/data.js`)
+
+- Building cost: cost(n) = base · growth^n, growth 1.15 (grove) — the Cookie Clicker constant.
+- Bulk-buy k levels from n: base · growthⁿ · (growth^k − 1)/(growth − 1)  (geometric series).
+- Payback time of a building: cost / (rate · multiplier) seconds — Phase 24.3's bot buys by this.
+- Offline: gain = groveRate · min(elapsed, cap) · rate, cap = 8 h + 4 h/battery, rate = 0.6 + 0.1/battery.
+- Prestige: seeds = ⌊√(lifetimeG / 77)⌋. Square root ⇒ doubling seeds needs 4× lifetime G — laps
+  lengthen gently. Each seed = +10 % all earnings (multiplicative with everything else).
+
+### 10.7 Multiplier pipeline (`js/state.js`)
+
+Additive within a source, multiplicative across sources — the only stacking rule in the game:
+
+mult(cur) = (1 + Σ charm bonuses for cur) · (1 + upgrade bonus for cur) ·
+            (1 + Σ celestial charm bonuses) · (1 + 0.01·achievements) · (1 + 0.10·seeds)
+
+Apply exactly once, at credit time (`Game.gain`). Anything pre-multiplied (e.g. `groveRate()`)
+must be credited with `gain(cur, amt, /*raw*/ true)` — see §12 "double-multiplication trap".
+
+### 10.8 Save integrity (`js/state.js`, `js/util.js`)
+
+Code grammar: `"T7" <version> "." <fnv1a-8-hex> "." <base64(JSON)>`. FNV-1a 32-bit:
+
+```js
+var h = 0x811c9dc5;
+for (var i = 0; i < str.length; i++) {
+  h ^= str.charCodeAt(i);
+  h = (h + ((h<<1) + (h<<4) + (h<<7) + (h<<8) + (h<<24))) >>> 0;
+}
+```
+
+Import pipeline: regex-parse → version gate → base64-decode → checksum compare → JSON.parse →
+deep-merge over `defaultState()` (migration) → `sanitize()` (clamp NaN/negatives). Every step
+throws a player-readable message; a failed import must never touch the live state.
+
+### 10.9 Date-seeded live content (Phase 29)
+
+seed(day, system) = fnv1a(salt_system + "2026-07-25") — one independent stream per system
+(palette/rotation/wheel), UTC day boundaries, plus a claim ledger `{feature: lastClaimDay}` in the
+save so clock rewinds replay the same outcome instead of minting new rewards.
+
+### 10.10 Statistical verification (tools/)
+
+- Monte-Carlo standard error of a mean: SE = σ/√n. Slot σ ≈ 5.4 ⇒ 2 M spins give SE ≈ 0.0038 S;
+  demand |MC − exact| ≤ 3·SE before trusting a change (the simulator's Δ line).
+- Frequency check: χ² = Σ (obs − exp)²/exp against symbol expectations, df = k−1 (Phase 26.4).
+- Dozer EV needs warmup discard (first ~15 % of drops) — the table must reach steady state before
+  counting, or you understate RTP.
+
+## 11. Casino-Industry Pitfalls & Adapted Solutions
+
+Each entry: the pitfall as the gambling industry met it, the industry's answer, and Triple7's
+adaptation with a reference snippet. These are binding design rules, not trivia.
+
+### 11.1 Predictable or re-seeded RNG
+**Pitfall:** early slot machines used weak PRNGs seeded from the clock; insiders (the Ron Harris
+case) and players with laptops predicted outcomes. **Industry:** certified hardware RNGs, free
+running, never reseeded per play. **Triple7:** seed once per session from `crypto.getRandomValues`,
+one continuously-running mulberry32 stream; never construct a new Rng around a "lucky" moment.
+```js
+// js/rng.js — seed once, at boot:
+var buf = new Uint32Array(1); crypto.getRandomValues(buf); return buf[0];
+```
+
+### 11.2 Deciding the outcome after presentation starts
+**Pitfall:** machines that "peek" at a result mid-animation and adjust it ("secondary decisions")
+are illegal in regulated markets (Nevada Gaming Regulation 14 bans them). **Industry:** outcome is
+fixed the instant the handle is pulled; everything after is theater. **Triple7:** `resolveSpin()`
+runs before any reel moves; the animation is then *aimed at* the decided symbols. Same for the
+dozer (physics decides; renderer only draws) and match-3 (`resolveMove()` is authoritative).
+```js
+// js/slots.js — View.spin(): decide first, then stage the show
+var res = resolveSpin(this.rng, g.upLvl('luckysevens'));  // ← outcome fixed HERE
+this.result = res; /* ...then compute reel stop distances to land res.symbols */
+```
+
+### 11.3 Displayed reels that lie about the odds
+**Pitfall:** weighted virtual reels let a jackpot look "one stop away" while its true probability is
+tiny; courts and regulators forced disclosure norms (video poker must map displayed cards 1:1 to
+odds). **Industry:** published par sheets, uniform-mapping rules. **Triple7:** the visual strip *is*
+the 64-stop weighted strip (what scrolls past = true distribution), and the in-game Paytable dialog
+publishes exact odds ("1 in 32768") computed live from `enumerateRTP()`.
+```js
+// js/slots.js — visual strip built from the real weights, then shuffled:
+S.REEL.forEach(function (s) { for (var i = 0; i < s.w; i++) strip.push(s.id); });
+```
+
+### 11.4 Engineered near-misses
+**Pitfall:** clustering jackpot symbols adjacent to the payline to fake "almost won" inflates play;
+regulators treat outcome-driven near-miss *induction* as deceptive. **Industry:** near-misses may
+only arise from honest reel layout; anticipation effects must not change results. **Triple7:**
+anticipation (reel 3 spins 2.5× longer when two sevens show) reads the already-decided outcome and
+only stretches time; we never bias stop positions toward near-misses.
+```js
+// js/slots.js — presentation reads the decided symbols, never edits them:
+this.anticipating = res.symbols[0] === 'seven' && res.symbols[1] === 'seven';
+if (r === 2 && this.anticipating) stopAt *= ANTICIPATION_MULT;
+```
+
+### 11.5 Gambler's ruin
+**Pitfall:** even at fair odds a finite bankroll busts against variance; casinos rely on it.
+**Industry answer (inverted for us):** table minimums sized to bankroll; for social games, pity
+timers and login grants. **Triple7:** ruin is structurally impossible — Match-3 is a free,
+always-available, EV-positive faucet and the Grove drips passively, so the player's "bankroll" has
+an income floor at every tier. Rule for all new content: never make a conversion the only faucet
+for its input currency.
+
+### 11.6 Credit-meter tampering
+**Pitfall:** slot EPROM fraud (rigged payout chips) pushed regulators to checksummed, signed
+firmware. **Triple7 adaptation:** save codes carry an FNV-1a checksum and imports are sanitized
+(NaN/negatives clamped, unknown versions rejected). Be honest about scope: this is *integrity*
+against corruption, not *security* against cheaters — in a FOSS idle game, cheaters only cheat
+themselves. Never add DRM-ish measures; do keep the parser strict so corrupted codes fail loudly.
+```js
+// js/state.js — every import step throws a readable error; live state untouched on failure
+if (U.fnv1a(json) !== m[2]) throw new Error('Checksum mismatch — code is corrupted.');
+```
+
+### 11.7 Hit-frequency starvation and losses-disguised-as-wins
+**Pitfall:** long dry streaks kill casual play, so social slots pad with "wins" smaller than the
+stake (LDWs) — regulators and researchers flag LDWs as deceptive. **Industry:** tuned hit
+frequency (25–35 %). **Triple7:** 30.1 % hit rate via the pair-cherry line, and every listed "win"
+pays ≥ the 1 S stake equivalent (smallest win = 2 S) — no LDWs, ever. Keep that property when
+adding paylines (Phase 28.5 must re-prove it).
+
+### 11.8 Promotional inflation blowing the economy
+**Pitfall:** casinos issuing free-play beyond the math budget wreck their hold; social games that
+stack multipliers without ceilings hyperinflate and trivialize content. **Industry:** promo EV is
+accounted like real EV. **Triple7:** every multiplier source is bounded (upgrade `max` levels,
+charm level 7, achievement count, seed softcap in Phase 28.2), and Phase 24.2's upgrade-sweep must
+assert a ceiling:
+```js
+// tools/ (Phase 24.2) — inflation guard
+if (enumerateRTP(maxLucky).ev * maxSunMult > 4.0) fail('slot RTP ceiling breached');
+```
+
+### 11.9 Autoplay without limits
+**Pitfall:** unbounded autoplay drew regulation (UKGC banned slot autoplay outright in 2021).
+**Triple7:** automation is the *idle genre's* joy, not a spending accelerant — but keep the shape:
+autos act on a bounded cadence (floor `AUTO.MIN_S = 2 s`), only when affordable, and never spend
+faster than the player could by tapping.
+```js
+// js/state.js — cadence floor
+return Math.max(D.AUTO.MIN_S, D.AUTO.BASE_S - (lvl - 1) * D.AUTO.STEP_S);
+```
+
+### 11.10 Clock-based bonus exploits
+**Pitfall:** daily bonuses validated against device clocks get farmed by clock rewinds; casinos use
+server time — we have no server. **Triple7 (Phase 29):** rewards derive from a deterministic UTC
+day seed plus a claim ledger stored in the save; rewinding the clock replays the *same* decided
+outcome and the ledger refuses a second claim. No punishment, no exploit.
+```js
+var seed = fnv1a('wheel|' + utcDay);          // outcome fixed per day
+if (save.claims.wheel === utcDay) return;      // ledger blocks double-dip
+```
+
+### 11.11 Theoretical vs actual hold drift
+**Pitfall:** casino floors audit actual hold against par-sheet theory to catch broken math or fraud.
+**Triple7:** the same discipline, both directions — `npm run simulate` is the theoretical audit
+(exact vs Monte-Carlo within 3σ), and Phase 28.7's "personal RTP" stat shows each player their
+measured return vs the published number. If they diverge beyond variance, the code is wrong; fix
+the code, never the disclosure.
+
+### 11.12 Opaque odds
+**Pitfall:** hidden par sheets bred distrust and lawsuits. **Industry:** mandated RTP disclosure in
+many jurisdictions. **Triple7:** odds are a feature — the Paytable dialog, the fairness doc, the
+simulator, and this plan all publish the same numbers, generated from the same `data.js` constants.
+One source of truth; if a number changes, regenerate everywhere (Phase 24.6's doc-lint enforces it).
+
+## 12. Implementation Notes, Tracking & Hard Thinking
+
+The judgment calls, traps, and bookkeeping an implementer must carry across all 30 phases.
+
+### 12.1 Things to keep track of (bookkeeping table)
+
+| When you change… | You must re-run / update… |
+|---|---|
+| Any `data.js` SLOT weight or payout | `npm run simulate`, §9/§10 numbers, Paytable copy, test constant 1.18401 |
+| Dozer geometry (radius, travel, rails, stock) | dozer sim + steady-state check; §9b/§10.5 measured s |
+| Grove/upgrade costs or growth | progression pacing (Phase 24.3 bot), §6 timeline claims |
+| Save schema (any new persisted field) | `SAVE_VERSION` bump + migration + fixture in Phase 26.2 |
+| Multiplier sources | §10.7 formula, upgrade-sweep ceiling (§11.8) |
+| Number magnitudes beyond 1e30 | extend `SUFFIXES` in util.js (currently caps at Oc = 1e27·k) |
+| Any player-facing string | strings table once Phase 30.4 lands |
+
+Also track: localStorage can throw in private mode (all saves are try/caught — keep it that way);
+DPR is capped at 2 for canvas memory; `MAX_COINS = 90` includes specials; `playSec` accrues only
+while visible (by design — offline time is credited separately).
+
+### 12.2 Traps already found once (do not rediscover them)
+
+- **Double multiplication.** `groveRate()` returns a multiplier-adjusted rate; crediting it through
+  plain `gain()` would multiply twice. Always `gain(cur, rate*dt, /*raw*/ true)` for pre-multiplied
+  amounts (see `js/main.js`). Achievement gem rewards are also `raw` — intentional, keeps rewards flat.
+- **Undersaturated dozer table.** A too-deep table with small coins absorbs drops for minutes
+  (v1 shipped only after simulation exposed this). Any geometry change requires the steady-state
+  sim, not eyeballing.
+- **CSS class collisions.** A HUD pill classed `sun` once matched the sky's `.sun` and became a
+  260px circle blocking clicks. Scope decorative selectors (`#sky .sun`), and keep the Playwright
+  smoke test that caught it.
+- **Reel off-by-one.** The payline displays `strip[pos+1]`, so reels must stop at `targetIdx − 1`.
+  If reel rendering changes, re-derive this mapping and add the planned exact-stop test (Phase 10.2).
+- **Rainbow "self-swap".** `findAllMoves` represents a rainbow activation as a swap with its
+  horizontal neighbor; resolver and auto-mover must stay in sync with that convention.
+- **fmt vs fmtInt.** Multiplied credits are fractional; UI floaters use `fmtInt` to avoid "+3.0".
+
+### 12.3 Things to think hard about (open judgment calls)
+
+- **Float currency.** Currencies are IEEE doubles with epsilon-tolerant `canAfford` (1e-9) and
+  clamp-at-zero on spend. Casinos use integer cents. If any drift bug ever appears, migrate to
+  integer milli-units (×1000) behind the same API — decide *before* Phase 28's 1e12 magnitudes.
+- **Dozer table persistence.** v1 restocks the table to `START_COINS` on every load: a reload
+  *forfeits* in-flight dropped coins (mildly punishing, never exploitable — verify no geometry
+  change makes a fresh stock worth more than a played-in pile). Phase 12.9 persists the table;
+  when it lands, delete the restock note from the README and re-check the reload exploit both ways.
+- **Instant cascade resolve.** v1 resolves the whole cascade in one tick and animates only a pop —
+  the biggest feel gap. Phase 8's staged state machine replaces it; when it does, the *logic* result
+  must stay byte-identical to `resolveMove()` (it remains the oracle for sims and tests).
+- **One RNG stream.** v1 shares a single stream across all systems — simple, but means match-3 play
+  perturbs slot outcomes (only in sequence, never in fairness). Phase 4.2 splits named streams;
+  that changes replay semantics, so land it *before* the replay harness (Phase 24.8), not after.
+- **Pusher displacement.** The pusher teleports overlapping coins to `face + r` in one step. At
+  much higher pusher speeds or bigger travel this could tunnel coins through each other faster than
+  3 solver iterations can separate; if pusher params change, re-run the physics invariants
+  (Phase 26.5) and consider raising iterations.
+- **Emoji glyphs.** Charm glyphs are OS-rendered emoji — they differ per platform and can miss
+  (old Android). Phase 30.5's canvas-drawn glyph set is the durable fix; until then, treat glyphs
+  as decorative and keep names as the identity.
+- **The seven motif.** Every new number should audition 7 first: costs (77, 777), counts (7, 28=4×7),
+  rates (+7 %). It is the game's signature; breaking it reads as sloppiness.
+- **Cozy is a constraint.** Reject any feature that adds pressure: timers that punish absence,
+  streaks that break, limited-time power. The fantasy is a sunny shelf of glass fruit, not a casino
+  floor — the casino math serves the coziness, never the reverse.
+
 # The 30 Phases
 
 Phases 1–14 = shipped v1. Phases 15–30 = growth roadmap. 10 features per phase, 10 todos each.
@@ -408,6 +801,9 @@ Goal: a runnable empty shell — repo hygiene, npm scripts, UMD module skeletons
 Deliverable: `npm start` serves index.html loading all js/ files with zero console errors; `npm test` runs a trivial passing test.
 
 ### Feature 1.1 — Repository & License Hygiene
+
+Story: Keep the repo legally and structurally clean so anyone can fork and trust it. Done when LICENSE, README, .gitignore and .nojekyll are correct and linked.
+
 - [ ] Confirm LICENSE is Apache-2.0 verbatim text with correct year and "Triple7 contributors"
 - [ ] Add NOTICE file naming Triple7 and linking the repo
 - [ ] Write .gitignore: node_modules/, .DS_Store, *.log, coverage/, .claude/settings.local.json
@@ -420,6 +816,9 @@ Deliverable: `npm start` serves index.html loading all js/ files with zero conso
 - [ ] Tag initial commit v0.0.1 and describe tagging convention in README
 
 ### Feature 1.2 — package.json & npm Scripts
+
+Story: Give every dev task a one-word npm entry point with zero dependencies. Done when start/test/simulate run on a fresh clone with only Node installed.
+
 - [ ] Set name "triple7", version 0.1.0, license "Apache-2.0", private false, type omitted (CJS)
 - [ ] Add "start" script: node tools/server.js --port 7777
 - [ ] Add "simulate" script: node tools/simulate.js
@@ -432,6 +831,9 @@ Deliverable: `npm start` serves index.html loading all js/ files with zero conso
 - [ ] Add npm pkg fix / npm pack dry-run to confirm manifest validity
 
 ### Feature 1.3 — index.html Shell & Load Order
+
+Story: Make index.html the whole program: classic script tags in dependency order. Done when the page boots from file:// with no console errors.
+
 - [ ] Write index.html with lang, charset, viewport, theme-color #7ED6FF meta tags
 - [ ] Add <title>Triple7 — a cozy glass-fruit idle</title> and meta description
 - [ ] Create empty structural divs: #hud, #tabs, #game-match3, #game-slots, #game-dozer, #modals
@@ -444,6 +846,9 @@ Deliverable: `npm start` serves index.html loading all js/ files with zero conso
 - [ ] Run html validation (npx html-validate or manual W3C) and fix findings
 
 ### Feature 1.4 — UMD Module Pattern
+
+Story: One UMD wrapper pattern so the exact same files run in browser and Node. Done when every js/ module loads in both without modification.
+
 - [ ] Write the UMD wrapper template: module.exports in Node, root.T7.<name> in browser
 - [ ] Apply wrapper to all nine js/ files with correct require() dependency lists
 - [ ] Guard all DOM/canvas code behind typeof document !== "undefined"
@@ -456,6 +861,9 @@ Deliverable: `npm start` serves index.html loading all js/ files with zero conso
 - [ ] Add a dependency-order lint test parsing index.html script tags vs require lists
 
 ### Feature 1.5 — util.js Core Helpers
+
+Story: A tiny shared toolbox (clamp/lerp/clone/hash) every module can lean on. Done when util.js is dependency-free and unit-tested.
+
 - [ ] Implement clamp(v, lo, hi), lerp(a, b, t), invLerp, remap with tests
 - [ ] Implement el(id), div(cls, parent), text(node, s) DOM micro-helpers
 - [ ] Implement on(node, evt, fn) returning an off() disposer; track for teardown
@@ -468,6 +876,9 @@ Deliverable: `npm start` serves index.html loading all js/ files with zero conso
 - [ ] Unit-test every helper in test/util.test.js including edge cases (NaN, 0, negatives)
 
 ### Feature 1.6 — Number Formatting
+
+Story: Numbers players can read at a glance from 1 to 1e27. Done when fmt/fmtInt pass the suffix tests and are used by every UI surface.
+
 - [ ] Implement fmt(n): 0–999 plain, 1.00K–999K, 1.00M, B, T, then aa/ab letter pairs
 - [ ] Implement fmtInt(n) with locale-free thousands separators for stats panels
 - [ ] Implement fmtRate(n) appending /s with 1-decimal precision under 100
@@ -480,6 +891,9 @@ Deliverable: `npm start` serves index.html loading all js/ files with zero conso
 - [ ] Add fmtDelta(n) with explicit +/− sign for toast messages
 
 ### Feature 1.7 — Easing Library
+
+Story: A small easing library that gives all three games the same motion vocabulary. Done when easeOutCubic/Back/Elastic are shared, not duplicated.
+
 - [ ] Implement linear, quadIn/Out/InOut, cubicIn/Out/InOut in util.easing
 - [ ] Implement backOut(overshoot=1.7) for tile pops and modal entrances
 - [ ] Implement elasticOut for jackpot celebration scale-ins
@@ -492,6 +906,9 @@ Deliverable: `npm start` serves index.html loading all js/ files with zero conso
 - [ ] Test tween completion, cancellation, and 0 ms edge case headlessly
 
 ### Feature 1.8 — rng.js Seed Core
+
+Story: Seedable randomness as a first-class object. Done when Rng(seed) replays identical sequences and powers every draw in the game.
+
 - [ ] Implement mulberry32(seed) returning () => float in [0,1) exactly per reference
 - [ ] Implement rng.int(stream, n) uniform integer [0, n)
 - [ ] Implement seed derivation: crypto.getRandomValues(Uint32Array) with Math.random fallback
@@ -504,6 +921,9 @@ Deliverable: `npm start` serves index.html loading all js/ files with zero conso
 - [ ] Expose rng.debugSeed(seedString) to force deterministic sessions from console
 
 ### Feature 1.9 — tools/server.js Static Dev Server
+
+Story: A zero-dependency static server for local play. Done when npm start serves the game at :7777 with correct MIME types.
+
 - [ ] Write zero-dependency http server serving repo root with correct MIME types
 - [ ] Support --port flag (default 7777) and print clickable localhost URL
 - [ ] Add cache-control: no-store so dev edits always reload fresh
@@ -516,6 +936,9 @@ Deliverable: `npm start` serves index.html loading all js/ files with zero conso
 - [ ] Verify server works on node 18 and 22 (CI-less: document manual check)
 
 ### Feature 1.10 — GitHub Pages Readiness
+
+Story: The repo deploys to GitHub Pages by flipping one setting. Done when Pages from branch root serves the game unchanged, no Actions.
+
 - [ ] Verify all asset paths are relative (no leading /) so /Triple7/ subpath works
 - [ ] Add .nojekyll file to prevent Pages underscoredir mangling
 - [ ] Confirm no GitHub Actions directory exists; deploy = Pages from main branch
@@ -533,6 +956,9 @@ Goal: one rAF driver, fixed-step simulation, scene/tab switching, crisp canvases
 Deliverable: three blank themed canvases swap via tabs at 60fps with a debug overlay showing dt/fps.
 
 ### Feature 2.1 — requestAnimationFrame Driver
+
+Story: One requestAnimationFrame loop owns all time. Done when every update flows from a single driver with clamped dt.
+
 - [ ] Implement main.loop(ts) as the single rAF callback; no other rAF in codebase
 - [ ] Compute frame dt from timestamps; clamp dt to 100 ms max
 - [ ] Store lastTs; handle first-frame undefined gracefully
@@ -545,6 +971,9 @@ Deliverable: three blank themed canvases swap via tabs at 60fps with a debug ove
 - [ ] Boot loop only after DOMContentLoaded and save-load completes
 
 ### Feature 2.2 — Fixed-Step Accumulator
+
+Story: Physics steps at exactly 60 Hz regardless of display rate. Done when the accumulator survives slow frames without spiral-of-death.
+
 - [ ] Implement accumulator: acc += dt; while acc ≥ 1/60 run fixedUpdate(1/60)
 - [ ] Cap catch-up at 5 steps/frame; overflow routes to offline-style lump earnings
 - [ ] fixedUpdate drives dozer physics and economy/Grove production ticks
@@ -557,6 +986,9 @@ Deliverable: three blank themed canvases swap via tabs at 60fps with a debug ove
 - [ ] Document why match3/slots tween on frame dt not fixed steps (comment in main.js)
 
 ### Feature 2.3 — Time Source & Clock Discipline
+
+Story: A single clock source with defined behavior across pauses. Done when hidden time never leaks into frame dt.
+
 - [ ] Centralize game time in state.time {realMs, playMs, lastSeen wall-clock}
 - [ ] Update lastSeen on every autosave for offline gap measurement
 - [ ] Detect wall-clock jumps >90 s during play → route through offline path
@@ -569,6 +1001,9 @@ Deliverable: three blank themed canvases swap via tabs at 60fps with a debug ove
 - [ ] Document time model at top of main.js (10-line comment)
 
 ### Feature 2.4 — Scene / Tab Manager
+
+Story: Tabs switch scenes without leaking state or draw work. Done when only the active scene draws and switching is instant.
+
 - [ ] Implement ui.scenes registry: {match3, slots, dozer} each with enter/exit/tick/draw
 - [ ] Only active scene's draw runs; all scenes' logic ticks continue (automation)
 - [ ] Tab click switches scene: exit old (pause tweens), enter new (resume, redraw)
@@ -581,6 +1016,9 @@ Deliverable: three blank themed canvases swap via tabs at 60fps with a debug ove
 - [ ] Debounce rapid tab clicks (>4/s) to avoid enter/exit thrash
 
 ### Feature 2.5 — Canvas DPI Scaling
+
+Story: Canvases stay crisp on retina and zoomed displays. Done when DPR-aware sizing (capped 2×) leaves no blur at any zoom.
+
 - [ ] Implement fitCanvas(canvas): CSS size from layout, backing = size × devicePixelRatio
 - [ ] Cap DPR at 2 to bound fill cost on 3× phones
 - [ ] Apply ctx.setTransform(dpr,0,0,dpr,0,0) so draw code works in CSS pixels
@@ -593,6 +1031,9 @@ Deliverable: three blank themed canvases swap via tabs at 60fps with a debug ove
 - [ ] Manual QA note: check crispness at 100/125/150/200% zoom (document in QA script)
 
 ### Feature 2.6 — Resize & Layout Response
+
+Story: The layout answers window resizes gracefully. Done when resize mid-game preserves state and re-fits all canvases.
+
 - [ ] Listen to window resize with 150 ms debounce; re-fit active canvas immediately
 - [ ] Recompute per-scene layout metrics (board rect, reel window, table rect) on resize
 - [ ] Define breakpoints: ≥1024 desktop (side panels), 600–1023 stacked, <600 compact HUD
@@ -605,6 +1046,9 @@ Deliverable: three blank themed canvases swap via tabs at 60fps with a debug ove
 - [ ] Add resize stress test note: drag-resize 10 s, assert no console errors, fps >50
 
 ### Feature 2.7 — Render Scheduler & Dirty Flags
+
+Story: Draw only what changed. Done when idle scenes cost near-zero and dirty flags gate rendering.
+
 - [ ] Give each scene a needsDraw flag; static frames skip canvas repaint entirely
 - [ ] Match3 sets needsDraw on tween/board activity; idle board = zero repaints
 - [ ] Slots repaint only while spinning or celebrating
@@ -617,6 +1061,9 @@ Deliverable: three blank themed canvases swap via tabs at 60fps with a debug ove
 - [ ] Document scheduler contract in main.js for future scene authors
 
 ### Feature 2.8 — Input Plumbing
+
+Story: Pointer events normalized once for all games. Done when click/drag/touch reach games as clean world coordinates.
+
 - [ ] Normalize pointer events (mouse/touch/pen) into scene.onPointer(down/move/up, x, y)
 - [ ] Convert client coords to canvas-local CSS pixels via getBoundingClientRect cache
 - [ ] Invalidate rect cache on resize/scroll
@@ -629,6 +1076,9 @@ Deliverable: three blank themed canvases swap via tabs at 60fps with a debug ove
 - [ ] Test coordinate mapping under DPR 1 and 2 with synthetic events
 
 ### Feature 2.9 — Visibility & Focus Handling
+
+Story: Tab-hide pauses fairly, tab-show resumes fairly. Done when visibilitychange saves, pauses, and routes long gaps to offline credit.
+
 - [ ] Listen visibilitychange: hidden → flush autosave, note wall-clock, halt rAF
 - [ ] visible → measure gap; >90 s routes through offline earnings, else resume normally
 - [ ] Pause audio context on hidden (Phase 19 hook), resume on visible
@@ -641,6 +1091,9 @@ Deliverable: three blank themed canvases swap via tabs at 60fps with a debug ove
 - [ ] Document lifecycle diagram (running/hidden/offline) in main.js comment
 
 ### Feature 2.10 — Debug Overlay
+
+Story: A dev overlay that shows fps and state at a keypress. Done when ?debug=1 reveals live internals without shipping cost.
+
 - [ ] Implement toggle (backtick key or ?debug=1) showing overlay DOM panel
 - [ ] Show fps, dt, fixed steps/frame, active tweens, awake bodies, draws skipped
 - [ ] Show currency rates (J/s, S/min, G/min rolling 60 s averages)
@@ -658,6 +1111,9 @@ Goal: the wet-glassy-fruit look codified — tokens, glass recipe, sky, panels, 
 Deliverable: a style showcase state (?styleguide=1) rendering every token, fruit, chip, and panel.
 
 ### Feature 3.1 — Palette Tokens
+
+Story: One palette to rule every pixel: named color tokens. Done when no hardcoded hex remains outside the token block.
+
 - [ ] Define all §2 hex tokens as CSS custom properties on :root in style.css
 - [ ] Mirror tokens as T7.data.palette object for canvas code; single source comment links both
 - [ ] Add derived tokens: --panel-stroke, --shadow-tint, --text-dim computed values
@@ -670,6 +1126,9 @@ Deliverable: a style showcase state (?styleguide=1) rendering every token, fruit
 - [ ] Render palette swatch grid in the styleguide state
 
 ### Feature 3.2 — Glass Gradient Recipe (drawGlassBall)
+
+Story: The signature glass-fruit look as one reusable draw recipe. Done when drawGlassBall renders body/rim/specular/wet-shadow from any base color.
+
 - [ ] Implement drawGlassBall(ctx, x, y, r, triad, opts) per §2 five-step recipe
 - [ ] Offset radial gradient center to (−0.3r, −0.3r) with 3 color stops from triad
 - [ ] Draw rotated white specular ellipse (−30°, alpha .85) plus secondary dot (.35)
@@ -682,6 +1141,9 @@ Deliverable: a style showcase state (?styleguide=1) rendering every token, fruit
 - [ ] Showcase all six fruits + coin + gem at 3 sizes in styleguide state
 
 ### Feature 3.3 — Sky & Sun Background
+
+Story: A sunny sky that makes the whole game feel warm. Done when gradient sky, pulsing sun and drifting clouds frame every tab.
+
 - [ ] Build page background: linear-gradient --sky-hi→--sky-lo on body
 - [ ] Add sun: fixed radial-gradient layer top-right using --sun-core/--sun-glow
 - [ ] Add two cloud layers as blurred white blobs, CSS keyframe drift 90 s/140 s
@@ -694,6 +1156,9 @@ Deliverable: a style showcase state (?styleguide=1) rendering every token, fruit
 - [ ] Screenshot baseline for visual regression note in QA script
 
 ### Feature 3.4 — Frosted Panel & Layout System
+
+Story: Frosted-glass panels as the app's furniture. Done when panels share one CSS system with consistent radius, blur and edge.
+
 - [ ] Create .panel class: --panel bg, 1px inner white stroke, 16px radius, sky-tinted shadow
 - [ ] Support backdrop-filter blur(8px) with graceful non-support fallback (higher opacity)
 - [ ] Define spacing scale (4/8/12/16/24/32) as CSS vars; use exclusively
@@ -706,6 +1171,9 @@ Deliverable: a style showcase state (?styleguide=1) rendering every token, fruit
 - [ ] Showcase panel/modal/toast variants in styleguide state
 
 ### Feature 3.5 — Typography
+
+Story: Friendly rounded type with a clear hierarchy. Done when the type ramp is documented and used by all UI.
+
 - [ ] Use system font stack (no webfonts): ui-rounded, "SF Pro Rounded", Nunito fallback chain
 - [ ] Define type scale vars: 12/14/16/20/26/34 with line-heights
 - [ ] Currency numbers use font-variant-numeric: tabular-nums to stop chip jitter
@@ -718,6 +1186,9 @@ Deliverable: a style showcase state (?styleguide=1) rendering every token, fruit
 - [ ] Typography specimen page in styleguide state
 
 ### Feature 3.6 — Buttons & Interactive States
+
+Story: Buttons that feel like candy — press, glow, disable. Done when all interactive states are styled and consistent.
+
 - [ ] Base .btn: glass pill, gradient fill from token, inner top highlight stroke
 - [ ] Variants: primary (sun gold), currency-colored (J orange, S gold, G teal), quiet
 - [ ] States: hover raise 1px, active press 1px + darken, disabled frosted + "why" tooltip
@@ -730,6 +1201,9 @@ Deliverable: a style showcase state (?styleguide=1) rendering every token, fruit
 - [ ] Button gallery with all states in styleguide state
 
 ### Feature 3.7 — HUD Currency Chips
+
+Story: Currency chips that read at a glance and celebrate gains. Done when pills show value, rate, and bump on credit.
+
 - [ ] Build three chips: droplet (J), sun coin (S), star gem (G) inline SVG icons
 - [ ] Icons drawn with the glass recipe as SVG gradients matching canvas look
 - [ ] Chip shows fmt(amount); width-stable via tabular-nums and 7-char reserve
@@ -742,6 +1216,9 @@ Deliverable: a style showcase state (?styleguide=1) rendering every token, fruit
 - [ ] Chips render correctly at all three breakpoints; test overflow at 999.9aa
 
 ### Feature 3.8 — Canvas Iconography
+
+Story: Canvas-drawn icons matching the glass style. Done when shared icon painters replace ad-hoc shapes.
+
 - [ ] Implement drawFruit(ctx, kind, x, y, r) — six fruits with distinguishing silhouettes
 - [ ] Cherry: twin balls + stem arc; lemon: pointed ellipse; melon: striped rind ball
 - [ ] Berry: cluster of 3 small balls; orange: dimpled ball + leaf; plum: teardrop ball
@@ -754,6 +1231,9 @@ Deliverable: a style showcase state (?styleguide=1) rendering every token, fruit
 - [ ] Icon sheet rendered in styleguide state with grayscale toggle
 
 ### Feature 3.9 — Dew & Gloss Decorations
+
+Story: Dew drops and gloss as ambient identity. Done when decorative details exist without stealing attention or frames.
+
 - [ ] Implement drawDew(ctx, x, y, r): white micro-circle, micro-specular, hue shadow
 - [ ] Scatter dew on panels' canvas headers via seeded positions (stable per session)
 - [ ] Add glint pass: occasional 4-point sparkle star on random glass object (fx stream)
@@ -766,6 +1246,9 @@ Deliverable: a style showcase state (?styleguide=1) rendering every token, fruit
 - [ ] Decoration sampler in styleguide state
 
 ### Feature 3.10 — Theme QA & Consistency Pass
+
+Story: The look holds together everywhere. Done when a screenshot audit across all screens shows one coherent theme.
+
 - [ ] Build ?styleguide=1 state rendering every component from 3.1–3.9
 - [ ] Verify one shared shadow direction (top-left light) across CSS and canvas
 - [ ] Contrast-check every text/bg pair; log table into docs/theme-qa.md
@@ -783,6 +1266,9 @@ Goal: deterministic seeded randomness with per-system streams and a written fair
 Deliverable: docs/fairness.md + passing statistical tests; all game rolls flow through named streams.
 
 ### Feature 4.1 — mulberry32 Core Hardening
+
+Story: The PRNG core proven solid and wrapped safely. Done when mulberry32 passes the statistical smoke tests in CI-less verify.
+
 - [ ] Verify mulberry32 implementation bit-exact vs reference vectors (5 seeds × 8 draws)
 - [ ] Ensure state is uint32 wrapped (>>> 0) on every step; test seed 0 and 2^32−1
 - [ ] Add nextUint32() alongside float for integer-domain uses
@@ -795,6 +1281,9 @@ Deliverable: docs/fairness.md + passing statistical tests; all game rolls flow t
 - [ ] Property test: same seed → identical 1e4 sequence across two instances
 
 ### Feature 4.2 — Named Stream Registry
+
+Story: Independent named streams per subsystem. Done when match-3 draws no longer perturb slot outcomes and replays are stream-stable.
+
 - [ ] Implement rng.stream(name) lazy-creating streams: match3, slots, dozer, charms, daily, fx
 - [ ] Each stream: independent mulberry32 state + draw counter
 - [ ] Boot seeds: crypto.getRandomValues per stream; fx reseeded every boot
@@ -807,6 +1296,9 @@ Deliverable: docs/fairness.md + passing statistical tests; all game rolls flow t
 - [ ] Test cross-stream isolation: draws on one stream never change another's next value
 
 ### Feature 4.3 — Weighted Pick Utilities
+
+Story: Weighted draws as one audited utility. Done when every weighted table in the game goes through Rng.weighted.
+
 - [ ] Implement weightedIndex(stream, weights[]) via cumulative sum walk
 - [ ] Implement weightedPick(stream, items, weightKey) returning the item
 - [ ] Precompute cumulative tables for hot paths (reel strips, special kinds)
@@ -819,6 +1311,9 @@ Deliverable: docs/fairness.md + passing statistical tests; all game rolls flow t
 - [ ] Fuzz weights arrays (empty, single, huge) for graceful asserts
 
 ### Feature 4.4 — Shuffle & Sampling
+
+Story: Fair shuffles and samples from one place. Done when Fisher-Yates is the only shuffle and it is seed-stable.
+
 - [ ] Implement fisherYates(stream, array) in-place with test for uniformity smoke
 - [ ] Implement sampleN(stream, array, n) without replacement for charm draws
 - [ ] Use fisherYates for match-3 reshuffle and one-time reel strip layout
@@ -831,6 +1326,9 @@ Deliverable: docs/fairness.md + passing statistical tests; all game rolls flow t
 - [ ] Verify no bias from reusing stream across shuffle+picks in same tick (test)
 
 ### Feature 4.5 — Seed Persistence & Debug Seeds
+
+Story: Seeds you can pin for debugging. Done when ?seed=N reproduces a session and the seed is visible in debug.
+
 - [ ] Save all persistent stream states in save schema section rng{}
 - [ ] On import/export, stream states round-trip exactly (test)
 - [ ] Implement ?seed=abc123 URL param hashing to seeds for all streams (dev only)
@@ -843,6 +1341,9 @@ Deliverable: docs/fairness.md + passing statistical tests; all game rolls flow t
 - [ ] Test that daily stream ignores ?seed (must stay date-based)
 
 ### Feature 4.6 — Crypto Seeding & Fallback
+
+Story: Strong seeding with a graceful fallback. Done when crypto.getRandomValues seeds when available and the fallback is documented.
+
 - [ ] Seed via crypto.getRandomValues(new Uint32Array(6)) at first boot
 - [ ] Fallback chain: crypto → Date.now^performance.now mix; log which was used
 - [ ] Never reseed persistent streams after first boot (except prestige policy decision)
@@ -855,6 +1356,9 @@ Deliverable: docs/fairness.md + passing statistical tests; all game rolls flow t
 - [ ] Prestige explicitly keeps stream states (no luck-reset exploit); test
 
 ### Feature 4.7 — Fairness Documentation
+
+Story: The fairness contract in writing. Done when docs/fairness.md states the decide-before-present rule and publishes all odds sources.
+
 - [ ] Write docs/fairness.md: outcomes resolve before presentation, always
 - [ ] Document slot: result drawn from fixed 64-stop strips at button press; reels animate to it
 - [ ] Document near-miss policy: presentational layout only, cites the ~30% research
@@ -867,6 +1371,9 @@ Deliverable: docs/fairness.md + passing statistical tests; all game rolls flow t
 - [ ] Invite verification: document how to run npm run simulate to audit RTPs
 
 ### Feature 4.8 — RNG Statistical Tests
+
+Story: Statistical self-tests that would catch a broken RNG. Done when frequency/serial tests run under npm test with tolerances.
+
 - [ ] Chi-square uniformity test on 16 bins, 1e6 draws, p>0.001 threshold
 - [ ] Serial correlation test lag-1 < 0.01 absolute
 - [ ] Kolmogorov–Smirnov smoke test against uniform CDF
@@ -879,6 +1386,9 @@ Deliverable: docs/fairness.md + passing statistical tests; all game rolls flow t
 - [ ] Add quick versions (1e4 draws) always-on for fast pre-commit runs
 
 ### Feature 4.9 — Deterministic Replay Harness
+
+Story: Deterministic replay of a whole session from a seed+action log. Done when a recorded session replays to identical currency totals.
+
 - [ ] Implement event recorder: log {tick, system, action, args} during play (dev flag)
 - [ ] Implement replayer: feed recorded script into headless logic, assert same outcomes
 - [ ] Record RNG stream states at recording start inside the script header
@@ -891,6 +1401,9 @@ Deliverable: docs/fairness.md + passing statistical tests; all game rolls flow t
 - [ ] Document replay workflow in docs/fairness.md testing section
 
 ### Feature 4.10 — Distribution Self-Check (Boot Audit)
+
+Story: A boot-time sanity audit of distributions in dev mode. Done when dev boot logs weight sums and flags impossible configs.
+
 - [ ] On dev boot, run 1e4-draw quick audit per stream; warn if wildly skewed
 - [ ] Verify reel strip composition equals declared weights exactly at boot (counts)
 - [ ] Verify charm table has 28 entries, 4×7 sets, weights 8/4/2/1 present
@@ -908,6 +1421,9 @@ Goal: currencies as first-class state with gain/spend APIs, multiplier pipeline,
 Deliverable: state.js economy passing tests; debug overlay shows live J/S/G with rates and multipliers.
 
 ### Feature 5.1 — Currency Registry & State Shape
+
+Story: Currencies as declared data, not scattered variables. Done when juice/suncoin/stargem exist only through the registry.
+
 - [ ] Define state.cur {j, s, g} floats + state.lifetime {j, s, g} in state.js
 - [ ] Define currency metadata in data.js: id, name, color token, icon, format rules
 - [ ] Initialize new-save defaults (0 J / 0 S / 0 G) via makeNewSave() factory
@@ -920,6 +1436,9 @@ Deliverable: state.js economy passing tests; debug overlay shows live J/S/G with
 - [ ] Document units: all amounts stored unrounded floats, displayed via fmt
 
 ### Feature 5.2 — gain / spend API
+
+Story: One way to earn and one way to spend. Done when gain/spend are the only mutation paths and both emit events.
+
 - [ ] Implement earn(cur, amt, source): applies multiplier pipeline, adds, logs source
 - [ ] Implement canAfford(cur, amt) and spend(cur, amt, sink) returning success bool
 - [ ] spend never allows negatives; assert amt ≥ 0 on both paths
@@ -932,6 +1451,9 @@ Deliverable: state.js economy passing tests; debug overlay shows live J/S/G with
 - [ ] Debug overlay shows last 10 economy events with sources
 
 ### Feature 5.3 — Multiplier Pipeline
+
+Story: All bonuses through one ordered pipeline. Done when multFor(cur) implements the documented stacking formula exactly.
+
 - [ ] Implement getMult(cur): product of upgrade, charm, set, achievement, seed layers
 - [ ] Layer registry: each system registers a provider fn returning its factor
 - [ ] Cache multiplier products; invalidate on upgrade/charm/achievement/prestige change
@@ -944,6 +1466,9 @@ Deliverable: state.js economy passing tests; debug overlay shows live J/S/G with
 - [ ] Document where multipliers apply: earn-side only, never on spend costs
 
 ### Feature 5.4 — Conversion Constants & Gates
+
+Story: The 7:1 gates as named constants. Done when SPIN_COST_J/DROP_COST_S are the only place the ratio lives.
+
 - [ ] Define in data.js: JUICE_PER_SUN=7, SUN_PER_GEM=7, SPIN_COST_J=7, DROP_COST_S=7
 - [ ] Implement buySpin(): spend 7 J → returns token consumed by slots.spin
 - [ ] Implement buyDrop(): spend 7 S → returns token consumed by dozer.drop
@@ -956,6 +1481,9 @@ Deliverable: state.js economy passing tests; debug overlay shows live J/S/G with
 - [ ] Document nominal value identity 1 G ≡ 7 S ≡ 49 J in data.js header
 
 ### Feature 5.5 — Number Safety & Formatting Integration
+
+Story: No NaN, no negatives, no display glitches. Done when sanitize guards run on every load and formatting handles all magnitudes.
+
 - [ ] All economy numbers double floats; document max safe magnitude ~1e15 practical target
 - [ ] Guard against NaN/Infinity in earn/spend with assert + clamp recovery
 - [ ] HUD chips subscribe to economy events; verify count-up uses real values
@@ -968,6 +1496,9 @@ Deliverable: state.js economy passing tests; debug overlay shows live J/S/G with
 - [ ] Overflow drill: warp-earn to 1e14 in dev, verify UI/save/perf hold
 
 ### Feature 5.6 — Earn-Rate Statistics
+
+Story: Live earn-rates the UI can show. Done when per-currency /s rates are computed once and shared.
+
 - [ ] Track rolling 60 s and 10 min rates per currency (ring buffer of per-second sums)
 - [ ] Track per-source totals (match3 vs grove vs slots…) for stats panel
 - [ ] Compute session earnings summary for the pause/stats view
@@ -980,6 +1511,9 @@ Deliverable: state.js economy passing tests; debug overlay shows live J/S/G with
 - [ ] Stats panel prototype listed in debug overlay until Phase 17 UI
 
 ### Feature 5.7 — Economy Event Bus
+
+Story: Currency changes broadcast to any listener. Done when the event bus decouples UI from economy internals.
+
 - [ ] Implement tiny pub/sub in util: on(topic, fn), emit(topic, payload), off
 - [ ] Topics: earn, spend, convert, unlock, achievement, charm, prestige
 - [ ] HUD, audio, particles, achievements subscribe rather than polling
@@ -992,6 +1526,9 @@ Deliverable: state.js economy passing tests; debug overlay shows live J/S/G with
 - [ ] Keep bus dependency-free and Node-usable for simulator hooks
 
 ### Feature 5.8 — Anti-Overflow & Sanity Guards
+
+Story: The economy cannot overflow or corrupt. Done when extreme-value tests (1e30) pass without display or math breakage.
+
 - [ ] Clamp any single earn to <1e12 with warn (catches multiplier bugs)
 - [ ] Daily sanity sweep (once per session): recompute multipliers from scratch, diff cache
 - [ ] Validate save-loaded currency values: finite, ≥0, lifetime ≥ current-ish checks
@@ -1004,6 +1541,9 @@ Deliverable: state.js economy passing tests; debug overlay shows live J/S/G with
 - [ ] Document all guards in state.js header for future contributors
 
 ### Feature 5.9 — Lifetime Counters & Milestone Hooks
+
+Story: Lifetime counters that survive prestige. Done when lifetime totals feed achievements and prestige math untouched by resets.
+
 - [ ] Count lifetime: per-currency earned, spins, drops, matches, cascades, charms
 - [ ] Expose milestone check API: onCounter(counter, threshold, cb) one-shot registry
 - [ ] Wire lifetimeG to prestige unlock check (777 G) firing unlock event
@@ -1016,6 +1556,9 @@ Deliverable: state.js economy passing tests; debug overlay shows live J/S/G with
 - [ ] Document counter list as the achievements vocabulary (Phase 17 contract)
 
 ### Feature 5.10 — Economy Debug Console
+
+Story: A console for economy inspection in dev. Done when dev mode can query and grant currencies for testing (never shipped enabled).
+
 - [ ] Implement T7.debug.economy() printing formatted currency/multiplier table
 - [ ] Implement T7.debug.grant(cur, amt) dev-only with source=debug
 - [ ] Implement T7.debug.simulateMinutes(n) running headless economy ticks fast
@@ -1033,6 +1576,9 @@ Goal: bulletproof persistence — schema, autosave, portable codes, checksums, m
 Deliverable: save round-trips byte-stable; export code re-imports on a fresh profile identically; corrupt saves recover.
 
 ### Feature 6.1 — Save Schema v1
+
+Story: One documented shape for everything persisted. Done when defaultState() is the schema and every field is commented.
+
 - [ ] Define schema doc in state.js comment: version, time, cur, lifetime, rng, grove, upgrades…
 - [ ] Include per-scene blocks: match3{board, specials}, slots{stats}, dozer{bodies[]}
 - [ ] Include meta blocks: charms{owned, levels}, achievements{done}, settings{}
@@ -1045,6 +1591,9 @@ Deliverable: save round-trips byte-stable; export code re-imports on a fresh pro
 - [ ] Document which fields prestige resets vs keeps (aligned with §6)
 
 ### Feature 6.2 — Autosave
+
+Story: Progress saves itself. Done when autosave runs every 10 s, on hide, and on unload without jank.
+
 - [ ] Save to localStorage key "t7.save" debounced 5 s after any state change
 - [ ] Heartbeat save every 30 s regardless of changes (playtime/lastSeen freshness)
 - [ ] Force-save on visibilitychange hidden and pagehide events
@@ -1057,6 +1606,9 @@ Deliverable: save round-trips byte-stable; export code re-imports on a fresh pro
 - [ ] Log save cadence in debug overlay (last save age)
 
 ### Feature 6.3 — Serialization & Canonical JSON
+
+Story: Stable serialization that hashes identically. Done when serialize() output is canonical enough for checksumming.
+
 - [ ] Implement serialize(state) → canonical JSON string (sorted keys, no whitespace)
 - [ ] Implement deserialize(json) → validated plain object (no class instances)
 - [ ] Round floats via JSON default (full precision); test exact round-trip
@@ -1069,6 +1621,9 @@ Deliverable: save round-trips byte-stable; export code re-imports on a fresh pro
 - [ ] Shared by save, export code, and simulator snapshots (single code path)
 
 ### Feature 6.4 — Export Code Generation
+
+Story: Progress as a portable pasteable code. Done when export produces T7<v>.<sum>.<base64> reliably.
+
 - [ ] Format: "T7" + version + "." + fnv1a hex + "." + base64(JSON) per spec
 - [ ] Implement base64 via btoa with UTF-8 safe encoding (escape/unescape-free approach)
 - [ ] Export button in settings copies code to clipboard with success toast
@@ -1081,6 +1636,9 @@ Deliverable: save round-trips byte-stable; export code re-imports on a fresh pro
 - [ ] Clipboard API fallback: select-and-copy textarea for older browsers
 
 ### Feature 6.5 — Import Validation
+
+Story: Imports that never brick the game. Done when malformed input throws readable errors and live state survives all failures.
+
 - [ ] Parse prefix: must match /^T7(\d+)\./ else "not a Triple7 code" error
 - [ ] Verify fnv1a checksum over the base64 payload before parsing JSON
 - [ ] Parse JSON safely in try/catch; structural validation against schema per version
@@ -1093,6 +1651,9 @@ Deliverable: save round-trips byte-stable; export code re-imports on a fresh pro
 - [ ] Friendly error copy for each failure class (never raw exceptions to user)
 
 ### Feature 6.6 — FNV-1a Checksum
+
+Story: A checksum that catches corruption. Done when any single-character code change is rejected.
+
 - [ ] Implement fnv1a(str) 32-bit with standard offset 2166136261 / prime 16777619
 - [ ] Output as 8-char lowercase hex, zero-padded
 - [ ] Known-answer tests: fnv1a("") = 811c9dc5, fnv1a("a"), fnv1a("Triple7")
@@ -1105,6 +1666,9 @@ Deliverable: save round-trips byte-stable; export code re-imports on a fresh pro
 - [ ] Note in fairness doc: checksum is integrity, not anti-cheat (by design)
 
 ### Feature 6.7 — Migration Framework
+
+Story: Old saves load forever. Done when version-gated migrations merge old shapes onto current defaults with tests.
+
 - [ ] Implement migrations array: [{from:1, to:2, up(save)}…] applied stepwise
 - [ ] migrate(save) loops until save.v === SAVE_VER; assert progress each step
 - [ ] Each migration pure and unit-tested with a fixture of the older shape
@@ -1117,6 +1681,9 @@ Deliverable: save round-trips byte-stable; export code re-imports on a fresh pro
 - [ ] Document migration authoring checklist in state.js comment
 
 ### Feature 6.8 — Hard Reset
+
+Story: A hard reset with real friction. Done when double-confirmed reset wipes storage and restarts clean.
+
 - [ ] Settings "Reset everything" behind two-step confirm typing "PRESERVE NOTHING"
 - [ ] Auto-export current save to download before wiping (forced backup)
 - [ ] Clear "t7.save", "t7.save.prev", seeded-session keys; keep settings? — no: full wipe
@@ -1129,6 +1696,9 @@ Deliverable: save round-trips byte-stable; export code re-imports on a fresh pro
 - [ ] Debug overlay quick-reset skips confirms under dev flag only
 
 ### Feature 6.9 — Error Recovery & Backup Slots
+
+Story: Corruption recovers instead of crashing. Done when a bad autosave falls back to a rotating backup slot.
+
 - [ ] Keep rolling backup "t7.save.prev" updated once per 10 min (not every save)
 - [ ] On load: main parse fail → try prev → try makeNewSave with apology modal
 - [ ] Corrupt main save preserved as "t7.save.corrupt" for manual rescue
@@ -1141,6 +1711,9 @@ Deliverable: save round-trips byte-stable; export code re-imports on a fresh pro
 - [ ] Two-tab policy: newest write wins + passive "open elsewhere" banner (no locks)
 
 ### Feature 6.10 — Save System Tests
+
+Story: The save system proven by tests. Done when round-trip, tamper, and migration suites are green.
+
 - [ ] Round-trip property test: makeNewSave → serialize → deserialize → deep-equal
 - [ ] Late-game fixture round-trip including 150 dozer bodies and full charms
 - [ ] Export/import full-cycle test through actual code string
@@ -1158,6 +1731,9 @@ Goal: complete, headless-testable Juicy Grove logic — the chain's unconditiona
 Deliverable: playable 8×8 match-3 earning J with cascades, deadlock auto-reshuffle; logic 100% covered headless.
 
 ### Feature 7.1 — Board Model
+
+Story: The board as pure data any function can reason about. Done when 8×8 cells with fruit+special are the only board state.
+
 - [ ] Represent board as Int8Array(64), index = row*8+col; fruit ids 0–5
 - [ ] Special flags in high bits: LINE_H, LINE_V, RAINBOW constants in data.js
 - [ ] Implement get(r,c)/set(r,c)/inBounds helpers with asserts in dev
@@ -1170,6 +1746,9 @@ Deliverable: playable 8×8 match-3 earning J with cascades, deadlock auto-reshuf
 - [ ] Test model invariants: ids always valid fruit or valid special combo
 
 ### Feature 7.2 — Board Generation (No Instant Matches)
+
+Story: Fresh boards start fair. Done when generation never contains pre-matches and always has a move.
+
 - [ ] Generate initial board cell-by-cell from match3 stream
 - [ ] Reroll a candidate fruit while it completes a horizontal or vertical 3-run (left/up checks)
 - [ ] Guarantee termination: ≤6 fruits means a non-matching pick always exists (proof comment)
@@ -1182,6 +1761,9 @@ Deliverable: playable 8×8 match-3 earning J with cascades, deadlock auto-reshuf
 - [ ] Benchmark generation <1 ms; record
 
 ### Feature 7.3 — Swap Validation
+
+Story: Only legal swaps act. Done when adjacency plus produces-a-match (or rainbow) gates every swap.
+
 - [ ] Accept swap(a, b) only for orthogonally adjacent in-bounds cells
 - [ ] Simulate swap on clone; scan only the 2 affected rows + 2 columns for runs (§8)
 - [ ] Valid if any run found OR either tile is rainbow (always-valid special swap)
@@ -1194,6 +1776,9 @@ Deliverable: playable 8×8 match-3 earning J with cascades, deadlock auto-reshuf
 - [ ] Selection state cleared on invalid target with soft "nope" wiggle event
 
 ### Feature 7.4 — Run Detection
+
+Story: Matches found by one scanning pass. Done when row/column run detection returns merged clear-sets with run metadata.
+
 - [ ] Implement findRuns(board, rows?, cols?) returning runs {cells[], len, dir, fruit}
 - [ ] Scan lines with run-length counting; emit runs of len ≥3
 - [ ] Merge overlapping H+V runs sharing a cell into cross shapes (for special spawn logic)
@@ -1206,6 +1791,9 @@ Deliverable: playable 8×8 match-3 earning J with cascades, deadlock auto-reshuf
 - [ ] Property test: no runs reported on generated (clean) boards
 
 ### Feature 7.5 — Clear Resolution & Payout
+
+Story: Cleared tiles become Juice by the formula. Done when payout applies tiles × cascade multiplier plus special bonuses.
+
 - [ ] Build clear mask from runs; expand with special effects (line/rainbow) recursively
 - [ ] Pay 1 J per cleared tile × cascade multiplier via earnMany(source=match3)
 - [ ] Apply Combo Kettle upgrade to the multiplier at payout time
@@ -1218,6 +1806,9 @@ Deliverable: playable 8×8 match-3 earning J with cascades, deadlock auto-reshuf
 - [ ] Test special chain reactions terminate (visited set; no infinite loops)
 
 ### Feature 7.6 — Gravity
+
+Story: Tiles fall to fill gaps. Done when column compaction reports moves for animation.
+
 - [ ] Compact each column downward: stable write-index pass bottom-up
 - [ ] Record per-tile fall distance for renderer tween planning
 - [ ] Specials fall like normal tiles retaining their flags
@@ -1230,6 +1821,9 @@ Deliverable: playable 8×8 match-3 earning J with cascades, deadlock auto-reshuf
 - [ ] Determinism snapshot test with fixture board
 
 ### Feature 7.7 — Refill & Spawn Bias
+
+Story: Refills that keep cascades special. Done when spawns re-roll instant matches (bounded retries).
+
 - [ ] Fill top-down empties from match3 stream fruit picks
 - [ ] Bias: if spawn completes an immediate run, reroll once via pickExcluding (§8)
 - [ ] Second roll stands even if it matches (cascades stay possible — gift, not guarantee)
@@ -1242,6 +1836,9 @@ Deliverable: playable 8×8 match-3 earning J with cascades, deadlock auto-reshuf
 - [ ] Document bias rationale + research citation in comment
 
 ### Feature 7.8 — Resolve State Machine
+
+Story: The whole move as one deterministic state machine. Done when resolveMove() is the single oracle for logic, sims and tests.
+
 - [ ] Implement phases: IDLE → SWAP → RESOLVE → GRAVITY → REFILL → (RESOLVE|CHECK) → IDLE
 - [ ] chain counter: 1 on first RESOLVE, ++ each loop back from REFILL with new runs
 - [ ] After settle with no runs: full-board scan then deadlock CHECK then IDLE
@@ -1254,6 +1851,9 @@ Deliverable: playable 8×8 match-3 earning J with cascades, deadlock auto-reshuf
 - [ ] Headless: full move resolvable in Node with zero DOM references (test)
 
 ### Feature 7.9 — Deadlock Detection
+
+Story: Dead boards detected cheaply. Done when the all-swaps simulation runs after each settle in ~1 ms.
+
 - [ ] Implement findAnyMove(): iterate 112 adjacent swaps, simulate on clone, check runs
 - [ ] Early-exit on first found move; return it (doubles as hint source)
 - [ ] Rainbow on board short-circuits: always a move available
@@ -1266,6 +1866,9 @@ Deliverable: playable 8×8 match-3 earning J with cascades, deadlock auto-reshuf
 - [ ] Fuzz 1e4 random boards: detection agrees with brute-force checker
 
 ### Feature 7.10 — Auto-Reshuffle
+
+Story: Deadlocks fix themselves silently. Done when reshuffle produces a valid board or regenerates, invisibly to the player.
+
 - [ ] On deadlock: collect fruit multiset, Fisher-Yates redistribute, re-check moves
 - [ ] Preserve specials in place during reshuffle (only plain fruit shuffle)
 - [ ] Retry ≤10 shuffles; then regenerate board (7.2) as last resort
@@ -1283,6 +1886,9 @@ Goal: the faucet made delightful — cascade celebration, specials, hints, glass
 Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, hint idle timer.
 
 ### Feature 8.1 — Cascade Multiplier Celebration
+
+Story: Cascades feel like gifts. Done when chain depth escalates VFX/SFX and the multiplier is celebrated visibly.
+
 - [ ] Display chain multiplier badge ("×1.5!", "×2!") escalating in size/color per chain
 - [ ] Escalate payout popup hue with chain depth (research: celebrate the gift)
 - [ ] Emit cascade event with chain for audio pitch ramp (Phase 19 hook)
@@ -1295,6 +1901,9 @@ Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, 
 - [ ] Tune escalation curve in data.js (badgeScale[chain]) not hardcoded
 
 ### Feature 8.2 — Line-Blast Special
+
+Story: Four-in-a-row mints a Burst worth keeping. Done when line-blast clears row+column and chains through other specials.
+
 - [ ] Render line-blast tile: base fruit + glass arrow band (H or V) overlay
 - [ ] Activation VFX event: row/col sweep flash with droplet trail
 - [ ] Spawn animation: 4-run collapse converges into the special tile
@@ -1307,6 +1916,9 @@ Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, 
 - [ ] Data-drive bonus (+3 J) from data.js paytable block
 
 ### Feature 8.3 — Rainbow Special
+
+Story: Five-in-a-row mints a Rainbow that clears a color. Done when rainbow swaps clear the partner fruit everywhere.
+
 - [ ] Render rainbow tile: iridescent glass ball, slow hue-cycling sheen (needsDraw-friendly: 4 fps shimmer)
 - [ ] Swap with fruit → clear all of that fruit; VFX: beams from rainbow to each target
 - [ ] +7 J bonus popup; targets clear in radial-distance order (staggered 30 ms)
@@ -1319,6 +1931,9 @@ Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, 
 - [ ] Data-drive all combo bonuses in data.js
 
 ### Feature 8.4 — Special Combo Polish
+
+Story: Special+special swaps feel expert. Done when burst+burst and rainbow+rainbow have defined, spectacular results.
+
 - [ ] Define combo matrix in data.js: LL cross, LR mass-line, RR board-clear with bonuses
 - [ ] Preview affordance: dragging a special over another highlights combo hint ring
 - [ ] Combo events get unique names for audio/achievement hooks (comboCross…)
@@ -1331,6 +1946,9 @@ Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, 
 - [ ] Manual QA script entry: trigger each combo, verify feel checklist
 
 ### Feature 8.5 — Hint System
+
+Story: Stuck players get a gentle nudge. Done when a valid move pulses after 6 idle seconds.
+
 - [ ] Idle timer: 8 s without input in IDLE phase → pulse a valid move (from findAnyMove cache)
 - [ ] Hint animation: both swap tiles breathe-scale 1.06 in sync, gentle
 - [ ] Any input cancels hint immediately; timer resets
@@ -1343,6 +1961,9 @@ Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, 
 - [ ] Track hintsShown stat (tutorial tuning signal)
 
 ### Feature 8.6 — Tile Rendering (Glass Fruit on Tray)
+
+Story: Fruit rendered as wet glass on a tray. Done when tiles use the glass recipe with distinct silhouettes per fruit.
+
 - [ ] Draw beveled tray: 64 recessed glass cells with inner shadow + wet-edge highlight
 - [ ] Render fruits via baked sprites (3.8) at cell size; DPR-aware
 - [ ] Selected tile: lift 4px + glow ring in fruit hue
@@ -1355,6 +1976,9 @@ Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, 
 - [ ] Board background uses palette tokens only (grep test extends)
 
 ### Feature 8.7 — Swap & Clear Tweens
+
+Story: Swaps and clears animate believably. Done when tweens cover swap, bounce-back, clear pop and falls.
+
 - [ ] Swap tween: both tiles slide 140 ms cubicOut; invalid swap slides back with wiggle
 - [ ] Clear tween: pop scale 1→1.25→0 with fade, 180 ms, backIn on shrink
 - [ ] Gravity tween: fall duration ∝ sqrt(distance), bounceOut landing squash
@@ -1367,6 +1991,9 @@ Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, 
 - [ ] All durations in data.js tuning block (feel iteration without code edits)
 
 ### Feature 8.8 — Particle Hooks
+
+Story: Matches feed the particle system. Done when clears emit juice splashes at the right cells.
+
 - [ ] Emit particle events: clearSplash(cells, fruit), cascadeBurst(chain), specialFire(kind)
 - [ ] Juice splash: 6–10 droplets in fruit hue, gravity arc, 400 ms fade (engine in Phase 20)
 - [ ] Stub particle engine adapter so events no-op cleanly until Phase 20 lands
@@ -1379,6 +2006,9 @@ Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, 
 - [ ] Budget note: match3 target ≤150 live particles (Phase 20 enforces)
 
 ### Feature 8.9 — Score Popups
+
+Story: Earnings pop where they happen. Done when +J floaters rise from the match with cascade-scaled emphasis.
+
 - [ ] Floating "+N J" text at clear centroid, rises 40 px, fades 600 ms
 - [ ] Batch per clear-step: one popup per run, not per tile
 - [ ] Popup size scales with amount tier (log scale, 3 tiers)
@@ -1391,6 +2021,9 @@ Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, 
 - [ ] Verify totals shown equal earn events exactly (no double-count drift)
 
 ### Feature 8.10 — Feel Tuning Pass
+
+Story: The faucet feels juicy end to end. Done when a tuning pass signs off timing, sound and reward legibility.
+
 - [ ] Tuning block in data.js: all durations, staggers, scales, hint timer in one place
 - [ ] Playtest checklist: swap responsiveness <150 ms perceived, cascade legibility, popup readability
 - [ ] Tune fall speed so 8-row cascade resolves <2.5 s total
@@ -1408,6 +2041,9 @@ Goal: exact par-sheet slot logic — strips, resolve, paytable, jackpot — enum
 Deliverable: slots.spin() headless returns spec-exact results; EV self-test asserts §9a table.
 
 ### Feature 9.1 — Reel Strip Data
+
+Story: The par sheet as data. Done when reel weights live only in data.js and sum to 64.
+
 - [ ] Define symbol enum + per-reel weights {seven:2, star:5, berry:8, melon:10, lemon:17, cherry:22}
 - [ ] Expand weights into 64-entry strip arrays per reel in data.js builder
 - [ ] One-time seed-shuffle each strip at first boot; persist layouts in save (§8)
@@ -1420,6 +2056,9 @@ Deliverable: slots.spin() headless returns spec-exact results; EV self-test asse
 - [ ] Expose getStrips() for renderer and simulator
 
 ### Feature 9.2 — Spin Resolution
+
+Story: A spin resolved in one pure call. Done when resolveSpin returns symbols+payout from weighted draws.
+
 - [ ] Implement spin(): draw 3 stop indices (0–63) from slots stream
 - [ ] Map stops → symbols via strips; build result {stops, symbols}
 - [ ] Resolution happens entirely at spin start (fairness contract §4.7)
@@ -1432,6 +2071,9 @@ Deliverable: slots.spin() headless returns spec-exact results; EV self-test asse
 - [ ] Reject spin while previous unresolved token pending (assert)
 
 ### Feature 9.3 — Paytable Evaluation
+
+Story: Paytable evaluation with strict precedence. Done when triple > pair-seven > pair-cherry > nothing, tested exhaustively.
+
 - [ ] Encode §4b paytable in data.js: triples 777/77/30/20/12/7, any2sevens 5, exactly2cherries 2
 - [ ] Evaluate priority: 3-of-a-kind > any-2-sevens > exactly-2-cherries > nothing
 - [ ] any-2-sevens = exactly two sevens any positions; exactly-2-cherries = two cherries, third ≠ cherry
@@ -1444,6 +2086,9 @@ Deliverable: slots.spin() headless returns spec-exact results; EV self-test asse
 - [ ] Apply Sun-Kissed Reels multiplier at payout, not in table (test base intact)
 
 ### Feature 9.4 — Stake & Payout Wiring
+
+Story: Stakes and payouts wired through the economy. Done when spins spend 7 J and credit S through gain() exactly once.
+
 - [ ] Spin button path: canAfford 7 J → spend → spin → earn payS (source=slotWin)
 - [ ] Payout applies S multiplier pipeline (charm sets, reels upgrade, global)
 - [ ] Zero-pay spins emit result event too (presentation needs misses)
@@ -1456,6 +2101,9 @@ Deliverable: slots.spin() headless returns spec-exact results; EV self-test asse
 - [ ] Headless transaction test through real state.js economy
 
 ### Feature 9.5 — Jackpot Gem Bonus
+
+Story: The jackpot crosses tiers. Done when 3×seven pays 777 S plus 7 G and increments the jackpot stat.
+
 - [ ] 3×seven pays 777 S plus 7 G via separate earn(g, 7, source=jackpot)
 - [ ] Jackpot event distinct from win event (triggers fanfare + hub splash)
 - [ ] Track jackpot count lifetime; first-jackpot achievement hook
@@ -1468,6 +2116,9 @@ Deliverable: slots.spin() headless returns spec-exact results; EV self-test asse
 - [ ] Simulate 1e7 spins: jackpot frequency ≈ 8/262,144 ± tolerance (slow test)
 
 ### Feature 9.6 — Spin State Machine
+
+Story: Spin lifecycle as a clean state machine. Done when idle→spinning→settle states gate input correctly.
+
 - [ ] States: READY → SPINNING → LANDING → PAYOUT → READY
 - [ ] Logic resolves instantly; state machine paces presentation only
 - [ ] Spin button disabled outside READY unless queue mode active
@@ -1480,6 +2131,9 @@ Deliverable: slots.spin() headless returns spec-exact results; EV self-test asse
 - [ ] Machine state never serialized mid-spin: pending spin resolves into save on hide
 
 ### Feature 9.7 — Result Events & History
+
+Story: Results as events others can hear. Done when settles emit typed events consumed by UI/audio/stats.
+
 - [ ] Emit spinResult {stops, symbols, payS, lineId, jackpot, nearMiss} on bus
 - [ ] Ring buffer last 50 results for history panel and near-miss stats
 - [ ] Compute nearMiss flag: exactly 2 sevens on payline with third off by one row visually (presentation input)
@@ -1492,6 +2146,9 @@ Deliverable: slots.spin() headless returns spec-exact results; EV self-test asse
 - [ ] Verify bus re-entrancy safe when result handler triggers earn (5.7 queue)
 
 ### Feature 9.8 — EV Self-Test
+
+Story: The machine proves its own math. Done when enumerateRTP() returns EV 1.18401 and a test pins it.
+
 - [ ] Implement enumerateEV() iterating 64³ triples via strips, summing pays
 - [ ] Assert base EV == 310,381/262,144 exactly (integer pay-weight compare)
 - [ ] Assert hit rate == 78,934/262,144 exactly
@@ -1504,6 +2161,9 @@ Deliverable: slots.spin() headless returns spec-exact results; EV self-test asse
 - [ ] Document that enumeration is exact — Monte-Carlo is a cross-check only
 
 ### Feature 9.9 — Spin History Statistics
+
+Story: Spin history for stats and fairness. Done when recent results and running RTP are queryable.
+
 - [ ] Aggregate per-line hit counters persisted in save (8 lines + miss)
 - [ ] Rolling session RTP + lifetime RTP computed from staked/won
 - [ ] Drought tracker: spins since last win ≥30 S (fun stat, not a nudge)
@@ -1516,6 +2176,9 @@ Deliverable: slots.spin() headless returns spec-exact results; EV self-test asse
 - [ ] Debug overlay shows live line-hit table vs expected probabilities
 
 ### Feature 9.10 — Edge Cases & Abuse Guards
+
+Story: No double-spins, no free spins. Done when rapid clicks, mid-spin imports and zero balances are all guarded.
+
 - [ ] Spin with exactly 7 J succeeds; 6.999… fails (float display trap test)
 - [ ] Spam-click 20 taps/s: exactly one spin per READY cycle (dedupe test)
 - [ ] Hold-to-queue drains J to reserve threshold then stops gracefully
@@ -1533,6 +2196,9 @@ Goal: the Sunshine Sevens cabinet — cylinder reels, exact-stop easing, anticip
 Deliverable: spins look like a warm glass slot machine; near-miss & anticipation per research, outcomes untouched.
 
 ### Feature 10.1 — Reel Strip Rendering
+
+Story: Reels drawn from the honest strip. Done when the visible strip is the weighted 64 stops, shuffled once.
+
 - [ ] Draw 3 reel windows showing 3 symbols each (payline = middle row)
 - [ ] Render strip as vertical symbol sequence from persisted layout; wrap at 64
 - [ ] Symbols drawn from baked fruit/star/seven sprites at reel cell size
@@ -1545,6 +2211,9 @@ Deliverable: spins look like a warm glass slot machine; near-miss & anticipation
 - [ ] Layout adapts: 3 reels fit portrait mobile (min 96 px reel width)
 
 ### Feature 10.2 — Spin Motion & Exact-Stop Easing
+
+Story: Reels that stop exactly on the decided symbol. Done when easing lands targetIdx on the payline every spin (off-by-one tested).
+
 - [ ] Spin phase 1: constant velocity blur-free scroll (integer pixel steps, symbol tick events)
 - [ ] Spin phase 2: cubic-out deceleration landing exactly on resolved stop index
 - [ ] Compute deceleration path: current offset → target = stopIndex×cellH + k×stripLen
@@ -1557,6 +2226,9 @@ Deliverable: spins look like a warm glass slot machine; near-miss & anticipation
 - [ ] Motion at 60fps with ≤2 ms reel draw cost; record
 
 ### Feature 10.3 — Anticipation Delay
+
+Story: Two sevens make hearts race. Done when reel 3 stretches ~2.5× with glow when jackpot is live.
+
 - [ ] Detect reels 1–2 landed seven on payline → reel 3 spin time ×2.5 (§4b)
 - [ ] Anticipation state: reel 3 glow ramps, tick tempo rises, others dim 15%
 - [ ] Cabinet edge lights pulse during anticipation (CSS class on DOM frame)
@@ -1569,6 +2241,9 @@ Deliverable: spins look like a warm glass slot machine; near-miss & anticipation
 - [ ] Tune ×2.5 duration in data.js; verify feels tense not tedious (QA note)
 
 ### Feature 10.4 — Near-Miss Presentation
+
+Story: Near-misses only as honest byproducts. Done when no code biases stops toward almost-wins (fairness doc cites this).
+
 - [ ] When result is a loss with 2 payline sevens, reel 3 visual window centers a seven one row off
 - [ ] Achieve via choosing which strip window row to align — never altering stops (comment + assert)
 - [ ] Apply same treatment to 2-star near-wins at lower intensity
@@ -1581,6 +2256,9 @@ Deliverable: spins look like a warm glass slot machine; near-miss & anticipation
 - [ ] Document near-miss policy inline citing US9898891-adjacent research (§1)
 
 ### Feature 10.5 — Win Line Highlights
+
+Story: Wins light the line. Done when the payline flashes and winning symbols highlight on settle.
+
 - [ ] Winning triple: payline symbols pulse-scale in sync, gold underline sweep
 - [ ] any-2-sevens: the two sevens spotlight + connecting arc
 - [ ] exactly-2-cherries: cherries wiggle + soft chime hook
@@ -1593,6 +2271,9 @@ Deliverable: spins look like a warm glass slot machine; near-miss & anticipation
 - [ ] Timings/tiers in data.js tuning block
 
 ### Feature 10.6 — Win Celebration Tiers
+
+Story: Celebrations sized to the win. Done when win tiers (small/big/jackpot) have distinct presentations.
+
 - [ ] Tier small (<10 S): chime + popup only
 - [ ] Tier medium (10–76 S): coin sprinkle particles + cabinet light chase
 - [ ] Tier big (77 S): star burst, screen-edge glow, 1.5 s fanfare hook
@@ -1605,6 +2286,9 @@ Deliverable: spins look like a warm glass slot machine; near-miss & anticipation
 - [ ] Reduced-motion: celebrations become static glow + text
 
 ### Feature 10.7 — Paytable Panel
+
+Story: The paytable is public. Done when the dialog shows live odds and payouts from enumerateRTP with current upgrades.
+
 - [ ] Paytable button flips cabinet face to table view (3D-ish flip, 300 ms)
 - [ ] Render all 8 lines with symbol sprites + exact S pays from data.js (never hardcoded)
 - [ ] Show live RTP note: "This machine pays ~118% — it likes you" cozy copy
@@ -1617,6 +2301,9 @@ Deliverable: spins look like a warm glass slot machine; near-miss & anticipation
 - [ ] Panel state remembered per session (open/closed)
 
 ### Feature 10.8 — Cabinet Art
+
+Story: A cabinet worth staring at. Done when the orange glass cabinet, shading and lights match the theme.
+
 - [ ] DOM frame around canvas: brushed gold gradient border, rounded, wet-edge top highlight
 - [ ] Marquee header: "Sunshine Sevens" lettering with glass-bevel CSS text effect
 - [ ] Edge light strips (CSS gradients) with idle slow shimmer, active chase
@@ -1629,6 +2316,9 @@ Deliverable: spins look like a warm glass slot machine; near-miss & anticipation
 - [ ] Screenshot for README gallery
 
 ### Feature 10.9 — Spin Button & Stake UX
+
+Story: The spin button sells the trade. Done when cost, affordability and disabled states are always truthful.
+
 - [ ] Big SPIN button with embedded "7 J" cost chip (3.6 machine button)
 - [ ] Disabled state shows exact shortfall and grove shortcut link
 - [ ] Hold-to-repeat: after 400 ms hold, auto-respins each READY (manual queue)
@@ -1641,6 +2331,9 @@ Deliverable: spins look like a warm glass slot machine; near-miss & anticipation
 - [ ] Cost chip reads SPIN_COST_J from data.js (never literal 7 in UI code)
 
 ### Feature 10.10 — Slot Audio/Particle Hook Verification
+
+Story: Sound and sparks land with the reels. Done when audio/particle hooks fire on spin, stops, wins and jackpot.
+
 - [ ] Verify ordered event stream per spin: press → drain → reelstart → ticks → stops → line/miss → celebration
 - [ ] Headless test capturing bus events for one scripted win and one miss
 - [ ] Tick events rate-limited ≤20/s per reel (audio safety)
@@ -1659,6 +2352,9 @@ Goal: the 2D circle solver + kinematic pusher — deterministic, sleepy, capped,
 Deliverable: 150 coins simulate stably at 60 Hz headless; pusher shoves, gutters eat, front edge pays events.
 
 ### Feature 11.1 — Circle Body Model
+
+Story: Coins as minimal physics bodies. Done when {x,z,vx,vz,r,kind} is the whole body and stays finite forever.
+
 - [ ] Body struct {id, x, y, vx, vy, r, kind, mass, sleepFrames} in flat arrays or pooled objects
 - [ ] Kinds: coin (r=14), gem-fruit (r=16), chest (r=18), bottle (r=15), pouch (r=15) from data.js
 - [ ] Table space: origin back-left, x across, y toward player; units = px at scale 1
@@ -1671,6 +2367,9 @@ Deliverable: 150 coins simulate stably at 60 Hz headless; pusher shoves, gutters
 - [ ] Debug draw mode: circles, velocities, sleep state colors
 
 ### Feature 11.2 — Broadphase & Pair Generation
+
+Story: Pair generation that scales. Done when O(n²) is measured fine to 90 coins and a grid is specced beyond.
+
 - [ ] O(n²) pair loop with early AABB reject (|dx|>r1+r2 skip) — fine ≤150 (§1)
 - [ ] Skip pairs where both bodies sleeping
 - [ ] Pair loop allocation-free (indices only)
@@ -1683,6 +2382,9 @@ Deliverable: 150 coins simulate stably at 60 Hz headless; pusher shoves, gutters
 - [ ] Wake-on-contact: awake body touching sleeper wakes it
 
 ### Feature 11.3 — Impulse Resolution
+
+Story: Collisions resolve believably. Done when equal-mass impulse with low restitution passes the invariant tests.
+
 - [ ] For each overlapping pair: normal = delta/dist, relative velocity along normal
 - [ ] Skip separating pairs (vn > 0)
 - [ ] Impulse j = −(1+e)·vn / (1/m1 + 1/m2), restitution e = 0.15 (cozy thud)
@@ -1695,6 +2397,9 @@ Deliverable: 150 coins simulate stably at 60 Hz headless; pusher shoves, gutters
 - [ ] Determinism test: fixed scenario → identical positions after 300 steps
 
 ### Feature 11.4 — Positional Correction
+
+Story: Overlaps separate without sinking. Done when 50% positional correction over 3 iterations keeps piles stable.
+
 - [ ] Baumgarte-style: push overlapping pairs apart by 50% of penetration beyond 0.5 px slop (§1)
 - [ ] Correction split by inverse mass (kinematics don't move)
 - [ ] Applied after impulses each iteration
@@ -1707,6 +2412,9 @@ Deliverable: 150 coins simulate stably at 60 Hz headless; pusher shoves, gutters
 - [ ] Visual debug: penetration heatmap toggle
 
 ### Feature 11.5 — Pusher Kinematics
+
+Story: The pusher as a kinematic wall. Done when the cosine cycle displaces coins and never pulls them back.
+
 - [ ] Pusher = kinematic rectangle at y_p(t) = A·sin(2πt/4.6 s), A from table layout (§4c)
 - [ ] Pusher velocity derived analytically (cosine) for correct impulse transfer
 - [ ] Collision: circles vs moving front face + side faces of the slab
@@ -1719,6 +2427,9 @@ Deliverable: 150 coins simulate stably at 60 Hz headless; pusher shoves, gutters
 - [ ] Debug overlay shows pusher phase + cycle count
 
 ### Feature 11.6 — Walls & Gutter Geometry
+
+Story: Rails and gutters as the house edge. Done when rail end and open sides produce the designed side-loss (~8%).
+
 - [ ] Table bounds: back wall (behind pusher), side walls with gutter notches, open front edge
 - [ ] Geometry defined in data.js: table W×H, gutter notch y-range and width per side
 - [ ] Circle-vs-wall constraint: project out, kill normal velocity with e=0.1
@@ -1731,6 +2442,9 @@ Deliverable: 150 coins simulate stably at 60 Hz headless; pusher shoves, gutters
 - [ ] Debug draw: walls, notches, capture zones outlined
 
 ### Feature 11.7 — Fall Detection & Payout Events
+
+Story: Falls become payouts through events. Done when front/side exits emit typed events consumed by the game layer.
+
 - [ ] Body fully past front edge (y − r > tableH) → emit fell {kind, x} and despawn
 - [ ] Side gutter capture → emit lost {kind, side} and despawn
 - [ ] Payout mapping handled by gameplay layer (Phase 12), physics only emits
@@ -1743,6 +2457,9 @@ Deliverable: 150 coins simulate stably at 60 Hz headless; pusher shoves, gutters
 - [ ] Fuzz: 1e4 random drops → fell+lost+remaining == spawned (conservation test)
 
 ### Feature 11.8 — Damping & Friction
+
+Story: Heavy damping is the friction model. Done when coins stop in <1 s unpushed and the constant is documented.
+
 - [ ] Global velocity damping ×0.9 per step (research value §1); tunable
 - [ ] Table surface friction: additional damping when |v| < 20 px/s (settle assist)
 - [ ] No gravity along table plane (top-down); "reduced gravity feel" = damping tune
@@ -1755,6 +2472,9 @@ Deliverable: 150 coins simulate stably at 60 Hz headless; pusher shoves, gutters
 - [ ] Debug slider (dev only) for live damping experiments
 
 ### Feature 11.9 — Sleep States
+
+Story: Still coins cost nothing. Done when sleeping bodies skip integration and wake on contact.
+
 - [ ] Body sleeps after 60 consecutive frames with |v| < 2 px/s
 - [ ] Sleeping bodies skip integration and pair-initiation (2.7 synergy)
 - [ ] Wake on: contact from awake body, pusher face proximity, new spawn overlap
@@ -1767,6 +2487,9 @@ Deliverable: 150 coins simulate stably at 60 Hz headless; pusher shoves, gutters
 - [ ] Verify sleeping saves ≥70% frame cost on full settled table (measure)
 
 ### Feature 11.10 — Physics Test Suite & Determinism
+
+Story: Physics proven deterministic and bounded. Done when seed-replay hashes match and invariants pass 100k steps.
+
 - [ ] Headless harness: run scenario files {spawns[], steps} through dozer.js in Node
 - [ ] Golden tests: 5 scenarios with position snapshots at step 300 (tolerance 1e-9)
 - [ ] Determinism: same scenario twice → bit-identical states
@@ -1784,6 +2507,9 @@ Goal: Star Harbor as a game — drops, specials, prizes, upgrade hooks, persiste
 Deliverable: 7 S buys a drop; coins pay 1 G off the front; specials spawn/collect; table survives reload.
 
 ### Feature 12.1 — Drop Input & Aiming
+
+Story: Players aim their drops. Done when tap/click position maps to a clamped drop x with a ghost preview.
+
 - [ ] Tap/click above table aims drop x-position; drag shows aim ghost coin
 - [ ] Drop lane clamped to spawn band (back area over pusher track)
 - [ ] DROP button (7 S chip) drops at last aim x; direct tap drops at tap x
@@ -1796,6 +2522,9 @@ Deliverable: 7 S buys a drop; coins pay 1 G off the front; specials spawn/collec
 - [ ] Track drops lifetime counter (5.9)
 
 ### Feature 12.2 — Coin Spawn & Queue
+
+Story: Drops spawn safely in front of the pusher. Done when spawn jitter, initial vz and the coin cap are enforced.
+
 - [ ] Implement drop queue: taps buffer up to 10; released one per 400 ms
 - [ ] Queue indicator: stacked coin pips near chute
 - [ ] Queue drains pause when spawn area congested; resumes automatically
@@ -1808,6 +2537,9 @@ Deliverable: 7 S buys a drop; coins pay 1 G off the front; specials spawn/collec
 - [ ] Queue events for audio ticks
 
 ### Feature 12.3 — Front-Edge Payout
+
+Story: Front falls pay Stargems. Done when each front exit credits 1 G through gain() with a floater at the lip.
+
 - [ ] fell{kind:coin} → earn(g, 1, source=dozerCoin) with G multiplier pipeline
 - [ ] Collect animation: coin arcs from fall x to G chip, 350 ms (canvas overlay layer)
 - [ ] Batch multi-fall within a frame into one earnMany + fanned arc visuals
@@ -1820,6 +2552,9 @@ Deliverable: 7 S buys a drop; coins pay 1 G off the front; specials spawn/collec
 - [ ] Verify no payout for lost (gutter) coins; they only increment loss stats
 
 ### Feature 12.4 — Side Gutter Accounting
+
+Story: Side losses are honest accounting. Done when gutter exits are counted, audible, and visible in stats.
+
 - [ ] lost events increment session/lifetime gutter stats per side
 - [ ] RTP panel shows side-loss % live vs current upgrade-adjusted target
 - [ ] Gutter VFX: coin slides into notch with descending shimmer (lost, but pretty)
@@ -1832,6 +2567,9 @@ Deliverable: 7 S buys a drop; coins pay 1 G off the front; specials spawn/collec
 - [ ] Document gutter=house-edge design note citing easy.vegas (§1) in dozer.js
 
 ### Feature 12.5 — Special Spawn Roll
+
+Story: Specials spawn by one weighted roll. Done when the 6%+magnet chance table matches data.js exactly.
+
 - [ ] On each paid drop: roll dozer stream vs specialChance (base 0.06)
 - [ ] Charm Magnet adds +0.01/lvl up to 0.13; read from upgrade state
 - [ ] On success: weightedPick {gemFruit:44, chest:18, bottle:22, pouch:16} (§4c)
@@ -1844,6 +2582,9 @@ Deliverable: 7 S buys a drop; coins pay 1 G off the front; specials spawn/collec
 - [ ] Stats: specials spawned by kind, lifetime
 
 ### Feature 12.6 — Special Item Behaviors
+
+Story: Each special behaves distinctly. Done when gem-fruit/chest/bottle/pouch pay their defined rewards on falling.
+
 - [ ] gem-fruit falls front → earn(g, 7, source=gemFruit) with gem burst VFX
 - [ ] charm chest falls front → charm draw event (Phase 15 API; stub grants queued chest)
 - [ ] juice bottle falls front → grant 300 s × current J/s as lump J + bottle-pour VFX (§5)
@@ -1856,6 +2597,9 @@ Deliverable: 7 S buys a drop; coins pay 1 G off the front; specials spawn/collec
 - [ ] Document special value model + drift note (bottle scales with Grove) in data.js
 
 ### Feature 12.7 — Prize Collection Flow
+
+Story: Prizes feel like prizes. Done when special falls celebrate and route rewards (charms roll the rarity table).
+
 - [ ] Collect overlay layer above canvas: arcs, bursts, labeled chips per prize
 - [ ] Charm chest opens in a mini-modal: chest shakes → cracks → charm reveal (15 hook)
 - [ ] Multi-prize same frame: stagger reveals 250 ms, queue modals
@@ -1868,6 +2612,9 @@ Deliverable: 7 S buys a drop; coins pay 1 G off the front; specials spawn/collec
 - [ ] Verify overlay pauses cleanly on tab switch and resumes
 
 ### Feature 12.8 — Table Upgrade Hooks
+
+Story: Upgrades physically change the table. Done when rails/pusher/magnet levels alter geometry live via syncParams.
+
 - [ ] Bumper Rails levels re-map gutter geometry live (11.6) with rail visual growing
 - [ ] Wide Pusher level widens slab + visual; existing coins unaffected mid-cycle (apply at back-stroke)
 - [ ] Charm Magnet level feeds 12.5 chance; magnet coil visual near chute
@@ -1880,6 +2627,9 @@ Deliverable: 7 S buys a drop; coins pay 1 G off the front; specials spawn/collec
 - [ ] QA: buy each upgrade live mid-play, verify stability 60 s
 
 ### Feature 12.9 — Table Seeding & Persistence
+
+Story: The pile is persistent property. Done when the table state saves/restores and the restock fallback retires.
+
 - [ ] New save seeds table with 24 starter coins in a settled pattern (instant gratification)
 - [ ] Starter pattern pre-settled positions stored in data.js (no boot physics churn)
 - [ ] Full body state serializes into save (6.1); loaded table resumes exactly
@@ -1892,6 +2642,9 @@ Deliverable: 7 S buys a drop; coins pay 1 G off the front; specials spawn/collec
 - [ ] Debug: export/import table-only state for physics bug reports
 
 ### Feature 12.10 — Anti-Stall & Board Health
+
+Story: The table never stalls or starves. Done when anti-stall detection re-energizes a frozen pile and health is testable.
+
 - [ ] Detect stall: 0 falls and 0 losses over 40 drops → nudge event (tiny table vibration impulse)
 - [ ] Detect over-cap pressure: ≥140 bodies → spawn refusal + "table is full, let the pusher work" toast
 - [ ] Corner-wedge rescue: bodies static outside pusher reach >5 min get micro-impulse toward center
@@ -1909,6 +2662,9 @@ Goal: three games become one game — tabs, conversion affordances, cross-tier m
 Deliverable: full hub flow: locked tiers tease, unlock ceremonies fire, currency visibly climbs the chain.
 
 ### Feature 13.1 — Tab Shell & Navigation
+
+Story: Three machines behind one nav. Done when tabs switch instantly with active state and lock icons.
+
 - [ ] Build three-tab bar: Juicy Grove / Sunshine Sevens / Star Harbor with icon + label
 - [ ] Active tab: raised glass pill; inactive: frosted; locked: dimmed + lock glyph
 - [ ] Tab switch calls scene manager (2.4) with slide-fade transition 200 ms
@@ -1921,6 +2677,9 @@ Deliverable: full hub flow: locked tiers tease, unlock ceremonies fire, currency
 - [ ] Test tab state machine: locked→teaser, unlocked→scene, rapid switching
 
 ### Feature 13.2 — Hub Layout Composition
+
+Story: The hub reads as one sunny place. Done when layout composes header/nav/panel with no dead space at any size.
+
 - [ ] Grid: HUD top, tab bar below, game canvas center, contextual side panel right (desktop)
 - [ ] Side panel per scene: Grove buildings / slot paytable+history / dozer RTP+prizes
 - [ ] Mobile: side panel becomes bottom sheet, swipe-up reveal
@@ -1933,6 +2692,9 @@ Deliverable: full hub flow: locked tiers tease, unlock ceremonies fire, currency
 - [ ] Empty side panel states have coaching copy (22 pre-hook)
 
 ### Feature 13.3 — Conversion Affordances
+
+Story: Conversions are visible trades. Done when spin/drop buttons show costs in the source currency's color.
+
 - [ ] SPIN and DROP buttons always show cost chips with live affordability color
 - [ ] Below-cost state: "need 3 more J" + tap → switches to earning tab (5.4 UI)
 - [ ] Conversion flow VFX: droplets drain into slot (10.9), suncoins stamp at dozer (12.1)
@@ -1945,6 +2707,9 @@ Deliverable: full hub flow: locked tiers tease, unlock ceremonies fire, currency
 - [ ] QA: new player can discover the full chain unaided (hallway test note)
 
 ### Feature 13.4 — Cross-Game Notifications
+
+Story: Wins echo across machines. Done when cross-tier moments (jackpot gems) toast wherever you are.
+
 - [ ] Off-tab events surface as toasts: "Jackpot! +777 S" while on Grove, etc.
 - [ ] Toast taps jump to the source tab
 - [ ] Aggregate spam: automation wins collapse into 30 s digest toasts
@@ -1957,6 +2722,9 @@ Deliverable: full hub flow: locked tiers tease, unlock ceremonies fire, currency
 - [ ] Event→toast routing table in ui.js data-driven
 
 ### Feature 13.5 — Locked-Tier Teasing
+
+Story: Locked tiers tease honestly. Done when veils state exact unlock costs and progress toward them.
+
 - [ ] Slots locked until first 7 J earned; dozer until first 7 S held (soft gates)
 - [ ] Locked tab shows frosted scene mockup + "Spins cost 7 Juice — you have 4"
 - [ ] Progress bar toward unlock on the teaser fills live
@@ -1969,6 +2737,9 @@ Deliverable: full hub flow: locked tiers tease, unlock ceremonies fire, currency
 - [ ] Analytics-free funnel: record unlock timestamps in save stats (22 tuning data)
 
 ### Feature 13.6 — Currency Flow Diagram
+
+Story: The chain is explainable in one glance. Done when a J→S→G diagram exists in-game (empty states reuse it).
+
 - [ ] Stats panel "The Chain" view: animated J→spin→S→drop→G→upgrades diagram
 - [ ] Live numbers on each edge: per-minute flow from stats (5.6)
 - [ ] Nominal identity annotation: 1 G = 7 S = 49 J
@@ -1981,6 +2752,9 @@ Deliverable: full hub flow: locked tiers tease, unlock ceremonies fire, currency
 - [ ] Link from first-conversion tooltip ("see the whole chain")
 
 ### Feature 13.7 — Tab Badges & Attention System
+
+Story: Attention flows to where it should. Done when tab badges signal affordable actions without nagging.
+
 - [ ] Badge dot on tabs for: affordable spin/drop, full drop queue, charm chest pending
 - [ ] Badge logic centralized: registry of predicates re-evaluated on economy events
 - [ ] Gentle pulse animation once on badge appear; then static (no nagging)
@@ -1993,6 +2767,9 @@ Deliverable: full hub flow: locked tiers tease, unlock ceremonies fire, currency
 - [ ] Badge state not persisted (recomputed on load; test)
 
 ### Feature 13.8 — Deep State Routing
+
+Story: State-aware routing on load. Done when the game opens on the most sensible tab for the save's progress.
+
 - [ ] URL hash reflects tab (#grove/#slots/#harbor) for reload continuity
 - [ ] Hash changes route through scene manager guard (locked tabs redirect to grove)
 - [ ] Modal deep states (#shop, #charms) open respective panels
@@ -2005,6 +2782,9 @@ Deliverable: full hub flow: locked tiers tease, unlock ceremonies fire, currency
 - [ ] Document routing map in ui.js header
 
 ### Feature 13.9 — Header HUD Integration
+
+Story: The HUD is the single wallet. Done when pills update from events, bump on gains, and show rates.
+
 - [ ] Compose HUD: three chips (3.7) + chain glyph (13.3) + meta buttons + save dot (6.2)
 - [ ] HUD sticky top, frosted panel, never overlaps canvases
 - [ ] Rate sublines toggle via settings (minimal HUD mode)
@@ -2017,6 +2797,9 @@ Deliverable: full hub flow: locked tiers tease, unlock ceremonies fire, currency
 - [ ] Screenshot states: 1/2/3 currencies for docs
 
 ### Feature 13.10 — Session Flow Polish
+
+Story: A session has an arc. Done when a 15-minute run naturally tours all three machines (playtested).
+
 - [ ] Implement the §3 15-minute arc as a QA walkthrough script with timing checkpoints
 - [ ] Welcome-back modal (Phase 14) links: collect → suggested next action per state
 - [ ] "What now?" affordance: subtle suggestion chip when idle 60 s (respects hints setting)
@@ -2034,6 +2817,9 @@ Goal: the idle layer — buildings, production, offline earnings, welcome-back m
 Deliverable: Grove panel buys/produces per §6; closing the tab 2 h banks 60%-rate J; v1 feature-complete.
 
 ### Feature 14.1 — Building Definitions
+
+Story: Buildings as declarative data. Done when six buildings exist only as data.js entries the UI renders.
+
 - [ ] data.js grove table: sapling 15 J/0.2 J/s, lemon 120 J/1.4, melon 1.3K/9, hedge 14K/55
 - [ ] Plus orchard 60 S/0.03 S/s and fountain 77 G/0.005 G/s (§6 exact)
 - [ ] Each def: id, name, flavor line, currency, baseCost, baseRate, icon draw fn ref
@@ -2046,6 +2832,9 @@ Deliverable: Grove panel buys/produces per §6; closing the tab 2 h banks 60%-ra
 - [ ] Document Cookie Clicker 1.15 citation (§1) in table comment
 
 ### Feature 14.2 — Purchase & Cost Curve
+
+Story: Costs climb the classic curve. Done when cost = base·1.15^owned with ceil, tested at high counts.
+
 - [ ] Buy path: canAfford cost(owned) → spend → owned++ → recompute rates
 - [ ] Buy buttons: ×1, ×10 (summed geometric cost), Max (closed-form affordable count)
 - [ ] Closed-form max: floor(log(spend·(r−1)/cost +1)/log r) verified vs loop (test)
@@ -2058,6 +2847,9 @@ Deliverable: Grove panel buys/produces per §6; closing the tab 2 h banks 60%-ra
 - [ ] Buy buttons disabled states show shortfall like conversion gates (consistent UX)
 
 ### Feature 14.3 — Production Tick
+
+Story: The grove drips every frame. Done when production accrues via raw gain() with no double-multiplication.
+
 - [ ] Grove production integrated in fixedUpdate: rate × dt accumulated per currency
 - [ ] Rates: Σ owned × baseRate × fertilizer 1.5^lvl × currency multipliers (5.3)
 - [ ] Fractional accumulation buffers paid out when ≥0.1 unit (HUD smoothness)
@@ -2070,6 +2862,9 @@ Deliverable: Grove panel buys/produces per §6; closing the tab 2 h banks 60%-ra
 - [ ] Benchmark: production tick ≤10 µs (runs 60 Hz)
 
 ### Feature 14.4 — Grove Fertilizer Upgrade
+
+Story: Fertilizer multiplies the whole grove. Done when ×1.5^level applies to all buildings and shows in rates.
+
 - [ ] Shop item: Grove Fertilizer, ×1.5 all grove output per level (§6)
 - [ ] Cost curve: 10 G base ×3 per level (G sink; document in tuning)
 - [ ] Level applies via rate recompute event; test ×1.5 stacking exactness
@@ -2082,6 +2877,9 @@ Deliverable: Grove panel buys/produces per §6; closing the tab 2 h banks 60%-ra
 - [ ] Tuning note in docs/tuning.md with G-sink pacing rationale
 
 ### Feature 14.5 — Grove Panel UI
+
+Story: The grove panel sells its math. Done when cards show owned, per-unit rate, cost, and disable when unaffordable.
+
 - [ ] Building rows: icon, name, owned count, rate contribution, cost button group
 - [ ] Row states: affordable (lit), close (70%+, warm), far (dim), teaser (silhouette)
 - [ ] Panel header: total rates per currency + fertilizer level
@@ -2094,6 +2892,9 @@ Deliverable: Grove panel buys/produces per §6; closing the tab 2 h banks 60%-ra
 - [ ] Screenshot for README
 
 ### Feature 14.6 — Offline Earnings Calculation
+
+Story: Absence earns fairly. Done when offline credit = rate × min(elapsed, cap) × 60% computed once at return.
+
 - [ ] On load/visible-gap: gap = clamp(now − lastSeen, 0, cap); cap = 8 h + 4 h×batteryLvl
 - [ ] Offline J/S/G = grove rates × gap × 0.6 × (1 + 0.1×batteryLvl) (§6 exact)
 - [ ] Rates snapshot stored in save at each autosave (offline uses saved rates, not live)
@@ -2106,6 +2907,9 @@ Deliverable: Grove panel buys/produces per §6; closing the tab 2 h banks 60%-ra
 - [ ] Offline calc pure function in state.js, fully unit-tested headless
 
 ### Feature 14.7 — Welcome-Back Modal
+
+Story: Coming back feels like a gift. Done when the welcome modal itemizes offline gains past a threshold.
+
 - [ ] Modal: "While you were away (4h 12m)…" with per-currency earned rows
 - [ ] Big friendly COLLECT button applies earnings (pre-applied? No — apply on collect; test)
 - [ ] Grove art vignette: sun arcs over grove illustration (CSS/canvas mini-scene)
@@ -2118,6 +2922,9 @@ Deliverable: Grove panel buys/produces per §6; closing the tab 2 h banks 60%-ra
 - [ ] Copy tone check: warm, no FOMO ("welcome back" not "you missed out")
 
 ### Feature 14.8 — Offline Battery Upgrade
+
+Story: The battery stretches offline. Done when +4 h cap and +10% rate per level apply and display.
+
 - [ ] Shop item: Offline Battery, +10% offline rate & +4 h cap per level (§6)
 - [ ] Cost curve: 25 G base ×3/lvl; cap level 4 (60% → 100% rate, 8 → 24 h)
 - [ ] Level 4 exactly reaches 100% offline rate; assert ceiling in test
@@ -2130,6 +2937,9 @@ Deliverable: Grove panel buys/produces per §6; closing the tab 2 h banks 60%-ra
 - [ ] Tuning rationale documented (8–12 h research window §1)
 
 ### Feature 14.9 — Autosave Cadence Integration
+
+Story: Saving never loses a session. Done when autosave cadence, hide-save and unload-save cover all exits.
+
 - [ ] Verify heartbeat 30 s keeps lastSeen fresh enough for fair offline gaps (≤30 s undercount)
 - [ ] Save immediately on any grove purchase (rate snapshot freshness)
 - [ ] Save on modal collect (banking is durable instantly)
@@ -2142,6 +2952,9 @@ Deliverable: Grove panel buys/produces per §6; closing the tab 2 h banks 60%-ra
 - [ ] QA scenario: play mobile, background 3 h, return — verify modal + amounts
 
 ### Feature 14.10 — v1 Grove Balance Validation
+
+Story: v1 grove numbers hold up. Done when payback times land in the documented bands via simulation.
+
 - [ ] Simulate first-hour script: manual match-3 rates → sapling by min 3, lemon by min 15 (targets)
 - [ ] Assert §6 timeline: 2–3 buildings within first hour under bot play
 - [ ] Verify grove share of total J income stays 25–60% across day-1 sim (engagement mix band)
@@ -2159,6 +2972,9 @@ Goal: 28 Glass Charms — draws, levels, set bonuses, refinement, and a cabinet 
 Deliverable: charm chests grant charms; sets buff currencies per §6; cabinet UI browsable and lovely.
 
 ### Feature 15.1 — Charm Data (28 Definitions)
+
+Story: All 28 charms as data. Done when four sets of seven exist with names, rarity and glyphs in data.js.
+
 - [ ] data.js charms: 4 sets × 7 (Citrus Suncatchers, Berry Lanterns, Tropic Tides, Celestial Preserve)
 - [ ] Each charm: id, set, name, flavor (≤70 chars), rarity (8/4/2/1 weight class), draw params
 - [ ] Name all 28 (e.g. "Lemon Prism", "Dawn Cherry Bell"…) — cozy, glassy vocabulary
@@ -2171,6 +2987,9 @@ Deliverable: charm chests grant charms; sets buff currencies per §6; cabinet UI
 - [ ] Flavor copy review pass for tone consistency
 
 ### Feature 15.2 — Rarity Draw Engine
+
+Story: Rarity draws by the 8/4/2/1 table. Done when awardRandomCharm uses weighted picks over rarity.
+
 - [ ] drawCharm(): weightedPick rarity class (8/4/2/1) → uniform pick within class (charms stream)
 - [ ] Chest sources call one shared draw API (dozer chest, shop chest, achievement grants)
 - [ ] Draw returns {charmId, isNew, newLevel} after applying duplicate logic
@@ -2183,6 +3002,9 @@ Deliverable: charm chests grant charms; sets buff currencies per §6; cabinet UI
 - [ ] Seeded draw snapshot test (20 draws)
 
 ### Feature 15.3 — Duplicate Leveling
+
+Story: Duplicates level charms to 7. Done when each dupe raises level and effect re-applies per level.
+
 - [ ] Duplicate of owned charm: level +1 up to max level 7 (§6)
 - [ ] Level stored per charm; new charm = level 1
 - [ ] Bonus scales linearly with level (+5%/lvl ⇒ lvl 7 = +35% from that charm)
@@ -2195,6 +3017,9 @@ Deliverable: charm chests grant charms; sets buff currencies per §6; cabinet UI
 - [ ] Migration default: owned charms without level → level 1
 
 ### Feature 15.4 — Set Bonuses
+
+Story: Complete sets pay set bonuses. Done when +25%/+15% activates exactly at 7/7 and shows in the cabinet.
+
 - [ ] Set complete (7/7 owned any level) → set bonus activates (+25/25/25/15%)
 - [ ] Set bonus provider registered per set in multiplier pipeline
 - [ ] Completion ceremony: cabinet shelf ignites with set-colored glow, fanfare hook
@@ -2207,6 +3032,9 @@ Deliverable: charm chests grant charms; sets buff currencies per §6; cabinet UI
 - [ ] Snapshot test of full-collection multiplier totals per currency
 
 ### Feature 15.5 — Refinement (Maxed Duplicates → 3 G)
+
+Story: Maxed dupes refine to gems. Done when a level-7 duplicate converts to 3 G with a distinct toast.
+
 - [ ] Duplicate of lvl-7 charm auto-refines: earn(g, 3, source=refine) + refinement VFX
 - [ ] Refinement toast: "Sunlight distilled: +3 G" with charm cameo
 - [ ] Refinement counter per charm (shown as tiny star tally in detail view)
@@ -2219,6 +3047,9 @@ Deliverable: charm chests grant charms; sets buff currencies per §6; cabinet UI
 - [ ] Test charm chest EV model consistency with §9b assumption (≈3 G floor)
 
 ### Feature 15.6 — Cabinet UI Grid
+
+Story: A cabinet worth staring at. Done when the 4×7 grid shows owned charms glassy and unknowns as ??? silhouettes.
+
 - [ ] Cabinet modal: 4 glass shelves (sets) × 7 slots, frosted backdrop
 - [ ] Owned charms render procedurally (15.1 params) with level glow; unowned = dim silhouette
 - [ ] Shelf headers: set name, progress, bonus status
@@ -2231,6 +3062,9 @@ Deliverable: charm chests grant charms; sets buff currencies per §6; cabinet UI
 - [ ] Screenshot full and early-game cabinets for docs
 
 ### Feature 15.7 — Charm Detail View
+
+Story: Every charm tells its story. Done when a detail view shows rarity, level, effect and source.
+
 - [ ] Slot tap opens detail: large render, name, flavor, set, rarity, level pips, bonus math
 - [ ] Bonus line shows this charm's current contribution ("+15% Juice (lvl 3)")
 - [ ] Refinement tally and next-dupe behavior explained contextually
@@ -2243,6 +3077,9 @@ Deliverable: charm chests grant charms; sets buff currencies per §6; cabinet UI
 - [ ] Copy review: flavor + mechanics separated visually
 
 ### Feature 15.8 — Source Wiring
+
+Story: Charms arrive from three faucets. Done when chests, dozer prizes and achievements all route through one award path.
+
 - [ ] Dozer charm chest (12.6) → drawCharm with source=dozer
 - [ ] Shop chest 77 G (16.6) → drawCharm source=shop
 - [ ] Achievement rewards → fixed-id grants source=achievement
@@ -2255,6 +3092,9 @@ Deliverable: charm chests grant charms; sets buff currencies per §6; cabinet UI
 - [ ] Balance note: expected charms/day at v1 rates recorded in tuning doc
 
 ### Feature 15.9 — New-Charm Reveal Moment
+
+Story: New charms get a moment. Done when first-time acquisitions play a reveal animation and toast.
+
 - [ ] Reveal sequence: chest crack → light bloom → charm forms from droplets → name card
 - [ ] Rarity-tiered reveal intensity (common quick 1.2 s → celestial 3 s with prism rays)
 - [ ] Duplicate reveals show level-up arc instead of full bloom (shorter)
@@ -2267,6 +3107,9 @@ Deliverable: charm chests grant charms; sets buff currencies per §6; cabinet UI
 - [ ] Hallway-test delight check recorded in qa-notes
 
 ### Feature 15.10 — Collection Stats & Completion
+
+Story: Collection progress is a stat. Done when unique count and set completion feed stats and achievements.
+
 - [ ] Collection stats view: owned x/28, per-set progress, total levels, refined count
 - [ ] Completion percent feeds an achievement ladder (7/14/21/28 owned)
 - [ ] "Cabinet complete" grand moment: all shelves ignite + permanent cabinet crest
@@ -2285,6 +3128,9 @@ Goal: every G sink from §6 purchasable with clear math, satisfying buys, data-d
 Deliverable: full shop panel; all upgrades apply live and persist; charm chest buyable at 77 G.
 
 ### Feature 16.1 — Upgrade Definitions
+
+Story: Upgrades as declarative data. Done when all twelve exist only as data.js entries with cost/growth/max.
+
 - [ ] data.js upgrades table: juicerBlades +25% J/lvl, comboKettle +10% cascade/lvl
 - [ ] sunKissedReels +5% slot pay/lvl, luckySevens +1 seven weight/lvl max 3
 - [ ] bumperRails −2% side loss/lvl (12→2% ⇒ max 5), widePusher, charmMagnet +1%/lvl max 7
@@ -2297,6 +3143,9 @@ Deliverable: full shop panel; all upgrades apply live and persist; charm chest b
 - [ ] Icons per upgrade: procedural glass gadget draws
 
 ### Feature 16.2 — Cost Curves
+
+Story: Every price follows its curve. Done when cost = base·growth^level with ceil, shown before buying.
+
 - [ ] Cost(lvl) = baseCost × growth^lvl; growth per-upgrade in data (2–3 range G sinks §9d)
 - [ ] Baselines: blades 5 G, kettle 7 G, reels 10 G, sevens 77 G, rails 15 G, magnet 12 G (tuning block)
 - [ ] Total-cost-to-max displayed for capped upgrades
@@ -2309,6 +3158,9 @@ Deliverable: full shop panel; all upgrades apply live and persist; charm chest b
 - [ ] Verify curve math shared with grove (single cost helper)
 
 ### Feature 16.3 — Buy UX
+
+Story: Buying feels certain and safe. Done when buttons disable when unaffordable and purchases confirm with sound.
+
 - [ ] Shop rows: icon, name, level pips/max, effect now→next, cost button
 - [ ] Buy tap: confirm-free instant buy with satisfying stamp animation
 - [ ] Post-buy: effect line pulses with new value; level pip fills
@@ -2321,6 +3173,9 @@ Deliverable: full shop panel; all upgrades apply live and persist; charm chest b
 - [ ] Purchase sound hook tiered by cost magnitude
 
 ### Feature 16.4 — Effect Application
+
+Story: Effects apply the moment you buy. Done when each upgrade's effect routes through the multiplier pipeline or game params live.
+
 - [ ] Effect hooks apply on purchase event + on load (idempotent re-apply pattern)
 - [ ] juicerBlades/sunKissedReels register multiplier providers (5.3)
 - [ ] comboKettle modifies cascade multiplier formula term (7.5 integration; test math)
@@ -2333,6 +3188,9 @@ Deliverable: full shop panel; all upgrades apply live and persist; charm chest b
 - [ ] Document hook contract in state.js for contributors
 
 ### Feature 16.5 — Automation Unlock Items
+
+Story: Automation is bought, not toggled. Done when auto unlocks appear as upgrades whose levels raise cadence.
+
 - [ ] Shop items: Auto-Juicer 111 G, Auto-Spinner 222 G, Auto-Dropper 333 G (tuning block)
 - [ ] Purchase unlocks automation system + its settings row (Phase 18 consumes)
 - [ ] Cadence upgrade sub-items: 8 s → 6 → 4 → 3 → 2 s ladder per automaton
@@ -2345,6 +3203,9 @@ Deliverable: full shop panel; all upgrades apply live and persist; charm chest b
 - [ ] Data-driven like all upgrades (same table, kind=automation)
 
 ### Feature 16.6 — Charm Chest (77 G)
+
+Story: The chest is the charm faucet you can buy. Done when 77 G buys one weighted charm roll with the reveal moment.
+
 - [ ] Shop chest card: 77 G, art = glass chest with rainbow seam
 - [ ] Buy → spend → drawCharm(source=shop) → reveal flow (15.9)
 - [ ] Buy-again button on reveal end (chain purchases comfortably)
@@ -2357,6 +3218,9 @@ Deliverable: full shop panel; all upgrades apply live and persist; charm chest b
 - [ ] Verify chest EV messaging stays descriptive not promissory (fairness copy rule)
 
 ### Feature 16.7 — Shop Layout
+
+Story: The shop reads as a market stall. Done when cards group by machine with clear current-level display.
+
 - [ ] Shop modal with sections: Boosts / Machines (automation) / Grove / Charm Chest
 - [ ] Section tabs sticky within modal; scroll position remembered per session
 - [ ] Each section header shows relevant currency balance chip
@@ -2369,6 +3233,9 @@ Deliverable: full shop panel; all upgrades apply live and persist; charm chest b
 - [ ] ARIA dialog + section landmarks
 
 ### Feature 16.8 — Affordability Signals
+
+Story: Players always know what they can afford. Done when affordability signals update live across the shop.
+
 - [ ] Global "can buy something" badge on Shop HUD button (13.7 predicate)
 - [ ] Row-level affordability colors (14.5 shared states)
 - [ ] Near-affordable (≥70%) rows show progress hairline
@@ -2381,6 +3248,9 @@ Deliverable: full shop panel; all upgrades apply live and persist; charm chest b
 - [ ] QA: signal correctness sweep after prestige reset
 
 ### Feature 16.9 — Purchase Feedback & History
+
+Story: Purchases leave a trail. Done when buy feedback plays and purchase counts feed stats.
+
 - [ ] Stamp animation + currency drain arc from G chip to item
 - [ ] Purchase log (session): last 10 buys in shop footer
 - [ ] Rate-delta toast where applicable ("Juice +25% → total ×2.1")
@@ -2393,6 +3263,9 @@ Deliverable: full shop panel; all upgrades apply live and persist; charm chest b
 - [ ] Hallway test: buys feel "chunky" (qa-notes)
 
 ### Feature 16.10 — Shop Tests & Balance Gate
+
+Story: The shop's math is regression-locked. Done when tests pin costs at sample levels and the sweep guards ceilings.
+
 - [ ] Integration test: buy every upgrade to max via granted G; all effects verified
 - [ ] Save/load with maxed shop → effects identical (idempotency test)
 - [ ] Prestige reset returns shop to virgin state except kept systems (test)
@@ -2410,6 +3283,9 @@ Goal: 26 achievements — tracked, toasted, each +1% global, some paying G.
 Deliverable: achievements panel with progress; global bonus applies; all triggers tested.
 
 ### Feature 17.1 — Achievement Definitions (26)
+
+Story: All 26 achievements as data. Done when id/name/stat/threshold/reward live only in data.js.
+
 - [ ] data.js achievements: 26 defs {id, name, desc, counter, threshold, rewardG?, hidden?}
 - [ ] Cover all systems: 6 match3, 5 slots, 5 dozer, 4 grove/idle, 3 charms, 3 meta
 - [ ] Examples: chain5 (cascade ×3), jackpot1, charm7, prestige1, coinsLost100 (wry)
@@ -2422,6 +3298,9 @@ Deliverable: achievements panel with progress; global bonus applies; all trigger
 - [ ] Copy review pass
 
 ### Feature 17.2 — Stats Tracking Integration
+
+Story: Stats tracked where they happen. Done when every named stat increments at its source through one stats object.
+
 - [ ] Map every achievement counter to 5.9 lifetime counters; add missing counters
 - [ ] Counters: matchesMade, cascades3, spins, jackpots, drops, coinsFell, coinsLost, charmsOwned…
 - [ ] Test each counter increments from its true call site (spy suite)
@@ -2434,6 +3313,9 @@ Deliverable: achievements panel with progress; global bonus applies; all trigger
 - [ ] Test save round-trip of full counter set
 
 ### Feature 17.3 — Trigger Engine
+
+Story: Unlocks trigger themselves. Done when checkAchievements() sweeps thresholds after relevant events and on a 2 s tick.
+
 - [ ] onCounter registry (5.9) evaluates thresholds on counter change events only
 - [ ] Fire once: done-set in save; re-fire impossible on load (test)
 - [ ] Multi-unlock same event handled FIFO (e.g. one jackpot triggers two)
@@ -2446,6 +3328,9 @@ Deliverable: achievements panel with progress; global bonus applies; all trigger
 - [ ] Headless full-suite test: scripted life → expected 26/26 unlocks
 
 ### Feature 17.4 — Achievement Toasts
+
+Story: Earning one feels great. Done when unlocks toast with name, reward and the +1% note.
+
 - [ ] Toast: badge icon, name, "+1% everything" line, optional +G line
 - [ ] Distinct achievement toast style (gold hairline) vs info toasts
 - [ ] Queue with 13.4 system; achievements never digest-collapsed (each shown)
@@ -2458,6 +3343,9 @@ Deliverable: achievements panel with progress; global bonus applies; all trigger
 - [ ] Anti-spam: max 3 achievement toasts visible; rest queue (test with 5-unlock script)
 
 ### Feature 17.5 — Global Bonus Application
+
+Story: Each achievement is +1% forever. Done when the global bonus multiplies through the pipeline per unlock count.
+
 - [ ] Provider: 1 + 0.01 × doneCount registered in global multiplier layer (5.3)
 - [ ] Applies to J, S, G earn paths; test each currency observes it
 - [ ] Breakdown view lists "Achievements +13%" line
@@ -2470,6 +3358,9 @@ Deliverable: achievements panel with progress; global bonus applies; all trigger
 - [ ] Doc: progression contribution noted in tuning doc
 
 ### Feature 17.6 — G Reward Payouts
+
+Story: Gem rewards pay out raw. Done when achievement G credits skip multipliers (flat, as designed).
+
 - [ ] rewardG paid via earn(source=achievement) at fire time
 - [ ] Reward shown in toast and panel entry permanently
 - [ ] Rewards tuned: total across 26 ≈ 77 G (one chest's worth; tuning block)
@@ -2482,6 +3373,9 @@ Deliverable: achievements panel with progress; global bonus applies; all trigger
 - [ ] Audit sums rewards and asserts tuning total
 
 ### Feature 17.7 — Achievements Panel
+
+Story: Progress is browsable. Done when the panel lists all achievements with earned state and descriptions.
+
 - [ ] Panel: 26 entries grouped by system, done/undone visual states
 - [ ] Entry: icon, name, desc, progress bar (counter/threshold), reward badge
 - [ ] Header: done count, current global bonus, total G earned from achievements
@@ -2494,6 +3388,9 @@ Deliverable: achievements panel with progress; global bonus applies; all trigger
 - [ ] Render test all states (locked/progress/done/hidden)
 
 ### Feature 17.8 — Progress Bars & Nearness
+
+Story: Nearness motivates. Done when progress bars show distance to each threshold.
+
 - [ ] Progress bar per entry from live counters (clamped 0–100%)
 - [ ] Nearness surfacing: ≥80% entries get a soft glow (no toast nag)
 - [ ] Progress text "43/77" formatted via fmtInt
@@ -2506,6 +3403,9 @@ Deliverable: achievements panel with progress; global bonus applies; all trigger
 - [ ] QA visual pass across breakpoints
 
 ### Feature 17.9 — Hidden Achievements
+
+Story: A few are secrets. Done when hidden achievements show as ??? until earned.
+
 - [ ] Three hidden: reshuffle witness, 7-loss slot streak survivor, midnight drop (local time 00:00–01:00)
 - [ ] Hidden trigger logic isolated + tested individually
 - [ ] Reveal moment: "???" flips with sparkle
@@ -2518,6 +3418,9 @@ Deliverable: achievements panel with progress; global bonus applies; all trigger
 - [ ] Keep hidden list stable v1 (speedrun community courtesy note)
 
 ### Feature 17.10 — Achievement System Tests
+
+Story: The system is proven. Done when trigger, reward and persistence tests are green.
+
 - [ ] Full-suite headless run unlocking all 26 via scripted play
 - [ ] Save/load at 13/26 → resume unlocking without re-fires
 - [ ] Prestige keeps done-set; counters continue (§6 semantics test)
@@ -2535,6 +3438,9 @@ Goal: the idle promotion — three automatons play the chain under player-set po
 Deliverable: owned automatons act on cadence, respect reserves, and keep the economy healthy AFK.
 
 ### Feature 18.1 — Auto-Juicer Behavior
+
+Story: The Auto-Juicer plays match-3 for you. Done when it makes a random valid move on cadence, reshuffling when stuck.
+
 - [ ] Every cadence tick: pick move via findAnyMove cache; prefer special-making (8.5 ranking)
 - [ ] Executes through match3.playMove public API (7.8) — same path as human
 - [ ] Skips while player mid-interaction on grove tab (2 s input cooldown courtesy)
@@ -2547,6 +3453,9 @@ Deliverable: owned automatons act on cadence, respect reserves, and keep the eco
 - [ ] Verify hint system suppressed during auto-play (8.5)
 
 ### Feature 18.2 — Auto-Spinner Behavior
+
+Story: The Auto-Spinner feeds the slots. Done when it spins on cadence only when 7 J is affordable.
+
 - [ ] Tick: if J − reserve ≥ 7 → requestSpin via 9.6 public API
 - [ ] Reserve threshold player-set (default 0); slider in automation panel
 - [ ] Visible-tab spins use fast presentation (skip path); off-tab resolve instantly
@@ -2559,6 +3468,9 @@ Deliverable: owned automatons act on cadence, respect reserves, and keep the eco
 - [ ] Headless hour-run: J drains to reserve then tracks match3 income (equilibrium test)
 
 ### Feature 18.3 — Auto-Dropper Behavior
+
+Story: The Auto-Dropper works the dozer. Done when it drops aimed-random coins on cadence only when 7 S is affordable.
+
 - [ ] Tick: if S − reserve ≥ 7 and queue+table has capacity → buyDrop into queue (12.2)
 - [ ] Aim policy: cycle three lanes (left/center/right) for even table coverage
 - [ ] Backs off when table ≥130 bodies (anti-stall integration 12.10)
@@ -2571,6 +3483,9 @@ Deliverable: owned automatons act on cadence, respect reserves, and keep the eco
 - [ ] Verify physics stays deterministic-seeded under automation (11.10 harness)
 
 ### Feature 18.4 — Cadence Upgrades
+
+Story: Levels buy speed. Done when each level shortens the interval from 8 s toward the 2 s floor.
+
 - [ ] Ladder 8→6→4→3→2 s per automaton from shop (16.5)
 - [ ] Cadence read live from upgrade state each tick scheduling
 - [ ] Independent timers per automaton (staggered starts to spread load)
@@ -2583,6 +3498,9 @@ Deliverable: owned automatons act on cadence, respect reserves, and keep the eco
 - [ ] Achievement: allAuto2s hook
 
 ### Feature 18.5 — Smart Thresholds & Reserves
+
+Story: Autos respect the player's wallet. Done when optional reserve thresholds stop autos draining below a floor.
+
 - [ ] Per-automaton reserve sliders (J for spinner, S for dropper) with fmt labels
 - [ ] Preset buttons: Drain (0), Balanced (49 J / 21 S), Hoard (343 J / 147 S)
 - [ ] Reserve semantics documented: automation never spends below it, manual play can
@@ -2595,6 +3513,9 @@ Deliverable: owned automatons act on cadence, respect reserves, and keep the eco
 - [ ] Copy: thresholds explained without jargon
 
 ### Feature 18.6 — Automation Panel UI
+
+Story: Automation is visible and controllable. Done when a panel shows each auto's state, cadence and toggles.
+
 - [ ] Panel section (shop-adjacent or settings tab): row per automaton
 - [ ] Row: robot icon, toggle, cadence, reserve slider, why-idle status, session stats
 - [ ] Locked rows show unlock price teaser (16.5)
@@ -2607,6 +3528,9 @@ Deliverable: owned automatons act on cadence, respect reserves, and keep the eco
 - [ ] Cozy framing copy ("little helpers", not "efficiency")
 
 ### Feature 18.7 — Off-Tab & Hidden-Tab Behavior
+
+Story: Autos keep working off-tab. Done when hidden-tab automation accrues correctly without rendering.
+
 - [ ] Automation continues while other tabs active (logic ticks, no draw) — 2.4 contract test
 - [ ] document.hidden: automation pauses with the loop (2.9); offline handles gaps — assert no double-earning
 - [ ] Return-to-tab: compressed catch-up? No — automation is real-time only; document clearly
@@ -2619,6 +3543,9 @@ Deliverable: owned automatons act on cadence, respect reserves, and keep the eco
 - [ ] QA: 30-min background tab session behaves per contract
 
 ### Feature 18.8 — Idle Balance Guardrails
+
+Story: Idle cannot outrun the economy. Done when auto cadences and gates keep automated RTP within the sweep ceilings.
+
 - [ ] Full-auto equilibrium sim (24 integration): 8 h bot → currencies rise, none starve
 - [ ] Assert spinner cadence can't outpace J income at matched upgrade tiers (band check)
 - [ ] Assert dropper backpressure keeps table healthy (rescues ≈0 in 8 h sim)
@@ -2631,6 +3558,9 @@ Deliverable: owned automatons act on cadence, respect reserves, and keep the eco
 - [ ] Sign-off: AFK hour ≈ 60–80% of active-play income (design band; sim assert)
 
 ### Feature 18.9 — Automation Statistics
+
+Story: Automation is accountable. Done when per-auto action counts and earnings appear in stats.
+
 - [ ] Per-automaton: actions, earnings, uptime, best find (spinner jackpots, dropper specials)
 - [ ] Stats panel automation section with per-hour rates
 - [ ] Lifetime + session split; persist lifetime
@@ -2643,6 +3573,9 @@ Deliverable: owned automatons act on cadence, respect reserves, and keep the eco
 - [ ] Doc blurb in README gameplay notes
 
 ### Feature 18.10 — Automation Tests & Sim Integration
+
+Story: Autos are simulated like players. Done when the progression bot exercises autos and tests pin their gating.
+
 - [ ] Headless 24 h full-auto sim completes <60 s wall time (throughput gate)
 - [ ] Determinism: seeded 1 h auto-sim twice → identical final state
 - [ ] Toggle fuzz: random on/off/reserve changes mid-sim → invariants hold
@@ -2660,6 +3593,9 @@ Goal: fully synthesized WebAudio soundscape — zero audio assets, cozy glass ac
 Deliverable: complete SFX set with mixer, mute/volume settings, mobile-safe unlocking.
 
 ### Feature 19.1 — AudioContext Boot & Unlock
+
+Story: Audio wakes politely. Done when the context creates lazily on first gesture and never warns in console.
+
 - [ ] Lazy AudioContext creation on first user gesture (autoplay policy compliance)
 - [ ] Resume-on-gesture handler for iOS/Safari suspended contexts
 - [ ] Central audio module js/audio.js (UMD; Node-safe no-op export)
@@ -2672,6 +3608,9 @@ Deliverable: complete SFX set with mixer, mute/volume settings, mobile-safe unlo
 - [ ] Add script tag to index.html load order (after util, before ui)
 
 ### Feature 19.2 — Synth Voice Toolkit
+
+Story: A tiny synth kit makes every sound. Done when tone/noise/envelope helpers cover all SFX with zero assets.
+
 - [ ] Voice builder: osc(type, freq) + gain envelope ADSR helper + optional filter
 - [ ] Glass plink voice: triangle osc, fast attack, exp decay, highpass sheen
 - [ ] Water droplet voice: sine pitch-drop glide + short noise tap
@@ -2684,6 +3623,9 @@ Deliverable: complete SFX set with mixer, mute/volume settings, mobile-safe unlo
 - [ ] Latency check: gesture→sound <50 ms (manual QA note)
 
 ### Feature 19.3 — Match-3 SFX
+
+Story: Match-3 sounds juicy. Done when select/swap/match/cascade have escalating plinks tied to chain depth.
+
 - [ ] Swap: soft wet slide (filtered noise swish)
 - [ ] Clear: glass plink per run, pitch by fruit (6 pitches, pentatonic-ish)
 - [ ] Cascade: plink pitch ladder ascending with chain depth (research: celebrate cascades)
@@ -2696,6 +3638,9 @@ Deliverable: complete SFX set with mixer, mute/volume settings, mobile-safe unlo
 - [ ] QA: 3-min play session pleasant with eyes closed (checklist)
 
 ### Feature 19.4 — Slot SFX
+
+Story: The slots sound like a cabinet. Done when spin-up, reel ticks, stops, wins and near-jackpot tension are voiced.
+
 - [ ] Spin start: hopper drain droplets ×7 + reel spin-up whir
 - [ ] Reel ticks: soft click per symbol boundary, rate-limited (10.10)
 - [ ] Stops 1/2/3: damped thunk with pitch descending
@@ -2708,6 +3653,9 @@ Deliverable: complete SFX set with mixer, mute/volume settings, mobile-safe unlo
 - [ ] QA hearing pass with mixer at defaults
 
 ### Feature 19.5 — Dozer SFX
+
+Story: The dozer sounds mechanical and wet. Done when drops, pushes, coin falls and gutter losses are distinct.
+
 - [ ] Coin drop: plunk with pitch by landing impact speed
 - [ ] Coin-coin contacts: tiny clinks, heavily rate-limited + velocity-gated (>40 px/s)
 - [ ] Pusher: low felt-slide loop tied to pusher speed, near-silent
@@ -2720,6 +3668,9 @@ Deliverable: complete SFX set with mixer, mute/volume settings, mobile-safe unlo
 - [ ] QA: full table sounds like gentle glass rain, not a casino floor
 
 ### Feature 19.6 — UI & Meta SFX
+
+Story: The UI clicks softly. Done when buys, toggles, toasts and achievements have gentle cues.
+
 - [ ] Tap/press: soft dew tap; toggle: click-slide
 - [ ] Panel open/close: frosted whoosh pair
 - [ ] Toast arrival: single bell (achievement variant brighter)
@@ -2732,6 +3683,9 @@ Deliverable: complete SFX set with mixer, mute/volume settings, mobile-safe unlo
 - [ ] Volume relationships tuned vs game SFX (UI quieter)
 
 ### Feature 19.7 — Jackpot Fanfare
+
+Story: The jackpot earns a fanfare. Done when 3×seven plays the biggest musical moment in the game.
+
 - [ ] 4 s composed fanfare: rising arpeggio → chord bloom → coin-rain shimmer tail
 - [ ] Built from synth voices (no samples); score table in data.js (notes/timing)
 - [ ] Ducks other buses −6 dB during fanfare (mixer automation)
@@ -2744,6 +3698,9 @@ Deliverable: complete SFX set with mixer, mute/volume settings, mobile-safe unlo
 - [ ] Hallway test: goosebump check recorded
 
 ### Feature 19.8 — Mixer & Settings
+
+Story: Players own their ears. Done when volume sliders and mute persist and apply instantly.
+
 - [ ] Buses: master, game, ui, celebration with gain nodes
 - [ ] Settings: master volume slider + mute toggle; per-bus sliders under "more"
 - [ ] Mute state persists; default master 70%
@@ -2756,6 +3713,9 @@ Deliverable: complete SFX set with mixer, mute/volume settings, mobile-safe unlo
 - [ ] Verify no sound before first gesture even when unmuted (policy test)
 
 ### Feature 19.9 — Adaptive Polish
+
+Story: Sound adapts to context. Done when celebrations duck ambience and rapid events rate-limit gracefully.
+
 - [ ] Cascade pitch ladder resets per move; caps at chain 7 (octave ceiling)
 - [ ] Session-length softening: after 30 min, global −3 dB gentle fatigue curve
 - [ ] Simultaneous-event chording: same-frame plinks become chords not stacks
@@ -2768,6 +3728,9 @@ Deliverable: complete SFX set with mixer, mute/volume settings, mobile-safe unlo
 - [ ] QA: hour-long soak, no annoyance notes
 
 ### Feature 19.10 — Audio Performance & Safety
+
+Story: Audio never hurts performance. Done when node counts are bounded and muted play costs ~zero.
+
 - [ ] Voice cap enforcement test (24) under burst storm (board-clear + jackpot)
 - [ ] Node graph teardown audit: steady-state node count constant over 10 min
 - [ ] CPU: audio <2% of frame budget under load (measure, record)
@@ -2785,6 +3748,9 @@ Goal: one pooled particle engine feeding every game's splashes, sparkles, and co
 Deliverable: unified particle system within budget; count-up numbers everywhere; reduced-motion complete.
 
 ### Feature 20.1 — Particle Engine Core
+
+Story: One pooled particle engine for everything. Done when a 512-particle pool serves all scenes allocation-free.
+
 - [ ] js/particles.js (UMD): pooled particle structs {x,y,vx,vy,life,size,hue,kind,ease}
 - [ ] Fixed pool 512; allocation-free emit/update/draw loops
 - [ ] Kinds: droplet, sparkle, glint, coinBit, star, ribbon — each a draw fn
@@ -2797,6 +3763,9 @@ Deliverable: unified particle system within budget; count-up numbers everywhere;
 - [ ] Script tag added to index.html load order
 
 ### Feature 20.2 — Juice Splashes
+
+Story: Matches splash juice. Done when clears emit color-correct droplets that fall with gravity.
+
 - [ ] Match-3 clear: droplet burst in fruit triad hues (8.8 contract fulfilled)
 - [ ] Droplets arc with gravity, squash on peak, fade with hue-tinted trail
 - [ ] Splash intensity scales with run length and chain (event intensity scalar)
@@ -2809,6 +3778,9 @@ Deliverable: unified particle system within budget; count-up numbers everywhere;
 - [ ] Tuning params in data.js particles block
 
 ### Feature 20.3 — Dew Sparkles & Ambient
+
+Story: The world glitters quietly. Done when ambient dew sparkles live within the particle budget.
+
 - [ ] Idle sparkle glints on random glass surfaces (3.9 unified into engine)
 - [ ] Chain ≥3 board-edge sparkle ring (8.8)
 - [ ] Charm reveal shimmer field by rarity tier (15.9)
@@ -2821,6 +3793,9 @@ Deliverable: unified particle system within budget; count-up numbers everywhere;
 - [ ] Density scalar from settings (low/med/high)
 
 ### Feature 20.4 — Coin Glints & Celebration Rain
+
+Story: Wins rain gold. Done when big wins emit coin glints scaled to the payout tier.
+
 - [ ] Slot win coinSprinkle: gold coinBits fountain from payline (10.10 contract)
 - [ ] Jackpot coin rain: 4 s emission synced to fanfare points (19.7)
 - [ ] Dozer collect arcs: coinBit trail on payout arc (12.3)
@@ -2833,6 +3808,9 @@ Deliverable: unified particle system within budget; count-up numbers everywhere;
 - [ ] Sync test: rain start/stop matches fanfare events
 
 ### Feature 20.5 — Count-Up Numbers
+
+Story: Numbers count up, never teleport. Done when currency displays tween toward new values.
+
 - [ ] Universal countUp(el, from, to, ms) for DOM numbers (HUD chips already; generalize)
 - [ ] Canvas popup count-ups for big wins ("+777" ticking up over 1.2 s)
 - [ ] Easing: fast start, slow settle (quadOut) with tabular-nums stability
@@ -2845,6 +3823,9 @@ Deliverable: unified particle system within budget; count-up numbers everywhere;
 - [ ] Duration scales log with delta (big numbers not slower than 1.5 s)
 
 ### Feature 20.6 — Easing Polish Pass
+
+Story: Every motion uses the right ease. Done when an easing audit replaces linear/instant transitions.
+
 - [ ] Audit every animation for easing curve fit (checklist per scene)
 - [ ] Standardize entrances backOut, exits quadIn, moves cubicOut (3.10 language)
 - [ ] Modal/panel physics feel: slight overshoot on open, none on close
@@ -2857,6 +3838,9 @@ Deliverable: unified particle system within budget; count-up numbers everywhere;
 - [ ] Final durations locked in data.js/css tokens
 
 ### Feature 20.7 — Micro Shake & Flash (Cozy-Grade)
+
+Story: Impact reads without violence. Done when micro-shake and flash stay cozy-grade and reduced-motion-gated.
+
 - [ ] Big-win screen effects: 2 px 150 ms canvas nudge max (never violent)
 - [ ] Golden flash overlay ≤15% opacity, 200 ms, on jackpot only
 - [ ] Dozer multi-fall: tray gets 1 px shiver
@@ -2869,6 +3853,9 @@ Deliverable: unified particle system within budget; count-up numbers everywhere;
 - [ ] QA epilepsy-safety checklist pass
 
 ### Feature 20.8 — Reduced-Motion Mode
+
+Story: Reduced motion is complete. Done when the toggle stills every decorative effect with information parity.
+
 - [ ] Honor prefers-reduced-motion at boot as default for motion setting
 - [ ] Motion setting: full / reduced / minimal in settings (23 shared)
 - [ ] Reduced: no particles, static popups, instant count-ups, crossfade transitions
@@ -2881,6 +3868,9 @@ Deliverable: unified particle system within budget; count-up numbers everywhere;
 - [ ] Document gate helper usage for contributors
 
 ### Feature 20.9 — Ambient Background Life
+
+Story: The background breathes. Done when clouds, sun pulse and harbor water live cheaply in the frame budget.
+
 - [ ] Sky cloud drift already (3.3); add rare bird-glint streak (1/5 min, fx stream)
 - [ ] Grove tab: occasional leaf-shimmer on building icons
 - [ ] Harbor tab: water glimmer line at table front edge
@@ -2893,6 +3883,9 @@ Deliverable: unified particle system within budget; count-up numbers everywhere;
 - [ ] Screenshot GIF-worthy moments for README
 
 ### Feature 20.10 — Feel QA & Budget Sign-Off
+
+Story: Feel is signed off. Done when the budget holds (≤2 ms) and a playtest confirms wet, glassy, warm.
+
 - [ ] Full-feel walkthrough checklist: every action has sight+sound+motion response
 - [ ] Particle budget verified across worst-case storm scenario recording
 - [ ] Frame time under storm ≤12 ms mid-hardware (measure matrix, record)
@@ -2911,6 +3904,9 @@ Goal: deepen the fake-3D of all three machines — perspective, stacking, shadin
 Deliverable: a visibly deeper table, rounder reels, and a subtly tilted board within the frame budget.
 
 ### Feature 21.1 — Dozer Perspective Camera
+
+Story: The dozer camera earns its depth. Done when a tunable projection with vanishing lines replaces magic numbers.
+
 - [ ] Extract proj() into a tunable camera struct {nearScale, farScale, horizonY, depthGamma}
 - [ ] Tune depthGamma so mid-table coins don't bunch visually (compare 0.85/0.93/1.0 shots)
 - [ ] Add vanishing-point convergence to lane stripes and rails
@@ -2923,6 +3919,9 @@ Deliverable: a visibly deeper table, rounder reels, and a subtly tilted board wi
 - [ ] Regression screenshots at 3 aspect ratios
 
 ### Feature 21.2 — Coin Stacking Illusion
+
+Story: Coins visibly pile. Done when a capped layer illusion shows stacking without changing the economy.
+
 - [ ] Add layer int to coins; increment when overlap resolution fails 3+ consecutive steps
 - [ ] Draw stacked coins with y-offset = layer × rim thickness, capped at 3 layers
 - [ ] Stacked coins cast slightly larger, softer shadows
@@ -2935,6 +3934,9 @@ Deliverable: a visibly deeper table, rounder reels, and a subtly tilted board wi
 - [ ] Screenshots of dense-pile moments for the README
 
 ### Feature 21.3 — Reel Cylinder Model
+
+Story: Reels read as cylinders. Done when sin-mapped rows, brightness falloff and motion blur sell the drum.
+
 - [ ] Replace linear squash with true cylinder mapping y = R·sin(θ) per symbol row
 - [ ] Per-row brightness curve (cos θ) multiplying symbol alpha
 - [ ] Ambient-occlusion gradient baked into an offscreen strip, composited per reel
@@ -2947,6 +3949,9 @@ Deliverable: a visibly deeper table, rounder reels, and a subtly tilted board wi
 - [ ] Reduced-motion: cylinder stays, blur/bounce disabled
 
 ### Feature 21.4 — Board Tilt & Parallax
+
+Story: The board tilts toward the sun. Done when subtle per-row perspective applies with corrected hit-testing.
+
 - [ ] Apply 4° perspective tilt to the match-3 plate via per-row scale (0.985→1.015)
 - [ ] Hit-testing corrected through the same row-scale function
 - [ ] Gem shadows shift down-screen proportionally to row depth
@@ -2959,6 +3964,9 @@ Deliverable: a visibly deeper table, rounder reels, and a subtly tilted board wi
 - [ ] Before/after screenshots reviewed against theme goals
 
 ### Feature 21.5 — Dynamic Shadows
+
+Story: Shadows are shared and colored. Done when one soft-shadow painter serves all scenes from the sun's direction.
+
 - [ ] Shared drawSoftShadow(ctx, x, y, rx, ry, alpha) used by all three games
 - [ ] Light direction derived from the sky sun position (upper right)
 - [ ] Shadow offset/length varies with pseudo-height (falling gems stretch)
@@ -2971,6 +3979,9 @@ Deliverable: a visibly deeper table, rounder reels, and a subtly tilted board wi
 - [ ] Screenshot diff with shadows off/on for the docs
 
 ### Feature 21.6 — Specular Sweep
+
+Story: Light sweeps the glass. Done when periodic speculars cross boards, cabinet and coins, reduced-motion-gated.
+
 - [ ] Timed diagonal light sweep across the match-3 board every ~45 s
 - [ ] Sweep highlights gem speculars sequentially (offset by cell position)
 - [ ] Slot cabinet gets the sweep across its orange frame
@@ -2983,6 +3994,9 @@ Deliverable: a visibly deeper table, rounder reels, and a subtly tilted board wi
 - [ ] Capture sweep moment for the README gif
 
 ### Feature 21.7 — Depth-of-Field Cues
+
+Story: Distance dims gently. Done when depth-of-field overlays cue far objects without hurting readability.
+
 - [ ] Back third of the dozer table desaturated 12% via overlay gradient
 - [ ] Far coins draw with 1px softer edges (pre-blurred sprite variant)
 - [ ] Slot window top/bottom rows dimmed beyond cylinder shading
@@ -2995,6 +4009,9 @@ Deliverable: a visibly deeper table, rounder reels, and a subtly tilted board wi
 - [ ] Screenshot comparison at 3 quality levels
 
 ### Feature 21.8 — Fall Animations
+
+Story: Falling coins arc and tumble. Done when front/gutter falls animate with pooled, capped effects.
+
 - [ ] Front-edge coin falls follow a quadratic arc with slight x-drift
 - [ ] Falling coins spin: ellipse ry animates rim-over-face (tumble illusion)
 - [ ] Landing splash: cyan glow ripple + 3 droplet particles at the lip
@@ -3007,6 +4024,9 @@ Deliverable: a visibly deeper table, rounder reels, and a subtly tilted board wi
 - [ ] Verify payout timing matches animation contact moment (feel check)
 
 ### Feature 21.9 — Camera Nudge
+
+Story: Impacts nudge the camera. Done when render-only nudges land within a frame of their sounds.
+
 - [ ] 2px 80ms canvas translate nudge when a dropped coin lands on the pile
 - [ ] 4px nudge + 1.5% zoom pulse on jackpot and charm-chest falls
 - [ ] Nudges implemented as render-offset only (physics unaffected)
@@ -3019,6 +4039,9 @@ Deliverable: a visibly deeper table, rounder reels, and a subtly tilted board wi
 - [ ] Feel review: nudges land within 1 frame of their trigger sound
 
 ### Feature 21.10 — Depth QA & Budget
+
+Story: Depth ships within budget. Done when the QA matrix passes and constants live in a VISUAL block.
+
 - [ ] Full-scene frame profile: depth pass total < 2 ms on reference hardware
 - [ ] Screenshot matrix: 3 games × 3 quality tiers × light/dense states
 - [ ] Reduced-motion parity walkthrough (no depth feature breaks it)
@@ -3036,6 +4059,9 @@ Goal: a wordless-where-possible first five minutes that lands the loop: match �
 Deliverable: guided first session with tier reveals, tooltips, and skippable coaching.
 
 ### Feature 22.1 — First-Run Detection
+
+Story: The game knows a newcomer. Done when fresh saves enter a resumable, always-skippable onboarding state machine.
+
 - [ ] Detect fresh state (no save, zero lifetime juice) → onboarding mode flag
 - [ ] Onboarding state machine: steps enum persisted in save (resume mid-tutorial)
 - [ ] Skip button visible from step 1 (cozy games never hold hostages)
@@ -3048,6 +4074,9 @@ Deliverable: guided first session with tier reveals, tooltips, and skippable coa
 - [ ] QA: fresh-profile run-through on desktop + mobile
 
 ### Feature 22.2 — Guided First Match
+
+Story: The first match teaches itself. Done when a guaranteed near-center match plus one hint lands the mechanic.
+
 - [ ] On first board, guarantee an obvious 3-match near center (seeded board filter)
 - [ ] Pulsing hint on the guaranteed pair after 2 s idle
 - [ ] "Swap these two!" floating label with an arrow, dismissed on first swap
@@ -3060,6 +4089,9 @@ Deliverable: guided first session with tier reveals, tooltips, and skippable coa
 - [ ] Verify labels are positioned correctly at all canvas sizes
 
 ### Feature 22.3 — Juice Meter Tease
+
+Story: Locked tabs show progress toward opening. Done when rings fill toward 7 J / 7 S and glow at ready.
+
 - [ ] Slot tab shows a mini progress ring filling toward 7 J while locked
 - [ ] Ring ticks with each juice gain; glows gold at 7/7
 - [ ] Lock icon wobbles once when affordability is first reached
@@ -3072,6 +4104,9 @@ Deliverable: guided first session with tier reveals, tooltips, and skippable coa
 - [ ] Screenshot the tease moment for the docs
 
 ### Feature 22.4 — Slot Reveal Moment
+
+Story: The slots introduce themselves. Done when the first visit wakes the cabinet and coaches the first spin.
+
 - [ ] First tab-switch to unlocked slots plays a cabinet "wake up" (lights sweep)
 - [ ] First spin is free-guided: button pulses, cost label explained in a callout
 - [ ] Guaranteed small win on the very first spin only (seeded outcome, disclosed in fairness doc)
@@ -3084,6 +4119,9 @@ Deliverable: guided first session with tier reveals, tooltips, and skippable coa
 - [ ] Feel review of the reveal with sound on
 
 ### Feature 22.5 — Dozer Reveal Moment
+
+Story: The dozer introduces itself. Done when a showcase pusher cycle and aim-ghost coach the first drop.
+
 - [ ] First visit: camera-style pan down the table (render offset animation)
 - [ ] Pusher does one slow showcase cycle before input enables
 - [ ] First drop guided with a "tap to aim" ghost coin following the pointer
@@ -3096,6 +4134,9 @@ Deliverable: guided first session with tier reveals, tooltips, and skippable coa
 - [ ] Mobile check: ghost coin tracks touch accurately
 
 ### Feature 22.6 — Grove Intro
+
+Story: The grove closes the loop. Done when the first building purchase teaches passive income and offline.
+
 - [ ] Grove tab badge appears when player first holds 15+ Juice
 - [ ] First visit highlights the Cherry Sapling card with cost breakdown
 - [ ] First purchase triggers a "+0.2 J/s forever" rate callout on the HUD
@@ -3108,6 +4149,9 @@ Deliverable: guided first session with tier reveals, tooltips, and skippable coa
 - [ ] Full funnel walkthrough: match → spin → drop → plant in under 5 min
 
 ### Feature 22.7 — Contextual Tooltips
+
+Story: Help lives where questions arise. Done when tooltips cover pills, locks and stats from one strings table.
+
 - [ ] Tooltip component (DOM, anchored, flip-aware) with 300 ms hover delay
 - [ ] Touch: long-press opens tooltip, tap elsewhere closes
 - [ ] Every HUD pill, tab lock, upgrade stat gets a tooltip string
@@ -3120,6 +4164,9 @@ Deliverable: guided first session with tier reveals, tooltips, and skippable coa
 - [ ] Accessibility review: tooltips duplicated into aria-describedby
 
 ### Feature 22.8 — Empty-State Coaching
+
+Story: Empty screens coach instead of confusing. Done when cabinet/shop/grove zero-states explain their faucets.
+
 - [ ] Charm cabinet with 0 charms shows "How to find charms" panel with 3 sources
 - [ ] Shop with 0 Stargems shows the chain diagram (J→S→G) inline
 - [ ] Grove with 0 buildings shows projected earnings example table
@@ -3132,6 +4179,9 @@ Deliverable: guided first session with tier reveals, tooltips, and skippable coa
 - [ ] Verify empty states render correctly on narrow mobile
 
 ### Feature 22.9 — Skip & Replay Controls
+
+Story: Coaching is always escapable and repeatable. Done when skip ends everything cleanly and replay works on any save.
+
 - [ ] "Skip tour" ends all coaching immediately and flags completion
 - [ ] Settings gains "Replay the tour" resetting only onboarding flags
 - [ ] Skipping mid-step cleans up labels, gating, and seeded-board filter
@@ -3144,6 +4194,9 @@ Deliverable: guided first session with tier reveals, tooltips, and skippable coa
 - [ ] QA sweep: skip/replay on mobile Safari and Firefox
 
 ### Feature 22.10 — Onboarding Metrics (local only)
+
+Story: Onboarding is measured privately. Done when local funnel counters exist with a no-telemetry guarantee.
+
 - [ ] Local funnel counters: step reached, step duration, skips (never transmitted)
 - [ ] Stats panel "Your first day" card built from those counters
 - [ ] Counters help tuning: log summary to console in dev mode only
@@ -3161,6 +4214,9 @@ Goal: playable by keyboard, readable by screen reader where DOM, safe for motion
 Deliverable: keyboard play across all three games, ARIA-clean UI, audited palette, richer settings.
 
 ### Feature 23.1 — Keyboard Match-3
+
+Story: Match-3 is fully keyboard-playable. Done when cursor+Enter swaps mirror pointer play exactly.
+
 - [ ] Arrow keys move a visible cursor cell; Enter selects, arrows+Enter swaps
 - [ ] Space re-centers cursor; Escape clears selection
 - [ ] Cursor rendered as a high-contrast rounded outline layer
@@ -3173,6 +4229,9 @@ Deliverable: keyboard play across all three games, ARIA-clean UI, audited palett
 - [ ] Doc: keyboard map in README and settings
 
 ### Feature 23.2 — Keyboard Slots & Dozer
+
+Story: Slots and dozer answer keys. Done when spin, aim and drop have bindings and a ? help overlay.
+
 - [ ] S or Enter spins when the slots tab is active
 - [ ] P opens the paytable; Escape closes dialogs universally
 - [ ] Dozer: arrow keys aim a drop marker; Enter/D drops
@@ -3185,6 +4244,9 @@ Deliverable: keyboard play across all three games, ARIA-clean UI, audited palett
 - [ ] Doc: shortcut table auto-generated from a bindings map
 
 ### Feature 23.3 — Focus & ARIA for DOM UI
+
+Story: The DOM UI is screen-reader honest. Done when roles, labels, live regions and focus traps pass an axe audit.
+
 - [ ] All interactive elements reachable and operable by keyboard (audit + fix)
 - [ ] Dialogs: focus trap, initial focus, restore-on-close
 - [ ] aria-live="polite" region announcing currency milestones and achievements
@@ -3197,6 +4259,9 @@ Deliverable: keyboard play across all three games, ARIA-clean UI, audited palett
 - [ ] Manual NVDA/VoiceOver smoke script documented and run
 
 ### Feature 23.4 — Colorblind Shapes Audit
+
+Story: No information lives in color alone. Done when grayscale and CVD filters leave everything identifiable.
+
 - [ ] Verify each fruit silhouette is identifiable in grayscale screenshots
 - [ ] Deuteranopia/protanopia/tritanopia filter passes over all screens
 - [ ] Slot symbols: confirm seven/star/cherry distinct without hue
@@ -3209,6 +4274,9 @@ Deliverable: keyboard play across all three games, ARIA-clean UI, audited palett
 - [ ] Fixes folded into data.js FRUITS/SYMBOLS definitions
 
 ### Feature 23.5 — Contrast & Text Scaling
+
+Story: Text stays readable everywhere. Done when contrast ≥4.5:1 and 200% zoom hold across themes.
+
 - [ ] Audit all text over sky/glass backgrounds for ≥ 4.5:1 contrast
 - [ ] Add text shadows/scrims where the sky gradient fails contrast
 - [ ] Respect browser font-size scaling: rem-based type ramp audit
@@ -3221,6 +4289,9 @@ Deliverable: keyboard play across all three games, ARIA-clean UI, audited palett
 - [ ] Findings + fixes documented in docs/accessibility.md
 
 ### Feature 23.6 — Motion Reduction Completeness
+
+Story: Reduced motion is a first-class mode. Done when OS preference is honored with a manual override.
+
 - [ ] Honor prefers-reduced-motion media query as the default on first run
 - [ ] Inventory every animation; classify essential vs decorative
 - [ ] Decorative set fully disabled under reduced motion (clouds, sweeps, nudges)
@@ -3233,6 +4304,9 @@ Deliverable: keyboard play across all three games, ARIA-clean UI, audited palett
 - [ ] Doc: motion inventory table in docs/accessibility.md
 
 ### Feature 23.7 — Audio Accessibility
+
+Story: Sound never carries meaning alone. Done when every audio cue has a visual twin and volume is granular.
+
 - [ ] Every meaningful sound has a visual counterpart (win flash, fall glint)
 - [ ] Optional captions toast for jackpot/charm events ("♪ fanfare")
 - [ ] Master volume slider replacing the binary toggle
@@ -3245,6 +4319,9 @@ Deliverable: keyboard play across all three games, ARIA-clean UI, audited palett
 - [ ] Hearing-impaired playtest walkthrough recorded
 
 ### Feature 23.8 — Save Accessibility
+
+Story: Saving is accessible. Done when codes label, announce, and also round-trip as downloadable files.
+
 - [ ] Save-code textarea gets label, description, and copy-status announcement
 - [ ] Copy button announces success/failure to the live region
 - [ ] Import errors read aloud and rendered inline, not only as toasts
@@ -3257,6 +4334,9 @@ Deliverable: keyboard play across all three games, ARIA-clean UI, audited palett
 - [ ] Docs updated with save portability instructions
 
 ### Feature 23.9 — Touch Targets & Mobile Ergonomics
+
+Story: Thumbs are welcome. Done when touch targets ≥44 px, safe areas and drag tolerances pass a device lab.
+
 - [ ] All buttons ≥ 44×44 px effective touch area (audit + fix)
 - [ ] Bottom action bar within thumb reach on phones (layout shift under 700 px)
 - [ ] Canvas gestures: drag-swap tolerance tuned for touch (larger dead zone)
@@ -3269,6 +4349,9 @@ Deliverable: keyboard play across all three games, ARIA-clean UI, audited palett
 - [ ] Findings logged and fixed; screenshots archived
 
 ### Feature 23.10 — Settings Panel v2
+
+Story: Settings grow up. Done when a tabbed, searchable, described panel replaces the flat list.
+
 - [ ] Reorganize into tabs: Game / Audio / Visuals / Access / Save
 - [ ] Every setting gets inline description and default indicator
 - [ ] Reset-to-defaults per section
@@ -3286,6 +4369,9 @@ Goal: turn tools/simulate.js into a full tuning workbench so every knob has a me
 Deliverable: sweep simulators, progression bots, geometry tuner, and a documented knob table.
 
 ### Feature 24.1 — Par-Sheet CLI
+
+Story: The simulator becomes a CLI workbench. Done when flags select subsystems and emit JSON, variance and droughts.
+
 - [ ] simulate.js flags: --slot-only/--match-only/--dozer-only for fast iteration
 - [ ] --json output mode for tooling consumption
 - [ ] --seed flag overriding the fixed seeds
@@ -3298,6 +4384,9 @@ Deliverable: sweep simulators, progression bots, geometry tuner, and a documente
 - [ ] Doc: simulator manual section in README
 
 ### Feature 24.2 — Upgrade-Sweep Simulator
+
+Story: Every upgrade combo is measured. Done when RTP sweeps across upgrades flag ceilings and dominated buys.
+
 - [ ] Enumerate slot RTP across all Lucky Sevens × Sun Reels combinations
 - [ ] Dozer EV sweep across rails/pusher/magnet levels (sampled sims)
 - [ ] Output matrix highlighting any combo exceeding 200% RTP (inflation guard)
@@ -3310,6 +4399,9 @@ Deliverable: sweep simulators, progression bots, geometry tuner, and a documente
 - [ ] Doc: sweep interpretation guide with the current matrix
 
 ### Feature 24.3 — Progression Bot
+
+Story: A bot plays the first hour. Done when unlock pacing asserts against targets in a deterministic run.
+
 - [ ] Headless bot playing a full first hour: greedy match-3, spin when affordable, drop when affordable
 - [ ] Bot buys buildings/upgrades with a simple ROI heuristic
 - [ ] Output: timeline of unlocks (slots, dozer, first charm, 100 G) with timestamps
@@ -3322,6 +4414,9 @@ Deliverable: sweep simulators, progression bots, geometry tuner, and a documente
 - [ ] Doc: pacing targets table with measured values
 
 ### Feature 24.4 — Dozer Geometry Tuner
+
+Story: Table geometry is a mapped surface. Done when the side-loss heatmap locates and pins the design point.
+
 - [ ] Parametric sweep: rail length × coin radius × pusher travel → side-loss surface
 - [ ] Output heatmap (ASCII) of side-loss across the surface
 - [ ] Locate the s ≈ 8% design point and confirm current constants sit on it
@@ -3334,6 +4429,9 @@ Deliverable: sweep simulators, progression bots, geometry tuner, and a documente
 - [ ] Re-run after any physics change; diff detection on the surface
 
 ### Feature 24.5 — Charm Drop Fairness
+
+Story: Charm luck is quantified. Done when chests-to-set distributions justify (or add) a pity rule.
+
 - [ ] Simulate 10k chest openings: distribution per rarity vs design weights
 - [ ] Expected chests-to-complete-set per set computed (coupon collector with weights)
 - [ ] Verify Celestial completion lands in the intended 60–120 chest band
@@ -3346,6 +4444,9 @@ Deliverable: sweep simulators, progression bots, geometry tuner, and a documente
 - [ ] Doc: collection math appendix in plan/docs
 
 ### Feature 24.6 — Economy Dashboard Doc
+
+Story: Every knob has a home page. Done when docs/tuning.md tables all constants with ranges and red lines.
+
 - [ ] docs/tuning.md master table: every knob, file:line, current value, safe range
 - [ ] Chain diagram annotated with measured EVs at base/mid/max
 - [ ] Inflation model: projected G income at hour 1/5/20 with sinks overlaid
@@ -3358,6 +4459,9 @@ Deliverable: sweep simulators, progression bots, geometry tuner, and a documente
 - [ ] Publish doc link in README
 
 ### Feature 24.7 — Regression Gates
+
+Story: Economy drift cannot land silently. Done when npm run verify asserts EVs and pacing bands, failing loud.
+
 - [ ] npm run verify = test + simulate quick profile + structure lint
 - [ ] Simulate quick profile (< 30 s) with assertion-only output
 - [ ] Economy assertions: slot EV exact, dozer EV band, match-3 J/move band
@@ -3370,6 +4474,9 @@ Deliverable: sweep simulators, progression bots, geometry tuner, and a documente
 - [ ] Doc: contributor guide section on the gates
 
 ### Feature 24.8 — Seeded Replay Harness
+
+Story: Any session can be replayed exactly. Done when record/replay reproduces bugs bit-identically.
+
 - [ ] Record mode: log every RNG draw site + player action with frame stamps
 - [ ] Replay mode: feed the log back for a bit-identical session
 - [ ] Use replays to reproduce reported bugs deterministically
@@ -3382,6 +4489,9 @@ Deliverable: sweep simulators, progression bots, geometry tuner, and a documente
 - [ ] Doc: replay workflow for bug reports
 
 ### Feature 24.9 — Generosity Profiles
+
+Story: Generosity is a profile, not a fork. Done when Cozy/Snappy/Marathon overlays pass all invariants.
+
 - [ ] Define profiles: Cozy (current), Snappy (faster early), Marathon (slower, deeper)
 - [ ] Profiles are data.js overlay objects touching only tuned constants
 - [ ] Profile picker in settings (new runs only; active run keeps its profile)
@@ -3394,6 +4504,9 @@ Deliverable: sweep simulators, progression bots, geometry tuner, and a documente
 - [ ] Doc: profile design intent one-pager
 
 ### Feature 24.10 — Balance Changelog
+
+Story: Tuning history is legible. Done when every balance change logs before/after numbers with rationale.
+
 - [ ] docs/balance-log.md: dated entries, knob before/after, sim numbers before/after
 - [ ] Entry template with rationale field (why, not just what)
 - [ ] Backfill entries for every tuning change made since v1
@@ -3411,6 +4524,9 @@ Goal: 60 fps on mid hardware, kind to batteries, instant startup — measured, n
 Deliverable: instrumented frame budget, pooled allocations, low-power mode, < 1 s first frame.
 
 ### Feature 25.1 — Frame Budget Instrumentation
+
+Story: Frame time is observable. Done when a dev overlay tracks per-system spans and rolling p95.
+
 - [ ] Dev overlay: per-system frame times (physics/draw/ui) as sparkline bars
 - [ ] Budget targets: physics 3 ms, draw 6 ms, ui 1 ms on reference hardware
 - [ ] performance.mark/measure spans around each system
@@ -3423,6 +4539,9 @@ Deliverable: instrumented frame budget, pooled allocations, low-power mode, < 1 
 - [ ] CI-less check: perf smoke in Playwright asserts p95 < 32 ms idle
 
 ### Feature 25.2 — Offscreen Discipline
+
+Story: Hidden things cost nothing. Done when inactive scenes tick cheap and a validated settle model covers long hides.
+
 - [ ] Only the active tab's canvas draws (verify no hidden draw calls remain)
 - [ ] Inactive game views update logic at reduced tick (4 Hz) where safe
 - [ ] Dozer physics stays 60 Hz only while dozer visible or auto-dropper owns it
@@ -3435,6 +4554,9 @@ Deliverable: instrumented frame budget, pooled allocations, low-power mode, < 1 
 - [ ] Doc: lifecycle diagram of tick modes
 
 ### Feature 25.3 — DOM Update Hygiene
+
+Story: The DOM updates only on change. Done when diffed writes keep idle DOM mutations near zero.
+
 - [ ] HUD updates only on value change (diffed), not every 200 ms tick
 - [ ] List refreshers touch only changed cards (per-card dirty flags)
 - [ ] textContent writes batched inside a single rAF
@@ -3447,6 +4569,9 @@ Deliverable: instrumented frame budget, pooled allocations, low-power mode, < 1 
 - [ ] Zero forced synchronous layouts in the interaction traces
 
 ### Feature 25.4 — Canvas Draw Caching
+
+Story: Draw work is pre-baked. Done when sprite/gradient caches cut draw time measurably.
+
 - [ ] Cache gem sprites per fruit×size to offscreen canvases (invalidate on resize)
 - [ ] Cache slot symbols likewise; reels blit sprites instead of path-drawing
 - [ ] Cache dozer coin at 6 scale buckets; draw nearest bucket
@@ -3459,6 +4584,9 @@ Deliverable: instrumented frame budget, pooled allocations, low-power mode, < 1 
 - [ ] Test: cache invalidation on DPR change
 
 ### Feature 25.5 — Physics Micro-Optimizations
+
+Story: Physics scales past 90 coins. Done when spatial hashing and sleep keep worst case under 2 ms.
+
 - [ ] Spatial hash grid (cell = 2r) replacing O(n²) when n > 48
 - [ ] Sleep states: stationary coins skip integration until neighborhood wakes
 - [ ] Wake rules: pusher proximity, collision impulse, drop splash radius
@@ -3471,6 +4599,9 @@ Deliverable: instrumented frame budget, pooled allocations, low-power mode, < 1 
 - [ ] Sim regression: E[G/drop] unchanged within noise after optimizations
 
 ### Feature 25.6 — Allocation Discipline
+
+Story: The frame path stops allocating. Done when pooling flattens GC pauses in a soak test.
+
 - [ ] Heap-allocation audit of the frame path (DevTools allocation sampling)
 - [ ] Pool floaters, tweens, events; reuse objects via reset()
 - [ ] Replace per-frame array literals/closures in hot loops
@@ -3483,6 +4614,9 @@ Deliverable: instrumented frame budget, pooled allocations, low-power mode, < 1 
 - [ ] Numbers recorded in docs/perf.md
 
 ### Feature 25.7 — Low-Power Mode
+
+Story: Batteries are respected. Done when low-power mode halves frames and strips decoration with equal earnings.
+
 - [ ] Setting: Low power (auto-on via battery API when discharging < 20%)
 - [ ] Halves target fps (30) with time-accumulated logic (no slow-motion bug)
 - [ ] Disables decorative layers: clouds, sweeps, DoF, particles beyond count-ups
@@ -3495,6 +4629,9 @@ Deliverable: instrumented frame budget, pooled allocations, low-power mode, < 1 
 - [ ] Doc: what low-power changes, for support questions
 
 ### Feature 25.8 — Startup Time
+
+Story: The game opens instantly. Done when first playable frame lands under 1 s on desktop.
+
 - [ ] Measure cold start: first paint, first playable frame (target < 1 s desktop)
 - [ ] Defer non-critical construction (charm DOM, shop DOM) until tab visit
 - [ ] Board generation budget: < 30 ms including no-match filtering
@@ -3507,6 +4644,9 @@ Deliverable: instrumented frame budget, pooled allocations, low-power mode, < 1 
 - [ ] Startup waterfall screenshot in docs/perf.md
 
 ### Feature 25.9 — Memory Hygiene
+
+Story: Memory stays flat forever. Done when tab-switch and soak tests show no growth or detached nodes.
+
 - [ ] Leak hunt: 50 tab switches → heap snapshot diff shows no growth
 - [ ] Event listener audit: every addEventListener paired or delegated
 - [ ] Dialog open/close cycles leak-free (focus trap teardown)
@@ -3519,6 +4659,9 @@ Deliverable: instrumented frame budget, pooled allocations, low-power mode, < 1 
 - [ ] Findings in docs/perf.md
 
 ### Feature 25.10 — Performance QA Matrix
+
+Story: Performance is a signed matrix. Done when device×scenario results publish with no red cells.
+
 - [ ] Device matrix: 2019 laptop, mid Android, iPhone SE-class, tablet
 - [ ] Scenario matrix: idle, cascade storm, dozer avalanche, all-tabs cycle
 - [ ] Record fps/p95/energy per cell; publish table in docs/perf.md
@@ -3536,6 +4679,9 @@ Goal: the logic layer provably correct, the UI provably alive, on every browser 
 Deliverable: expanded unit suites, statistical tests, Playwright coverage, and a manual QA script.
 
 ### Feature 26.1 — Test Runner Ergonomics
+
+Story: Tests are pleasant to run and write. Done when filtering, timing and discovery make additions trivial.
+
 - [ ] tools/test.js gains --filter substring and --quiet flags
 - [ ] Per-suite timing printed; slowest test flagged
 - [ ] Assertion helpers extended: throws(), deepEq(), inBand()
@@ -3548,6 +4694,9 @@ Deliverable: expanded unit suites, statistical tests, Playwright coverage, and a
 - [ ] Suite runtime kept under 15 s
 
 ### Feature 26.2 — Save Migration Suite
+
+Story: Old saves are fixtures, not memories. Done when frozen v1 saves load in every future build.
+
 - [ ] Frozen fixture saves: v1 fresh, v1 mid-game, v1 endgame (checked into tools/fixtures)
 - [ ] Migration test: every fixture loads into current defaultState shape
 - [ ] Unknown-field tolerance: future fields survive round-trip untouched? (decide+test policy)
@@ -3560,6 +4709,9 @@ Deliverable: expanded unit suites, statistical tests, Playwright coverage, and a
 - [ ] Add migration entry template for future schema bumps
 
 ### Feature 26.3 — Board Fuzzing
+
+Story: The board survives brutality. Done when 10k-board and 10k-move fuzzing hold all invariants.
+
 - [ ] 10k random boards: zero pre-matches, ≥ 1 move, generation < 5 ms p99
 - [ ] 10k-move random playthrough without invariant violation (extend current 500)
 - [ ] Invariants: board full, no null holes, juice > 0, specials counted correctly
@@ -3572,6 +4724,9 @@ Deliverable: expanded unit suites, statistical tests, Playwright coverage, and a
 - [ ] Seed of any failure printed for replay
 
 ### Feature 26.4 — Slot Statistical Tests
+
+Story: The slots pass statistics. Done when chi-squared and band tests confirm the par sheet at scale.
+
 - [ ] Chi-squared test: 1M spins per-symbol frequency vs reel weights (p > 0.001)
 - [ ] Line-hit frequencies vs par sheet within 3σ bands
 - [ ] Jackpot count in 10M spins within Poisson expectation band
@@ -3584,6 +4739,9 @@ Deliverable: expanded unit suites, statistical tests, Playwright coverage, and a
 - [ ] Document the statistical methodology in docs/fairness.md
 
 ### Feature 26.5 — Dozer Physics Invariants
+
+Story: Physics holds its promises. Done when NaN, tunneling, trapping and determinism invariants pass 100k steps.
+
 - [ ] Property test: no coin ever at NaN/Inf across 100k random steps
 - [ ] No tunneling: coin displacement per step < diameter under max forces
 - [ ] Pusher never traps coins behind it permanently (escape within 3 cycles)
@@ -3596,6 +4754,9 @@ Deliverable: expanded unit suites, statistical tests, Playwright coverage, and a
 - [ ] All invariants runnable via --physics flag in test.js
 
 ### Feature 26.6 — Playwright Journeys
+
+Story: The browser proves the journeys. Done when Playwright walks boot→match→spin→drop→buy→prestige without console errors.
+
 - [ ] Promote scratch smoke into tools/e2e.js (kept dependency-light, optional install note)
 - [ ] Journey: fresh boot → first match → juice credited (asserted via T7.app)
 - [ ] Journey: unlock slots → spin → settle → paytable opens with numbers
@@ -3608,6 +4769,9 @@ Deliverable: expanded unit suites, statistical tests, Playwright coverage, and a
 - [ ] Runtime < 90 s total, runnable headless via npm run e2e
 
 ### Feature 26.7 — Cross-Browser Pass
+
+Story: Every engine renders one game. Done when the browser matrix passes with documented support levels.
+
 - [ ] Matrix: Chrome, Firefox, Safari (macOS/iOS), Edge — latest two versions
 - [ ] dialog element support verified (polyfill decision if Safari < 15.4 matters)
 - [ ] Pointer events on iOS Safari: drag-swap and table-aim verified
@@ -3620,6 +4784,9 @@ Deliverable: expanded unit suites, statistical tests, Playwright coverage, and a
 - [ ] Browser support statement added to README
 
 ### Feature 26.8 — Mobile Device Pass
+
+Story: Real phones pass. Done when device runs confirm touch, layout, audio and battery behavior.
+
 - [ ] Full loop playthrough on Android Chrome + iOS Safari (real devices)
 - [ ] Touch precision: match-3 swap success rate ≥ 95% in 50 attempts
 - [ ] Viewport: no scroll traps; address-bar collapse handled
@@ -3632,6 +4799,9 @@ Deliverable: expanded unit suites, statistical tests, Playwright coverage, and a
 - [ ] Mobile-specific bugs logged and fixed
 
 ### Feature 26.9 — Manual QA Script
+
+Story: Humans still test. Done when a 40-step manual script exists with sign-off history.
+
 - [ ] docs/qa-script.md: 40-step full-game checklist with expected results
 - [ ] Includes edge cases: 0-affordability clicks, rapid tab switching, resize storms
 - [ ] Save-abuse section: import mid-animation, reset mid-spin
@@ -3644,6 +4814,9 @@ Deliverable: expanded unit suites, statistical tests, Playwright coverage, and a
 - [ ] Re-run policy: before every tag
 
 ### Feature 26.10 — Zero-Known-Crash Gate
+
+Story: Crashes block releases. Done when the zero-known-crash gate and error recovery are enforced.
+
 - [ ] Issue triage labels: crash / logic / visual / feel / docs
 - [ ] Crash bar: zero known reproducible crashes to ship
 - [ ] Global error handler: last-chance save + apologetic toast on uncaught error
@@ -3661,6 +4834,9 @@ Goal: anyone can play it, fork it, and understand it in ten minutes.
 Deliverable: Pages guide, polished README with media, contributor docs, tagged release.
 
 ### Feature 27.1 — GitHub Pages Guide
+
+Story: Anyone can host it. Done when the Pages guide takes a fork to a live URL in five minutes.
+
 - [ ] docs/deploy.md: enable Pages from branch root, with screenshots
 - [ ] Verify Pages serves .nojekyll correctly (no Jekyll processing)
 - [ ] Custom-domain instructions (CNAME) for forks
@@ -3673,6 +4849,9 @@ Deliverable: Pages guide, polished README with media, contributor docs, tagged r
 - [ ] Troubleshooting section: blank page, stale cache, mixed content
 
 ### Feature 27.2 — README Polish
+
+Story: The README sells and explains. Done when hero, GIF, math section and FAQ are polished.
+
 - [ ] Hero section: one-line pitch + play link + badge row (license, tests)
 - [ ] Animated GIF of the full loop (match → spin → drop) under 3 MB
 - [ ] Screenshot gallery: all three games + charm cabinet
@@ -3685,6 +4864,9 @@ Deliverable: Pages guide, polished README with media, contributor docs, tagged r
 - [ ] Spelling/tone pass; reads warm, not corporate
 
 ### Feature 27.3 — Media Assets
+
+Story: The game is showable. Done when GIFs, screenshots, social preview and favicons exist within size budgets.
+
 - [ ] Capture pipeline: consistent 1280×800 window, day theme, staged saves
 - [ ] GIF/webm recordings of: cascade, jackpot, dozer avalanche, charm unlock
 - [ ] Social preview image (1280×640) composed from game art
@@ -3697,6 +4879,9 @@ Deliverable: Pages guide, polished README with media, contributor docs, tagged r
 - [ ] Verify link unfurls on Slack/Discord/Twitter with the preview
 
 ### Feature 27.4 — CONTRIBUTING.md
+
+Story: Contributors know the rules. Done when CONTRIBUTING covers philosophy, gates and starter issues.
+
 - [ ] Project philosophy: cozy, free forever, no build step, no deps
 - [ ] Architecture tour: module map with one-paragraph responsibilities
 - [ ] Golden rules: logic in UMD cores, visuals in views, constants in data.js
@@ -3709,6 +4894,9 @@ Deliverable: Pages guide, polished README with media, contributor docs, tagged r
 - [ ] Code of conduct link
 
 ### Feature 27.5 — Code Tour Doc
+
+Story: The code explains itself. Done when the architecture tour maps every module with extension guides.
+
 - [ ] docs/architecture.md: data-flow diagram from input to pixels
 - [ ] The UMD pattern explained with the Node-reuse rationale
 - [ ] Economy flow diagram with multiplier application points
@@ -3721,6 +4909,9 @@ Deliverable: Pages guide, polished README with media, contributor docs, tagged r
 - [ ] Accuracy review against the shipped code
 
 ### Feature 27.6 — Versioning & Releases
+
+Story: Releases are ceremonies. Done when semver, changelog and tagged v1.0.0 with notes exist.
+
 - [ ] Semver policy: minor = content, patch = fixes, major = save-format bumps
 - [ ] CHANGELOG.md in keep-a-changelog format, backfilled from git history
 - [ ] Release checklist doc: verify → tag → notes → media refresh
@@ -3733,6 +4924,9 @@ Deliverable: Pages guide, polished README with media, contributor docs, tagged r
 - [ ] Announce format for releases (README badge auto-updates via shields)
 
 ### Feature 27.7 — Meta Tags & Discoverability
+
+Story: Links unfurl beautifully. Done when meta tags, manifest and JSON-LD pass Lighthouse SEO ≥95.
+
 - [ ] Title/description meta finalized with keywords (idle, match-3, coin dozer)
 - [ ] Canonical URL + theme-color meta
 - [ ] JSON-LD VideoGame schema block in index.html
@@ -3745,6 +4939,9 @@ Deliverable: Pages guide, polished README with media, contributor docs, tagged r
 - [ ] Search-result snippet reviewed after indexing
 
 ### Feature 27.8 — Store-Style Page Copy
+
+Story: Reposts have ready copy. Done when press.md offers descriptions, captions and an itch guide.
+
 - [ ] docs/press.md: short/medium/long descriptions for reposts (itch, aggregators)
 - [ ] Feature bullet bank with the honest math angle (player-positive RTP)
 - [ ] Screenshot captions bank
@@ -3757,6 +4954,9 @@ Deliverable: Pages guide, polished README with media, contributor docs, tagged r
 - [ ] Linked from README footer
 
 ### Feature 27.9 — License & Credits Hygiene
+
+Story: Licensing is spotless. Done when NOTICE, credits and the zero-third-party audit are recorded.
+
 - [ ] SPDX headers decision (repo-level LICENSE suffices; document choice)
 - [ ] NOTICE file: research citations and inspiration acknowledgments
 - [ ] Verify zero third-party code/assets in the runtime (audit)
@@ -3769,6 +4969,9 @@ Deliverable: Pages guide, polished README with media, contributor docs, tagged r
 - [ ] Legal-ish review pass; questions resolved or documented
 
 ### Feature 27.10 — Launch Checklist
+
+Story: Launch is a checklist, not a hope. Done when every gate is checked and v1.0.0 ships.
+
 - [ ] All Phase 26 gates green on the release commit
 - [ ] Pages live check: fresh browser, no cache, full loop playable
 - [ ] Mobile spot-check on the live URL
@@ -3786,6 +4989,9 @@ Goal: make the second, third, and tenth laps feel planned, not vestigial.
 Deliverable: ceremonial prestige, deeper seed math, challenge runs, and lap-3+ balance.
 
 ### Feature 28.1 — Preserves Ceremony
+
+Story: Prestige is a ceremony. Done when preserves commit atomically and the jar animation celebrates it.
+
 - [ ] Prestige confirm becomes a styled dialog with before/after multiplier table
 - [ ] Jar-filling animation: currencies pour into a preserve jar (canvas overlay)
 - [ ] Jar lands on a shelf in the Grove panel (persistent cosmetic record)
@@ -3798,6 +5004,9 @@ Deliverable: ceremonial prestige, deeper seed math, challenge runs, and lap-3+ b
 - [ ] Feel review with sound
 
 ### Feature 28.2 — Seed Math Extensions
+
+Story: Seed math goes long. Done when thresholds, softcap and projections make lap timing visible.
+
 - [ ] Seeds preview in Grove card shows next-seed threshold in lifetime G
 - [ ] Diminishing-returns display: seeds curve plotted as ASCII/CSS mini-chart
 - [ ] Decide+implement seed softcap beyond 100 seeds (e.g., +10% → +7%) with sims
@@ -3810,6 +5019,9 @@ Deliverable: ceremonial prestige, deeper seed math, challenge runs, and lap-3+ b
 - [ ] Balance-log entry with the chosen curve
 
 ### Feature 28.3 — Second-Lap Accelerators
+
+Story: Lap two starts warm. Done when chosen accelerators shorten early game without skipping it.
+
 - [ ] Keep-on-prestige: one grove building type stays planted (player chooses)
 - [ ] Early-lap boost: first 77 J each lap gains ×2 (seeded warm start)
 - [ ] Charm levels persist (already) — surface their compounding visibly post-reset
@@ -3822,6 +5034,9 @@ Deliverable: ceremonial prestige, deeper seed math, challenge runs, and lap-3+ b
 - [ ] Balance-log entry
 
 ### Feature 28.4 — Preserve Jar Collection
+
+Story: Every lap leaves a jar. Done when the shelf records lap stats compactly with tiered lids.
+
 - [ ] Each prestige mints a jar with lap stats embossed (G earned, time, charms)
 - [ ] Jar shelf UI in Grove: scrollable, hover shows lap summary
 - [ ] Jar visual varies by lap performance (bronze/silver/gold lids)
@@ -3834,6 +5049,9 @@ Deliverable: ceremonial prestige, deeper seed math, challenge runs, and lap-3+ b
 - [ ] Screenshot for docs
 
 ### Feature 28.5 — Endgame Stargem Sinks
+
+Story: The endgame has worthy sinks. Done when grand upgrades (incl. a re-proved second payline) absorb late G.
+
 - [ ] Grand Upgrades tier: 777-G-scale purchases (e.g., permanent 2nd payline)
 - [ ] Second payline design: diagonal line at 50% pay — full par-sheet re-proof
 - [ ] Golden Pusher cosmetic-plus (+2% special chance) at 1,111 G
@@ -3846,6 +5064,9 @@ Deliverable: ceremonial prestige, deeper seed math, challenge runs, and lap-3+ b
 - [ ] Balance-log entries per sink
 
 ### Feature 28.6 — Challenge Preserves
+
+Story: Challenges remix the rules. Done when modifier laps stay EV-positive and pay unique charms.
+
 - [ ] Challenge modifiers selectable at prestige: Droughtless (no grove), Slick Reels (RTP 105%), Narrow Table
 - [ ] Completing a challenge lap stamps the jar + grants a unique charm
 - [ ] Three unique challenge charms designed (new mini-set with +2% all each)
@@ -3858,6 +5079,9 @@ Deliverable: ceremonial prestige, deeper seed math, challenge runs, and lap-3+ b
 - [ ] Docs: challenge guide section
 
 ### Feature 28.7 — Statistics Deep Dive
+
+Story: Stats go deep. Done when per-lap records and personal RTP render from a bounded history.
+
 - [ ] Stats panel v2: per-lap tables, records (best cascade, biggest win, fastest lap)
 - [ ] Lifetime RTP experienced: personal measured slot/dozer RTP vs published
 - [ ] Charts: G income over session (sparkline from sampled history)
@@ -3870,6 +5094,9 @@ Deliverable: ceremonial prestige, deeper seed math, challenge runs, and lap-3+ b
 - [ ] Screenshot for docs
 
 ### Feature 28.8 — Lap 3+ Balance
+
+Story: Lap ten still progresses. Done when ten-lap sims show stable times and no overflow.
+
 - [ ] Ten-lap bot simulation: lap times, seed growth, sink coverage per lap
 - [ ] Identify the wall lap (where time-to-777-G rebounds) and flatten it
 - [ ] Grand-sink pricing tuned so laps 3–7 each buy ≥ 1 grand upgrade
@@ -3882,6 +5109,9 @@ Deliverable: ceremonial prestige, deeper seed math, challenge runs, and lap-3+ b
 - [ ] Balance-log entry summarizing the endgame curve
 
 ### Feature 28.9 — Elder Content Teasers
+
+Story: Something stirs beyond the harbor. Done when a honest tease appears at 7 preserves feeding v2 votes.
+
 - [ ] Post-7-preserves hook: "Something stirs beyond the harbor…" flavor line
 - [ ] Locked 4th tab silhouette appears at 7 preserves (pure tease, honest tooltip)
 - [ ] Tease content configured in data.js (no dead code paths)
@@ -3894,6 +5124,9 @@ Deliverable: ceremonial prestige, deeper seed math, challenge runs, and lap-3+ b
 - [ ] Decision checkpoint documented for v2 planning
 
 ### Feature 28.10 — Endgame QA
+
+Story: The endgame is QA-hardened. Done when endgame fixtures, journeys and abuse tests pass.
+
 - [ ] Hand-played (accelerated) three-lap session; feel notes filed
 - [ ] Save fixtures: 1-lap, 5-lap, 10-lap added to migration suite
 - [ ] All endgame features exercised in a Playwright journey
@@ -3911,6 +5144,9 @@ Goal: the game feels gently alive across days and seasons — with zero servers,
 Deliverable: seasonal palettes, weekly charm rotation, daily bonus, event calendar; deterministic and fair.
 
 ### Feature 29.1 — Date-Seeded Determinism Core
+
+Story: Days are seeds. Done when UTC day seeds plus a claim ledger make live content deterministic and rewind-safe.
+
 - [ ] dateSeed(date, salt) helper: UTC day → stable 32-bit seed via fnv1a
 - [ ] Separate salts per system (palette, rotation, wheel) — independent streams
 - [ ] All live-ish features derive from dateSeed only (no server, no clock net)
@@ -3923,6 +5159,9 @@ Deliverable: seasonal palettes, weekly charm rotation, daily bonus, event calend
 - [ ] All features below build on this core (dependency noted)
 
 ### Feature 29.2 — Season Palettes
+
+Story: Seasons repaint the sky. Done when four palettes rotate automatically with a manual pin.
+
 - [ ] Four palettes: Spring Rinse, High Summer (default), Harvest Gold, Frost Glass
 - [ ] Palette = CSS variable overlay + canvas color token swap (single source)
 - [ ] Auto-rotate by meteorological season from the date core
@@ -3935,6 +5174,9 @@ Deliverable: seasonal palettes, weekly charm rotation, daily bonus, event calend
 - [ ] Tests: palette selection math around season boundaries
 
 ### Feature 29.3 — Weekly Charm Rotation
+
+Story: Each week features a set. Done when chest odds double for the featured set with honest display.
+
 - [ ] Each ISO week features one charm set: its chest odds double for the week
 - [ ] Featured set bannered in the cabinet with the week's end date
 - [ ] Rotation order shuffled yearly via date-seeded permutation (no repeats within 4 weeks)
@@ -3947,6 +5189,9 @@ Deliverable: seasonal palettes, weekly charm rotation, daily bonus, event calend
 - [ ] Screenshot of the featured banner
 
 ### Feature 29.4 — Daily Bonus Wheel
+
+Story: One free spin a day. Done when the wheel pays stage-scaled bundles once per UTC day.
+
 - [ ] Once-per-UTC-day free wheel spin: 8 wedges (J bundles, S bundle, 3 G, chest ticket, ×2 hour boost)
 - [ ] Wheel outcome from the daily seed + claim ledger (pre-determined, presented as a spin)
 - [ ] Wedge values scale with player stage (percent-of-rate bundles, not flats)
@@ -3959,6 +5204,9 @@ Deliverable: seasonal palettes, weekly charm rotation, daily bonus, event calend
 - [ ] Reduced-motion variant: instant reveal
 
 ### Feature 29.5 — Golden Hours
+
+Story: Golden hours gild the harbor. Done when two daily windows raise special chance within capped EV.
+
 - [ ] Two date-seeded 20-min windows/day where dozer special chance +3%
 - [ ] Harbor visual shift during the window (golden light, sparkling water)
 - [ ] Upcoming window hinted in the dozer panel ("the tide turns at …")
@@ -3971,6 +5219,9 @@ Deliverable: seasonal palettes, weekly charm rotation, daily bonus, event calend
 - [ ] Screenshot of golden-hour harbor
 
 ### Feature 29.6 — Holiday Sprinkles
+
+Story: Holidays sprinkle cosmetics. Done when fixed dates add effects with zero economy impact.
+
 - [ ] Fixed-date cosmetic days: New Year (fireworks), midsummer (extra sun), harvest (leaves)
 - [ ] Cosmetic only — zero economy impact (hard rule, tested)
 - [ ] Each sprinkle: one background effect + one toast greeting
@@ -3983,6 +5234,9 @@ Deliverable: seasonal palettes, weekly charm rotation, daily bonus, event calend
 - [ ] Screenshots of two sprinkle days
 
 ### Feature 29.7 — Event Calendar UI
+
+Story: The calendar shows what's alive. Done when a dialog lists today's features computed locally.
+
 - [ ] Calendar dialog: this week's featured set, next golden hours, upcoming sprinkles
 - [ ] All entries computed locally from the date core (provably no network)
 - [ ] Today-centric layout: "now / later today / this week"
@@ -3995,6 +5249,9 @@ Deliverable: seasonal palettes, weekly charm rotation, daily bonus, event calend
 - [ ] Screenshot for docs
 
 ### Feature 29.8 — Event Fairness Rules
+
+Story: Events never pressure. Done when fairness invariants (no gates, no FOMO, ≤20% income) are tested.
+
 - [ ] Written invariants: no event gates progression; all events are bonuses
 - [ ] No FOMO mechanics: nothing permanent is time-limited (challenge charms exempt? decide: no — make them permanent via challenges)
 - [ ] Max daily bonus share of income capped (< 20%) and simmed
@@ -4007,6 +5264,9 @@ Deliverable: seasonal palettes, weekly charm rotation, daily bonus, event calend
 - [ ] Review pass against every Phase 29 feature
 
 ### Feature 29.9 — Content Config Discipline
+
+Story: Live content is just data. Done when a validated LIVE block in data.js drives everything.
+
 - [ ] All live-ish content data lives in data.js LIVE block (single home)
 - [ ] Schema documented: seasons, rotations, wheel wedges, windows, sprinkles
 - [ ] Validation pass at boot: malformed LIVE config disables live content gracefully
@@ -4019,6 +5279,9 @@ Deliverable: seasonal palettes, weekly charm rotation, daily bonus, event calend
 - [ ] Changelog entry
 
 ### Feature 29.10 — Live-ish QA
+
+Story: A month passes in CI. Done when synthetic-month and clock-tamper suites pass everywhere.
+
 - [ ] Synthetic month soak: bot plays 30 virtual days; all events fire correctly
 - [ ] Clock-tamper battery: rewind, fast-forward, DST crossings, leap day
 - [ ] Ledger integrity across export/import mid-day
@@ -4036,6 +5299,9 @@ Goal: hand the game to its players — moddable data, shareable pride, a governe
 Deliverable: mod contract, brag cards, translation scaffold, theme packs, and a v2 decision process.
 
 ### Feature 30.1 — Mod-Friendly data.js Contract
+
+Story: data.js is the modding API. Done when validation, docs and a loader make safe mods possible.
+
 - [ ] Freeze data.js public shape as the modding API (documented contract)
 - [ ] Boot-time validation of the whole data tree with friendly error panel
 - [ ] Economy guardrails in validation (weights > 0, growth > 1, RTP sim hook)
@@ -4048,6 +5314,9 @@ Deliverable: mod contract, brag cards, translation scaffold, theme packs, and a 
 - [ ] Showcase section in README linking example mods
 
 ### Feature 30.2 — Save-Code Sharing Culture
+
+Story: Saves become show-and-tell. Done when showcase codes share progress read-only and stripped of currency.
+
 - [ ] Save codes documented as a shareable format (spec in docs)
 - [ ] "Copy showcase code" — export variant stripped to achievements/charms/stats (no currencies)
 - [ ] Import of showcase codes opens a read-only viewer, never overwrites
@@ -4060,6 +5329,9 @@ Deliverable: mod contract, brag cards, translation scaffold, theme packs, and a 
 - [ ] Doc + README mention
 
 ### Feature 30.3 — Brag Cards
+
+Story: Pride renders as a card. Done when milestone brag cards export as local PNGs in game art.
+
 - [ ] Canvas-rendered share card: biggest win, cascade record, cabinet count, lap count
 - [ ] Card styled in full glassy-fruit art with the Triple7 wordmark
 - [ ] Download as PNG button (toBlob, local only — nothing uploaded)
@@ -4072,6 +5344,9 @@ Deliverable: mod contract, brag cards, translation scaffold, theme packs, and a 
 - [ ] Gallery of card designs in docs
 
 ### Feature 30.4 — Translation Scaffold
+
+Story: Words are ready to travel. Done when all strings externalize with fallbacks and a pseudo-locale.
+
 - [ ] Extract all player-facing strings into js/strings.js (keyed table)
 - [ ] String audit: no concatenated sentence fragments (pluralization-safe patterns)
 - [ ] Locale file format documented; EN ships as reference
@@ -4084,6 +5359,9 @@ Deliverable: mod contract, brag cards, translation scaffold, theme packs, and a 
 - [ ] First community locale merged as proof (or NL seeded by the maintainer)
 
 ### Feature 30.5 — Theme Packs
+
+Story: Themes are packs. Done when Midnight and Sorbet ship via tokens with an auto dark mode.
+
 - [ ] Theme = palette + fruit glyph set + ambience params, defined in data.js
 - [ ] Ship two extra packs: Midnight Glass (dark), Sorbet Pastel (soft)
 - [ ] Dark theme audited for contrast and glow balance (bloom restraint)
@@ -4096,6 +5374,9 @@ Deliverable: mod contract, brag cards, translation scaffold, theme packs, and a 
 - [ ] Community theme submission guide
 
 ### Feature 30.6 — Accessibility Feedback Loop
+
+Story: Accessibility keeps improving. Done when a feedback loop, statement and review cadence exist.
+
 - [ ] In-game feedback link (issue template) in settings footer
 - [ ] A11y issue template with assistive-tech fields
 - [ ] Quarterly a11y review checklist doc (re-run audits)
@@ -4108,6 +5389,9 @@ Deliverable: mod contract, brag cards, translation scaffold, theme packs, and a 
 - [ ] Cycle documented in CONTRIBUTING
 
 ### Feature 30.7 — Community Infrastructure
+
+Story: The community has a home. Done when Discussions, templates and triage rhythm are live.
+
 - [ ] Enable GitHub Discussions: categories for help, balance, mods, showcase
 - [ ] Pin a welcome post with the game's philosophy and links
 - [ ] Balance-feedback template asking for save codes + sim expectations
@@ -4120,6 +5404,9 @@ Deliverable: mod contract, brag cards, translation scaffold, theme packs, and a 
 - [ ] First community retro after 90 days scheduled
 
 ### Feature 30.8 — Fork-Friendly Guarantee
+
+Story: Forking is guaranteed easy. Done when the no-build invariant is tested by a timed fork drill.
+
 - [ ] Document the invariant: no build step, ever — index.html is the program
 - [ ] Fork test: fresh fork → enable Pages → playable, timed < 5 min
 - [ ] All tooling optional-by-design (game runs with zero npm installs)
@@ -4132,6 +5419,9 @@ Deliverable: mod contract, brag cards, translation scaffold, theme packs, and a 
 - [ ] Guarantee stated in README header
 
 ### Feature 30.9 — Roadmap Governance
+
+Story: The roadmap is governed. Done when this plan gains status tracking, ADRs and review cadence.
+
 - [ ] This plan.md becomes the living roadmap: status column per phase added
 - [ ] Quarterly roadmap review issue template (what shipped, what's next)
 - [ ] Community input window before locking each next phase batch
@@ -4144,6 +5434,9 @@ Deliverable: mod contract, brag cards, translation scaffold, theme packs, and a 
 - [ ] First quarterly review executed
 
 ### Feature 30.10 — v2 Vision
+
+Story: v2 is a decision, not a drift. Done when the 4th-machine RFC resolves go/no-go with proofs.
+
 - [ ] Synthesize tease feedback (28.9) + community votes into a 4th-machine RFC
 - [ ] RFC includes economy proof obligations (EV+, sims) as acceptance criteria
 - [ ] Candidate deep-dives: pachinko (7-pin), claw machine, tide-pool fishing
