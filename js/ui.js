@@ -13,6 +13,13 @@
   var game, views, rng;
   var hudTimer = 0, listTimer = 0;
   var groveEls = {}, shopEls = {}, achEls = {}, charmEls = {};
+  // Displayed HUD values ease toward the real currency totals (Phase 20.5)
+  // instead of snapping every tick, so a big cascade or jackpot visibly
+  // counts up rather than teleporting. Reset instantly (no animation) on
+  // import/hard-reset/prestige — those are deliberate state resets, not
+  // organic gains, and an animated count-down would just look like lag.
+  var displayedCur = { juice: 0, suncoin: 0, stargem: 0 };
+  var COUNTUP_TAU = 0.4;   // seconds to close ~99% of the gap
 
   ui.init = function (g, v, r) {
     game = g; views = v; rng = r;
@@ -149,9 +156,19 @@
       });
       ui.sfx('achieve');
     });
+    // Deliberate whole-state resets snap the HUD instantly — an animated
+    // count-down to zero on prestige/import/reset would just read as lag.
+    function snapDisplayedCur() {
+      displayedCur.juice = game.s.cur.juice;
+      displayedCur.suncoin = game.s.cur.suncoin;
+      displayedCur.stargem = game.s.cur.stargem;
+    }
+    game.on('imported', snapDisplayedCur);
+    game.on('prestige', snapDisplayedCur);
 
     ui.syncSettings();
     ui.rebuildAll();
+    snapDisplayedCur();   // start the HUD at the loaded save's real balance, not 0
   };
 
   ui.sfx = function (name) {
@@ -386,11 +403,20 @@
 
   ui.tick = function (dt) {
     hudTimer += dt; listTimer += dt;
+    // Count-up every frame (Phase 20.5): ease the displayed value toward the
+    // real one so big gains visibly climb instead of teleporting; snap once
+    // the gap is imperceptible so the loop doesn't chase an infinite tail.
+    var k = 1 - Math.pow(0.01, dt / COUNTUP_TAU);
+    ['juice', 'suncoin', 'stargem'].forEach(function (c) {
+      var target = game.s.cur[c];
+      var d = target - displayedCur[c];
+      displayedCur[c] = Math.abs(d) < 0.05 ? target : displayedCur[c] + d * k;
+    });
+    $('cur-juice').textContent = U.fmtInt(displayedCur.juice);
+    $('cur-suncoin').textContent = U.fmtInt(displayedCur.suncoin);
+    $('cur-stargem').textContent = U.fmtInt(displayedCur.stargem);
     if (hudTimer >= 0.2) {
       hudTimer = 0;
-      $('cur-juice').textContent = U.fmtInt(game.s.cur.juice);
-      $('cur-suncoin').textContent = U.fmtInt(game.s.cur.suncoin);
-      $('cur-stargem').textContent = U.fmtInt(game.s.cur.stargem);
       ['juice', 'suncoin', 'stargem'].forEach(function (c) {
         var r = game.groveRate(c);
         $('rate-' + c).textContent = r > 0 ? '+' + U.fmt(r) + '/s' : '';
