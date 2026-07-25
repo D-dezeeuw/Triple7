@@ -69,6 +69,33 @@ var slotOK = Math.abs(exact.ev - 1.18401) < 0.0005 && exact.ev > 1.0;
 console.log('\n  VERDICT: ' + (slotOK ? '✔ matches published 1.18401 S/spin; stage is EV-positive.'
   : '✘ MISMATCH with published EV!'));
 
+// Inflation ceiling (§11.8): promo/upgrade EV must stay bounded — every
+// multiplier source has a max level, but a change to one of them (or a new
+// stacking source) could silently blow past a sane RTP. Lucky Sevens (max 3)
+// and Sun-Kissed Reels (max 30, +5%/lvl) are the two slot-side sinks; this
+// asserts their fully-maxed product never exceeds a 4.0x (400%) RTP ceiling.
+var luckyU = D.UPGRADES.filter(function (u) { return u.id === 'luckysevens'; })[0];
+var reelsU = D.UPGRADES.filter(function (u) { return u.id === 'sunreels'; })[0];
+var maxSunMult = 1 + 0.05 * reelsU.max;
+var maxedSlotEv = slots.enumerateRTP(luckyU.max).ev * maxSunMult;
+var RTP_CEILING = 4.0;
+console.log('\n  Inflation ceiling check (§11.8): Lucky Sevens maxed (+' + luckyU.max +
+  ') × Sun-Kissed Reels maxed (+' + Math.round((maxSunMult - 1) * 100) + '%) → ' +
+  maxedSlotEv.toFixed(3) + ' S/spin (RTP ' + pct(maxedSlotEv) + '), ceiling ' + RTP_CEILING.toFixed(1) + 'x');
+var inflationOK = maxedSlotEv <= RTP_CEILING;
+console.log('  VERDICT: ' + (inflationOK
+  ? '✔ fully-maxed slot RTP stays under the ' + pct(RTP_CEILING) + ' ceiling.'
+  : '✘ INFLATION CEILING BREACHED — maxed slot RTP exceeds ' + pct(RTP_CEILING) + '!'));
+
+// Jackpot drought odds (§10.3): published so players can trust the number
+// rather than guess it — a rare event should still be an honestly-stated one.
+var pJackpot = Math.pow(2 / 64, 3);
+console.log('\n  Jackpot drought odds (published — honesty over hype):');
+[1000, 10000, 32768].forEach(function (n) {
+  console.log('    P(no Triple Seven in ' + n.toLocaleString() + ' spins) = ' +
+    pct(Math.pow(1 - pJackpot, n)));
+});
+
 // ── 2. MATCH-3 ──────────────────────────────────────────────────────────────
 hr('2. MATCH-3 — "Juicy Grove" (stake: one free move)');
 
@@ -167,6 +194,6 @@ console.log('    losing streaks are bounded by the free Match-3/Grove faucet (no
 console.log('  · No backward conversion exists (G→S→J impossible), so value flows one way.');
 console.log('  · Inflation sink: exponential upgrade costs (growth 1.15–2.6) and charm chests.');
 
-var allOK = slotOK && dozerOK && jPerMove > 1;
+var allOK = slotOK && dozerOK && jPerMove > 1 && inflationOK;
 console.log('\n' + (allOK ? '  ✅ ALL PUBLISHED ECONOMY CLAIMS VERIFIED.' : '  ❌ ECONOMY CHECK FAILED — see above.'));
 process.exit(allOK ? 0 : 1);
