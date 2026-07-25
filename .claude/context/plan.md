@@ -48,19 +48,31 @@ probability is published, every economy claim is machine-verified, and the only 
 **Non-goals, forever:** monetization of any kind, accounts, servers, telemetry, time pressure,
 FOMO. If a future idea needs one of these, the idea is wrong for Triple7.
 
-**Current priority directives (set 2026-07; re-order here as the game evolves):**
-1. **Phase 8 — remaining Match-3 Juice polish.** The top priority from the previous pass
-   (staged swap→clear→fall→refill cascade animation, replacing v1's instant resolve) **shipped**
-   — the cascade recorder plays pop→fall per chain link with per-step floaters, verified against
-   `resolveMove()` staying byte-identical whether or not a view is watching (§12.3). Remaining:
-   screen-shake/particle bursts on Burst/Rainbow (Phase 20 territory), a "fresh rain" reshuffle
-   animation (still instant), hint-nudge polish.
-2. **Phase 21 Depth Pass, Phase 25 Performance, Phase 26 Testing & QA, Phase 30 Community** are
-   the biggest remaining gaps with zero or near-zero real progress — good next targets.
-3. **Phase 32 — holiday destinations**: MVP shipped (3 of 7 destinations, palette-only, Passport
+**Current priority directives (set 2026-07-25; re-order here as the game evolves):**
+1. **Phase 8 — Match-3 Juice polish is now substantially complete.** Both the staged cascade
+   animation and the Burst/Rainbow screen-shake/sparkle feedback and the "fresh rain" reshuffle
+   animation (previously the three named gaps) have **shipped** this pass — cascades pop→fall per
+   chain link, Rainbow births trigger a cozy-grade camera nudge + sparkle burst
+   (`reducedMotion`-gated), and deadlock reshuffles now fade-out/rain-in instead of resolving
+   instantly. Remaining: hint-nudge polish (a minor Feature 8.x item) is the only known gap.
+2. **Phase 21 Depth Pass, Phase 25 Performance, Phase 28 Endgame, Phase 22 Onboarding** all moved
+   from 🔭 to 🟡 this pass (see audit trail below) — each shipped one honest, bounded, real slice
+   rather than a full phase. **Phase 26 Testing & QA, Phase 30 Community** remain the biggest
+   gaps with the least real progress relative to their vision — good next targets. Within the
+   now-🟡 phases, the bulk of each is still unbuilt: Phase 21 shipped 2 of 9 features (21.5, a
+   bounded 21.6); Phase 25 shipped observability (25.1) but no actual perf *optimization* work
+   (canvas layer caching, sprite atlasing); Phase 28 shipped 1 of 10 features (28.7, and only
+   half of that — no per-lap tables or income sparkline yet).
+3. **Mobile/PWA (cross-cutting, not a named phase)**: iOS double-tap/pinch-zoom is fully disabled
+   (`touch-action: pan-x pan-y`), and the game is now a real installable, fully-offline PWA
+   (manifest.json + a stale-while-revalidate service worker) — this exceeds what Feature 26.8
+   anticipated ("PWA-less" caching) and should be credited against 26.8 when that phase is
+   next audited. Saves are untouched (still pure localStorage; the service worker never touches
+   game state).
+4. **Phase 32 — holiday destinations**: MVP shipped (3 of 7 destinations, palette-only, Passport
    UI); the other four destinations, generated backdrop art, game-surface reskins, ambience
    layering and souvenirs/stamps remain.
-4. **Phase 31 — generated art pipeline**: the core sprite set is comprehensive (fruits, slot
+5. **Phase 31 — generated art pipeline**: the core sprite set is comprehensive (fruits, slot
    symbols, coins, all 28 charms, UI icons, logo/favicon) with a working white-card post-process
    and graceful canvas fallback; a per-asset provenance/licensing manifest (31.9) and destination
    backdrop art remain.
@@ -69,24 +81,34 @@ FOMO. If a future idea needs one of these, the idea is wrong for Triple7.
 
 Legend: ✅ core shipped (audit, then finish the phase) · 🟡 partially shipped · 🔭 pure vision.
 Update this table as work lands on `main`; it is the honest boundary between game and dream.
-(Updated 2026-07-25 — an autonomous pass audited and advanced several 🟡/🔭 phases; see the
-git log for the exact commits. Every status below reflects code actually on `main`, not intent.)
+(Updated 2026-07-25 — two autonomous passes today audited and advanced several 🟡/🔭 phases,
+plus a standalone iOS-zoom-fix/offline-PWA change; see the git log for the exact commits. Every
+status below reflects code actually on `main`, not intent.)
 
 | Phase | Status | Phase | Status | Phase | Status |
 |---|---|---|---|---|---|
-| 1 Foundation | ✅ | 11 Dozer Physics | ✅ | 21 Depth Pass | 🔭 |
-| 2 Core Engine | 🟡 | 12 Dozer Gameplay | 🟡 | 22 Onboarding | 🔭 |
+| 1 Foundation | ✅ | 11 Dozer Physics | ✅ | 21 Depth Pass | 🟡 |
+| 2 Core Engine | 🟡 | 12 Dozer Gameplay | 🟡 | 22 Onboarding | 🟡 |
 | 3 Visual Language | 🟡 | 13 Hub & Interlinking | ✅ | 23 Accessibility | 🟡 |
 | 4 RNG & Fairness | ✅ | 14 Grove & Offline | ✅ | 24 Balancing Tools | 🟡 |
-| 5 Economy Core | ✅ | 15 Charms | ✅ | 25 Performance | 🔭 |
+| 5 Economy Core | ✅ | 15 Charms | ✅ | 25 Performance | 🟡 |
 | 6 Save System | ✅ | 16 Shop & Upgrades | ✅ | 26 Testing & QA | 🟡 |
 | 7 Match-3 Core | ✅ | 17 Achievements | ✅ | 27 Deploy & Docs | 🟡 |
-| 8 Match-3 Juice | 🟡 | 18 Automation | 🟡 | 28 Endgame | 🔭 |
+| 8 Match-3 Juice | 🟡 | 18 Automation | 🟡 | 28 Endgame | 🟡 |
 | 9 Slot Core | ✅ | 19 Audio | 🟡 | 29 Live-ish Content | 🟡 |
 | 10 Slot Presentation | ✅ | 20 Particles & Feel | 🟡 | 30 Community & v2 | 🔭 |
 | 31 Generated Art | 🟡 | 32 Destinations | 🟡 |  |  |
 
 **What changed this pass, phase by phase** (audit trail — trust this over the table alone):
+- **8 Match-3 Juice**: Burst/Rainbow now trigger a decorative sparkle burst plus a tiny
+  (`reducedMotion`-gated) camera nudge on a Rainbow birth, and deadlock reshuffles play a
+  fade-out/rain-in animation instead of resolving the new board instantly. Both are purely
+  render-side — verified byte-identical `resolveMove()` output with/without a view watching, same
+  invariant test pattern as the original cascade recorder. Not done: hint-nudge polish.
+- **19 Audio**: audited for gaps left by other phases landing this pass — the slot's
+  affordability-failure now plays 'bad' (matching the dozer's existing pattern), and the charm
+  chest's insufficient-funds path plays 'bad' instead of staying silent. No new phase-19 features
+  (mixer, dynamic music layers) attempted.
 - **4 RNG & Fairness → ✅**: match3/slots/dozer/charms now run on independent, save-persisted
   mulberry32 streams (Feature 4.2/4.5) instead of one shared instance; `docs/fairness.md` (Feature
   4.7) publishes every odds table and the decide-before-present rule. Both of Phase 4's named
@@ -99,6 +121,41 @@ git log for the exact commits. Every status below reflects code actually on `mai
   player-set floors. No automation panel UI (18.6) yet; autos are still shop-upgrade rows.
 - **20 Particles & Feel**: HUD currency count-up landed (Feature 20.5). No pooled particle engine,
   splashes, or coin-glint rain yet — the bulk of the phase.
+- **22 Onboarding (🔭→🟡)**: a first-run guided intro (Feature 22.1-ish) shows once, only for
+  genuinely fresh saves — backfilled to "seen" for any save with real progress but no onboarding
+  field (predates the feature), so a returning player is never shown it. Replayable from Settings.
+  Not done: contextual tooltips on first-time unlocks, a guided first spin/drop, tutorial-skip
+  analytics (n/a — no telemetry by design).
+- **25 Performance (🔭→🟡)**: a dev-only DOM debug overlay (`?debug=1` or backtick key) shows live
+  fps, per-frame update/draw ms, and entity counts — all `performance.now()` calls gated behind the
+  flag so it costs nothing when off. This is observability, not optimization: no canvas layer
+  caching, sprite atlasing, or offscreen pre-render work has been done, and the phase's actual perf
+  budget claims are still unverified on real low-end hardware.
+- **28 Endgame (🔭→🟡)**: Feature 28.7 (Statistics Deep Dive) partially shipped — `slotSunWon`/
+  `dozerGemsWon` are new source-specific stats (distinct from the blended lifetime `sunEarned`/
+  `gemsEarned`), and Settings > Stats shows each player's personal slot/dozer RTP against the live
+  base par once they clear a 20-sample floor. The dozer figure is deliberately scoped to direct
+  Stargem credits only (plain coins + gemfruit) and says so in the UI — it does not attempt to
+  invent a cross-currency exchange rate for Sunpouch/Bottle/Charm specials. Not done: per-lap
+  record tables, an income-over-session sparkline, and the rest of Phase 28's other 9 features
+  (prestige-adjacent endgame content, leaderboard-free "personal bests," etc.) are untouched.
+- **21 Depth Pass (🔭→🟡)**: Feature 21.5 (Dynamic Shadows) landed as a genuinely shared
+  `T7.util.drawSoftShadow()` used by match-3, slots and dozer alike — dozer coins gained a
+  ground-shadow they never had before, while match-3/slots kept their existing look (the shadow
+  hides under sprites' baked white cards in sprite mode, same as before this refactor; it's fully
+  visible in the zero-asset canvas fallback). A bounded slice of Feature 21.6 (Specular Sweep) also
+  landed: a slow diagonal light sweep crosses the match-3 board every ~45s, reduced-motion-gated,
+  confirmed via pixel-diff to actually paint and to never arm when reduced motion is on. Not done:
+  the other 7 of 9 features (perspective camera struct, coin-stacking illusion, cylinder reel
+  model, board tilt/parallax, depth-of-field overlays, fall-arc animations, camera-nudge-on-
+  landing) — each is a substantially larger rendering rewrite deserving its own dedicated pass, not
+  a rushed partial attempt.
+- **Mobile/PWA cross-cutting (touches Feature 26.8, not yet reflected in Phase 26's status)**:
+  iOS double-tap/pinch-zoom fully disabled via `touch-action: pan-x pan-y` on `html`/`body`/canvas
+  (verified: blocks both, not just double-tap). The game is now a real installable, fully-offline
+  PWA — `manifest.json` + a stale-while-revalidate service worker (`sw.js`) — which exceeds what
+  26.8 originally scoped ("PWA-less" caching). Saves remain untouched: the service worker never
+  reads or writes game state, which still lives purely in localStorage.
 - **23 Accessibility (🔭→🟡)**: real ARIA tabs pattern (roles, aria-selected, aria-controls),
   keyboard 1-6 + arrow-key tab navigation, a visible `:focus-visible` ring, and a polite aria-live
   toast region. Not done: in-game keyboard play for match-3/slots/dozer (23.1/23.2), a full
@@ -109,9 +166,12 @@ git log for the exact commits. Every status below reflects code actually on `mai
   geometry tuner, `docs/tuning.md`.
 - **26 Testing & QA (🔭→🟡)**: added regression tests for RNG stream isolation + persistence, dozer
   table round-trip, the cascade recorder's non-interference with `resolveMove()`, reserve
-  sanitization, and the daily bonus/destinations logic (30 tests total, up from 20). Not done:
-  Playwright journeys, cross-browser/mobile passes, board fuzzing at the 10k scale, save migration
-  fixtures.
+  sanitization, the daily bonus/destinations logic, and (this pass) personal-RTP sample-floor
+  gating + corrupted-stat sanitize recovery (33 tests total, up from 20). Every feature landed this
+  pass was also hand-verified end-to-end in a real headless browser via Playwright (screenshots +
+  pixel-diffs), though those checks are throwaway scripts, not a committed suite. Not done:
+  Playwright journeys as a *permanent, repeatable* suite, cross-browser/mobile device passes, board
+  fuzzing at the 10k scale, save migration fixtures.
 - **27 Deploy & Docs (🔭→🟡)**: `CONTRIBUTING.md`, `NOTICE`, `.editorconfig`/`.gitattributes`, and a
   README pass (fixed the now-false "zero assets" claim, linked the fairness doc). Not done:
   versioning/changelog/tagged release, media assets, SEO meta tags, a Lighthouse pass.
