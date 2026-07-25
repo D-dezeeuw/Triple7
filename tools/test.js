@@ -163,6 +163,33 @@ t('500-move fuzz: board stays full, juice strictly positive', function () {
     }
   }
 });
+t('cascade step recording never changes resolveMove\'s result (recorder is pure observation)', function () {
+  // The animated view's playback recorder must be provably inert on the
+  // logic it observes — resolveMove() stays the oracle for the simulator
+  // and tests (§12.3 "Instant cascade resolve" note). Run the identical
+  // move through two identically-seeded boards, with and without a steps
+  // array, and assert every observable outcome — and the final board —
+  // matches exactly.
+  for (var trial = 0; trial < 25; trial++) {
+    var seed = 9000 + trial;
+    var rngA = new rngMod.Rng(seed), boardA = match3.newBoard(rngA);
+    var rngB = new rngMod.Rng(seed), boardB = match3.newBoard(rngB);
+    // Identical seed ⇒ identical draw sequence ⇒ boardA/boardB are content-
+    // identical and rngA/rngB sit at the same internal position.
+    var mv = match3.findAllMoves(boardA)[0];
+    var move = { x1: mv.x1, y1: mv.y1, x2: mv.x2, y2: mv.y2 };
+    var resA = match3.resolveMove(boardA, move, rngA, 0);
+    var steps = [];
+    var resB = match3.resolveMove(boardB, move, rngB, 0, steps);
+    eq(resA.valid, resB.valid, 'trial ' + trial + ' validity');
+    eq(resA.juice, resB.juice, 'trial ' + trial + ' juice');
+    eq(resA.tiles, resB.tiles, 'trial ' + trial + ' tiles');
+    eq(resA.chain, resB.chain, 'trial ' + trial + ' chain');
+    eq(resA.specialsMade, resB.specialsMade, 'trial ' + trial + ' specialsMade');
+    eq(JSON.stringify(boardA), JSON.stringify(boardB), 'trial ' + trial + ' final board diverged');
+    if (resA.valid) eq(steps.length, resA.chain, 'trial ' + trial + ' one recorded step per chain link');
+  }
+});
 t('reshuffle produces a valid board', function () {
   var rng = new rngMod.Rng(3);
   var b = match3.newBoard(rng);
