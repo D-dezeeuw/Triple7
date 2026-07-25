@@ -1,0 +1,16 @@
+{
+  "name": "triple7",
+  "version": "1.0.0",
+  "description": "Triple7 — a cozy glassy-fruit idle game chaining Match-3, Slot Machine and Coin Dozer through 7:1 coin conversions. Pure static site, runs on GitHub Pages.",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "start": "node tools/serve.js",
+    "simulate": "node tools/simulate.js",
+    "test": "node tools/test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/d-dezeeuw/triple7.git"
+  }
+}

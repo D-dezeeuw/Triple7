@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Triple7 — a juicy idle of three little machines</title>
+<meta name="description" content="Match fruit, spin suns, push stars. A free cozy idle game of three linked mini-games. No ads, no purchases, saves in your browser.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🍒</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="sky">
+  <div class="sun"></div>
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+</div>
+
+<header id="topbar">
+  <h1 class="logo">Triple<span class="seven">7</span></h1>
+  <div id="hud">
+    <div class="pill juice" id="pill-juice" title="Juice — squeeze it in the Grove match-3">
+      <span class="dot"></span><b id="cur-juice">0</b><small id="rate-juice"></small>
+    </div>
+    <div class="pill sun" id="pill-suncoin" title="Suncoins — won at the Sunshine Sevens slots (7 Juice per spin)">
+      <span class="dot"></span><b id="cur-suncoin">0</b><small id="rate-suncoin"></small>
+    </div>
+    <div class="pill gem" id="pill-stargem" title="Stargems — pushed off the Star Harbor dozer (7 Suncoins per coin)">
+      <span class="dot"></span><b id="cur-stargem">0</b><small id="rate-stargem"></small>
+    </div>
+  </div>
+  <button id="btn-settings" class="iconbtn" title="Settings, save &amp; about">⚙</button>
+</header>
+
+<nav id="tabs">
+  <button class="tab active" data-tab="match3">🍒 Match</button>
+  <button class="tab" data-tab="slots">☀ Slots<span class="lock" id="lock-slots">🔒</span></button>
+  <button class="tab" data-tab="dozer">★ Dozer<span class="lock" id="lock-dozer">🔒</span></button>
+  <button class="tab" data-tab="grove">🌱 Grove</button>
+  <button class="tab" data-tab="charms">✦ Charms</button>
+  <button class="tab" data-tab="shop">⬆ Shop</button>
+</nav>
+
+<main>
+  <section class="panel active" id="panel-match3">
+    <div class="gamewrap"><canvas id="cv-match3"></canvas></div>
+    <div class="actionbar">
+      <span class="tip">Swap two fruits to match 3+. Every cleared fruit squeezes <b>Juice</b>. 4-in-a-row makes a Burst, 5 makes a Rainbow!</span>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-slots">
+    <div class="gamewrap slotwrap"><canvas id="cv-slots"></canvas></div>
+    <div class="actionbar">
+      <button id="btn-spin" class="bigbtn">SPIN — 7 <span class="ic juice"></span></button>
+      <button id="btn-paytable" class="minibtn">Paytable</button>
+    </div>
+    <div class="lockveil" id="veil-slots">
+      <p>🔒 The Sunshine Sevens wake up once you've squeezed <b>7 Juice</b>.<br>Go match some fruit!</p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-dozer">
+    <div class="gamewrap"><canvas id="cv-dozer"></canvas></div>
+    <div class="actionbar">
+      <button id="btn-drop" class="bigbtn">DROP — 7 <span class="ic sun"></span></button>
+      <span class="tip">…or tap the table to aim your coin. Coins off the front edge become <b>Stargems</b>. Mind the side gutters!</span>
+    </div>
+    <div class="lockveil" id="veil-dozer">
+      <p>🔒 Star Harbor opens once you've won <b>7 Suncoins</b> at the slots.</p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-grove">
+    <h2>Sunshine Grove <small>— plant things, earn while you're away</small></h2>
+    <div id="grove-list" class="cardlist"></div>
+    <div id="prestige-card" class="card prestige hidden">
+      <h3>🫙 Make Preserves</h3>
+      <p id="prestige-info"></p>
+      <button id="btn-prestige" class="bigbtn">Preserve!</button>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-charms">
+    <h2>Charm Cabinet <small>— glass fruit, forever bonuses</small></h2>
+    <div class="actionbar">
+      <button id="btn-chest" class="bigbtn">Charm Chest — 77 <span class="ic gem"></span></button>
+      <span class="tip">Chests and dozer prizes hold random charms. Duplicates level a charm up (max 7).</span>
+    </div>
+    <div id="charm-sets"></div>
+  </section>
+
+  <section class="panel" id="panel-shop">
+    <h2>Upgrade Shop <small>— spend Stargems, bend the odds</small></h2>
+    <div id="shop-list" class="cardlist"></div>
+    <h2>Milestones <small id="ach-count"></small></h2>
+    <div id="ach-list" class="cardlist"></div>
+  </section>
+</main>
+
+<div id="toasts"></div>
+
+<dialog id="dlg-settings">
+  <h2>Settings &amp; Save</h2>
+  <div class="setrow"><label><input type="checkbox" id="set-sfx" checked> Sound effects</label></div>
+  <div class="setrow"><label><input type="checkbox" id="set-particles" checked> Extra sparkle</label></div>
+  <div class="setrow"><label><input type="checkbox" id="set-motion"> Reduce motion</label></div>
+  <h3>Save data</h3>
+  <p class="mini">Your game autosaves in this browser. Copy the code below to move or back up your progress.</p>
+  <textarea id="save-code" rows="4" spellcheck="false"></textarea>
+  <div class="setrow">
+    <button id="btn-export" class="minibtn">Export → code</button>
+    <button id="btn-copy" class="minibtn">Copy</button>
+    <button id="btn-import" class="minibtn">Import code</button>
+  </div>
+  <div class="setrow danger">
+    <button id="btn-reset" class="minibtn">Hard reset…</button>
+  </div>
+  <h3>Stats</h3>
+  <div id="stats-list" class="mini"></div>
+  <p class="mini">Triple7 is free &amp; open source (Apache-2.0). No ads, no accounts, no purchases — just fruit.</p>
+  <div class="setrow"><button id="btn-close-settings" class="bigbtn">Back to the fruit</button></div>
+</dialog>
+
+<dialog id="dlg-welcome">
+  <h2>☀ Welcome back!</h2>
+  <p id="welcome-body"></p>
+  <div class="setrow"><button id="btn-close-welcome" class="bigbtn">Collect</button></div>
+</dialog>
+
+<dialog id="dlg-paytable">
+  <h2>Sunshine Sevens — Paytable</h2>
+  <div id="paytable-body" class="mini"></div>
+  <div class="setrow"><button id="btn-close-paytable" class="bigbtn">Got it</button></div>
+</dialog>
+
+<script src="js/util.js"></script>
+<script src="js/rng.js"></script>
+<script src="js/data.js"></script>
+<script src="js/state.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/match3.js"></script>
+<script src="js/slots.js"></script>
+<script src="js/dozer.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

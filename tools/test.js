@@ -1,0 +1,201 @@
+#!/usr/bin/env node
+/* Triple7 — tools/test.js
+ * Logic unit tests, run with `npm test`. Zero dependencies.
+ * Node loads the SAME UMD modules the browser runs — no mocks, no ports.
+ */
+'use strict';
+var path = require('path');
+var U = require(path.join(__dirname, '..', 'js', 'util.js'));
+var rngMod = require(path.join(__dirname, '..', 'js', 'rng.js'));
+var D = require(path.join(__dirname, '..', 'js', 'data.js'));
+var st = require(path.join(__dirname, '..', 'js', 'state.js'));
+var match3 = require(path.join(__dirname, '..', 'js', 'match3.js'));
+var slots = require(path.join(__dirname, '..', 'js', 'slots.js'));
+var dozer = require(path.join(__dirname, '..', 'js', 'dozer.js'));
+
+var passed = 0, failed = 0;
+function t(name, fn) {
+  try { fn(); passed++; console.log('  ✔ ' + name); }
+  catch (e) { failed++; console.log('  ✘ ' + name + '\n      ' + e.message); }
+}
+function eq(a, b, msg) { if (a !== b) throw new Error((msg || 'eq') + ': ' + a + ' !== ' + b); }
+function ok(v, msg) { if (!v) throw new Error(msg || 'expected truthy'); }
+function near(a, b, eps, msg) { if (Math.abs(a - b) > eps) throw new Error((msg || 'near') + ': ' + a + ' vs ' + b); }
+
+console.log('util');
+t('fmt scales suffixes', function () {
+  eq(U.fmt(999), '999'); eq(U.fmt(1500), '1.50K'); eq(U.fmt(2500000), '2.50M');
+});
+t('fnv1a is stable and 8 hex chars', function () {
+  eq(U.fnv1a('triple7'), U.fnv1a('triple7'));
+  ok(/^[0-9a-f]{8}$/.test(U.fnv1a('x')));
+  ok(U.fnv1a('a') !== U.fnv1a('b'));
+});
+t('base64 round-trips unicode', function () {
+  var s = 'juice🧃 & däta';
+  eq(U.b64decode(U.b64encode(s)), s);
+});
+
+console.log('rng');
+t('same seed → same stream', function () {
+  var a = new rngMod.Rng(42), b = new rngMod.Rng(42);
+  for (var i = 0; i < 100; i++) eq(a.float(), b.float());
+});
+t('weighted respects weights (statistically)', function () {
+  var r = new rngMod.Rng(7);
+  var items = [{ id: 'a', w: 9 }, { id: 'b', w: 1 }];
+  var hits = 0;
+  for (var i = 0; i < 10000; i++) if (r.weighted(items).id === 'a') hits++;
+  ok(hits > 8700 && hits < 9300, 'a hit ' + hits + '/10000, expected ~9000');
+});
+
+console.log('state / save');
+t('gain applies multipliers, spend enforces funds', function () {
+  var g = new st.Game();
+  g.gain('juice', 10, true);
+  eq(g.s.cur.juice, 10);
+  ok(!g.spend('juice', 11));
+  ok(g.spend('juice', 10));
+  eq(g.s.cur.juice, 0);
+});
+t('export/import round-trips exactly', function () {
+  var g = new st.Game();
+  g.gain('juice', 123.45, true); g.gain('stargem', 9, true);
+  g.s.charms.lemondrop = 3;
+  g.s.upgrades.sunreels = 2;
+  var code = g.exportSave();
+  var g2 = new st.Game();
+  g2.importSave(code);
+  near(g2.s.cur.juice, 123.45, 1e-9);
+  eq(g2.s.charms.lemondrop, 3);
+  eq(g2.s.upgrades.sunreels, 2);
+});
+t('corrupted/tampered codes are rejected', function () {
+  var g = new st.Game();
+  var code = g.exportSave();
+  var bad = code.slice(0, -4) + 'AAAA';
+  var threw = false;
+  try { g.importSave(bad); } catch (e) { threw = true; }
+  ok(threw, 'tampered payload must throw');
+  threw = false;
+  try { g.importSave('hello world'); } catch (e) { threw = true; }
+  ok(threw, 'garbage must throw');
+});
+t('prestige seeds = floor(sqrt(lifetimeG/77)) and resets the run', function () {
+  var g = new st.Game();
+  g.gain('stargem', 77 * 49, true);          // → sqrt(49) = 7 seeds
+  g.s.buildings.sapling = 5;
+  eq(g.prestigeSeedsTotal(), 7);
+  ok(g.prestigeAvailable());
+  g.doPrestige();
+  eq(g.s.seeds, 7);
+  eq(g.s.cur.stargem, 0);
+  ok(!g.s.buildings.sapling);
+  near(g.allMult(), 1.7, 1e-9, '7 seeds → ×1.7');
+});
+t('charm set bonus activates only on completion', function () {
+  var g = new st.Game();
+  var citrus = D.CHARMS.filter(function (c) { return c.set === 'citrus'; });
+  citrus.slice(0, 6).forEach(function (c) { g.s.charms[c.id] = 1; });
+  near(g.charmBonus('juice'), 0.30, 1e-9, '6 charms ×5%');
+  g.s.charms[citrus[6].id] = 1;
+  near(g.charmBonus('juice'), 0.35 + 0.25, 1e-9, '7 charms + set bonus');
+});
+
+console.log('match3');
+t('new boards have no pre-matches and at least one move', function () {
+  var rng = new rngMod.Rng(1);
+  for (var i = 0; i < 20; i++) {
+    var b = match3.newBoard(rng);
+    eq(match3.findMatches(b).cells.length, 0, 'board ' + i + ' pre-matched');
+    ok(match3.findAllMoves(b).length > 0, 'board ' + i + ' deadlocked');
+  }
+});
+t('500-move fuzz: board stays full, juice strictly positive', function () {
+  var rng = new rngMod.Rng(2);
+  var b = match3.newBoard(rng);
+  for (var i = 0; i < 500; i++) {
+    var moves = match3.findAllMoves(b);
+    ok(moves.length > 0, 'deadlock leaked through reshuffle at move ' + i);
+    var out = match3.resolveMove(b, moves[Math.floor(rng.float() * moves.length)], rng, 0);
+    ok(out.valid, 'listed move was invalid at ' + i);
+    ok(out.juice > 0, 'no juice at ' + i);
+    for (var y = 0; y < match3.ROWS; y++) {
+      for (var x = 0; x < match3.COLS; x++) ok(b[y][x], 'hole at ' + x + ',' + y + ' after move ' + i);
+    }
+  }
+});
+t('reshuffle produces a valid board', function () {
+  var rng = new rngMod.Rng(3);
+  var b = match3.newBoard(rng);
+  match3.reshuffle(b, rng);
+  eq(match3.findMatches(b).cells.length, 0);
+  ok(match3.findAllMoves(b).length > 0);
+});
+
+console.log('slots');
+t('evaluate: all paying lines', function () {
+  eq(slots.evaluate(['seven', 'seven', 'seven']).sun, 777);
+  eq(slots.evaluate(['seven', 'seven', 'seven']).gems, D.SLOT.JACKPOT_GEM_BONUS);
+  eq(slots.evaluate(['star', 'star', 'star']).sun, 77);
+  eq(slots.evaluate(['cherry', 'cherry', 'cherry']).sun, 7);
+  eq(slots.evaluate(['seven', 'lemon', 'seven']).sun, 5, 'pair of sevens');
+  eq(slots.evaluate(['cherry', 'melon', 'cherry']).sun, 2, 'pair of cherries');
+  eq(slots.evaluate(['cherry', 'seven', 'cherry']).sun, 2, 'cherries beat lone seven');
+  eq(slots.evaluate(['lemon', 'melon', 'berry']).sun, 0);
+});
+t('exact RTP matches the published par sheet (1.18401)', function () {
+  var r = slots.enumerateRTP(0);
+  near(r.ev, 1.18401, 0.00001);
+  near(r.hitRate, 0.30111, 0.0005);
+});
+t('reel weights sum to 64 (+lucky levels)', function () {
+  var sum0 = slots.reelWeights(0).reduce(function (a, r) { return a + r.w; }, 0);
+  var sum3 = slots.reelWeights(3).reduce(function (a, r) { return a + r.w; }, 0);
+  eq(sum0, 64); eq(sum3, 67);
+});
+t('resolveSpin only returns known symbols', function () {
+  var rng = new rngMod.Rng(4);
+  var ids = D.SLOT.REEL.map(function (r) { return r.id; });
+  for (var i = 0; i < 1000; i++) {
+    var res = slots.resolveSpin(rng, 0);
+    res.symbols.forEach(function (s) { ok(ids.indexOf(s) >= 0, 'unknown symbol ' + s); });
+  }
+});
+
+console.log('dozer');
+t('world starts stocked and coins stay finite & in-bounds', function () {
+  var rng = new rngMod.Rng(5);
+  var w = new dozer.World(rng, {});
+  eq(w.coins.length, D.DOZER.START_COINS);
+  for (var i = 0; i < 60 * 30; i++) w.step(1 / 60);
+  w.coins.forEach(function (c) {
+    ok(isFinite(c.x) && isFinite(c.z), 'NaN coin');
+    ok(c.z > -1 && c.z < D.DOZER.TABLE_D + 40, 'coin escaped depth bounds: ' + c.z);
+  });
+});
+t('drops eventually push coins off the front (conservation)', function () {
+  var rng = new rngMod.Rng(6);
+  var w = new dozer.World(rng, {});
+  var front = 0, dropped = 0, tNext = 1;
+  for (var t = 0; t < 400; t += 1 / 60) {
+    if (t >= tNext && dropped < 220) { w.drop(D.DOZER.TABLE_W / 2 + (rng.float() - 0.5) * 120); tNext += 1.2; dropped++; }
+    w.step(1 / 60).forEach(function (ev) { if (ev.type === 'front') front++; });
+  }
+  ok(front > dropped * 0.5, 'only ' + front + ' front exits from ' + dropped + ' drops');
+});
+t('pusher face oscillates within its designed travel', function () {
+  var rng = new rngMod.Rng(8);
+  var w = new dozer.World(rng, {});
+  var min = 1e9, max = -1e9;
+  for (var t = 0; t < 10; t += 0.01) {
+    w.t = t;
+    var z = w.pusherZ();
+    min = Math.min(min, z); max = Math.max(max, z);
+  }
+  near(min, dozer.PUSHER_MIN_Z, 0.5);
+  near(max, dozer.PUSHER_MIN_Z + D.DOZER.PUSHER_TRAVEL, 0.5);
+});
+
+console.log('\n' + passed + ' passed, ' + failed + ' failed');
+process.exit(failed ? 1 : 0);
