@@ -24,7 +24,12 @@ http.createServer(function (req, res) {
   if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, function (err, data) {
     if (err) { res.writeHead(404); res.end('not found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
+      // Dev server: never let the browser cache, so edits to js/css/sprites
+      // always show on plain reload (stale js/match3.js kept hiding new art).
+      'Cache-Control': 'no-store'
+    });
     res.end(data);
   });
 }).listen(PORT, function () {
