@@ -96,6 +96,30 @@ t('automation reserve defaults to 0 and sanitizes bad values', function () {
   ok(g2.s.settings.reserve.juice >= 0, 'negative reserve must sanitize to >=0');
   ok(isFinite(g2.s.settings.reserve.suncoin), 'NaN reserve must sanitize to a finite number');
 });
+t('daily bonus is date-seeded, single-claim, and sanitizes a corrupted ledger', function () {
+  var g1 = new st.Game(), g2 = new st.Game();
+  var infoA = g1.dailyBonusInfo(), infoB = g2.dailyBonusInfo();
+  eq(infoA.day, infoB.day, 'same UTC day must produce the same day string');
+  eq(infoA.amount, infoB.amount, 'same day must be a pure function — identical amount');
+  ok(infoA.amount >= 77 && infoA.amount <= 210, 'amount ' + infoA.amount + ' outside the documented 77-210 range');
+  eq((infoA.amount - 77) % 7, 0, 'amount must be 77 plus a multiple of 7');
+  ok(infoA.available, 'fresh game must have an unclaimed daily bonus');
+
+  var before = g1.s.cur.juice;
+  var res = g1.claimDailyBonus();
+  ok(res && res.amount === infoA.amount, 'claim must credit the published amount');
+  near(g1.s.cur.juice, before + infoA.amount, 1e-9);
+  ok(!g1.dailyBonusInfo().available, 'must be marked claimed for today');
+  eq(g1.claimDailyBonus(), null, 'a second claim same day must be refused');
+  eq(g1.s.cur.juice, before + infoA.amount, 'a refused claim must not credit again');
+
+  var g3 = new st.Game();
+  g3.s.claims.daily = 'not-a-date';
+  var code = g3.exportSave();
+  var g4 = new st.Game();
+  g4.importSave(code);
+  eq(g4.s.claims.daily, null, 'a corrupted claim ledger must sanitize to null, not brick future claims');
+});
 t('export/import round-trips exactly', function () {
   var g = new st.Game();
   g.gain('juice', 123.45, true); g.gain('stargem', 9, true);

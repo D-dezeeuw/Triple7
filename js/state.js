@@ -52,7 +52,11 @@
       // Dozer table snapshot (Phase 12.9): World.serialize() array, written by
       // main.js's persist(). Null/empty on old or fresh saves — the dozer
       // view then restocks the table fresh (original v1 behavior).
-      dozerTable: null
+      dozerTable: null,
+      // Live-ish content claim ledger (Phase 29 MVP): last UTC day claimed
+      // per feature, so a clock rewind replays the same already-claimed
+      // outcome instead of granting a second gift (§10.9/§11.10).
+      claims: { daily: null }
     };
   }
 
@@ -82,6 +86,10 @@
         s.settings.reserve[c] = 0;
       }
     });
+    if (!s.claims || typeof s.claims.daily !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.claims.daily)) {
+      s.claims = s.claims || {};
+      s.claims.daily = null;
+    }
     // A corrupted/hand-edited save must never crash the dozer on load — drop
     // any record missing the fields World.deserialize needs.
     if (!Array.isArray(s.dozerTable)) {
@@ -321,6 +329,32 @@
     });
     this.s.lastSeen = now();
     return any ? { seconds: dtSec, gains: gains } : null;
+  };
+
+  // ── Live-ish content (Phase 29 MVP: "Daily Squeeze") ──────────────────────
+  // Date-seeded per §10.9: the reward for a given UTC day is a pure function
+  // of that day's string, so a clock rewind replays the identical amount and
+  // the claim ledger (s.claims.daily) blocks claiming it twice — no server,
+  // no punishment for a missed day, no streak to break (§11.10, the pledge
+  // in docs/fairness.md).
+  function pad2(n) { return ('0' + n).slice(-2); }
+  Game.prototype.utcDayStr = function () {
+    var d = new Date();
+    return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+  };
+  Game.prototype.dailyBonusInfo = function () {
+    var day = this.utcDayStr();
+    var hash = parseInt(U.fnv1a('daily|' + day), 16);
+    // 77..210 J in steps of 7 — a modest gift (roughly a dozen match-3
+    // moves' worth), never a needed one.
+    var amount = 77 + 7 * (hash % 20);
+    return { day: day, amount: amount, available: this.s.claims.daily !== day };
+  };
+  Game.prototype.claimDailyBonus = function () {
+    var info = this.dailyBonusInfo();
+    if (!info.available) return null;
+    this.s.claims.daily = info.day;
+    return { amount: this.gain('juice', info.amount, true), day: info.day };  // raw: flat, predictable gift
   };
 
   // ── Persistence ───────────────────────────────────────────────────────────

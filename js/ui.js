@@ -88,6 +88,15 @@
       ui.rebuildAll();
     });
 
+    // Daily Squeeze (Phase 29 MVP): a small, pressure-free once-a-day gift.
+    $('btn-daily').addEventListener('click', function () {
+      var result = game.claimDailyBonus();
+      if (!result) return;   // already claimed today — button will hide on next tick anyway
+      ui.toast('Daily Squeeze: +' + U.fmt(result.amount) + ' Juice — see you tomorrow, no rush.', 'gold', 'droplet');
+      ui.sfx('buy');
+      $('btn-daily').classList.add('hidden');
+    });
+
     // Settings dialog
     $('btn-settings').addEventListener('click', function () {
       ui.syncSettings(); ui.renderStats();
@@ -454,6 +463,7 @@
       var dozerOpen = game.s.lifetime.suncoin >= D.CONVERSION.DROP_COST_S;
       $('lock-slots').classList.toggle('hidden', slotsOpen);
       $('lock-dozer').classList.toggle('hidden', dozerOpen);
+      $('btn-daily').classList.toggle('hidden', !game.dailyBonusInfo().available);
       $('veil-slots').classList.toggle('hidden', slotsOpen);
       $('veil-dozer').classList.toggle('hidden', dozerOpen);
       $('btn-spin').disabled = !views.slots.canSpin();

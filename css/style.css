@@ -90,6 +90,13 @@ body.reduced-motion .cloud, body.reduced-motion #sky .sun { animation: none; }
 }
 .iconbtn:hover { background: rgba(255,255,255,0.3); }
 .iconbtn img { width: 24px; height: 24px; vertical-align: middle; }
+#btn-daily.hidden { display: none; }
+.dailybtn {
+  background: linear-gradient(180deg, #ffe28a, var(--sun) 55%, #f0a500);
+  border-color: #fff; animation: dailypulse 2.4s ease-in-out infinite;
+}
+@keyframes dailypulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+body.reduced-motion .dailybtn { animation: none; }
 
 /* ── Tabs ────────────────────────────────────────────────────── */
 #tabs {
