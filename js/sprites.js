@@ -14,7 +14,7 @@
   var IDS = [
     'strawberry', 'cherry', 'lemon', 'melon', 'berry', 'orange', 'plum', 'seven', 'star',
     'sun', 'sprout', 'sparkle', 'arrowup', 'lock', 'gear', 'jar', 'trophy', 'gem', 'bottle',
-    'suncoin', 'coin7', 'coin21', 'coin49', 'droplet',
+    'suncoin', 'coin7', 'coin21', 'coin49', 'droplet', 'compass',
     // Glass Charm collectibles live in charms/<id>.png; ids never collide.
     'charms/lemondrop', 'charms/limewedge', 'charms/orangeslice', 'charms/grapefruit',
     'charms/yuzu', 'charms/citron', 'charms/tangerine',

@@ -234,12 +234,28 @@
   ];
   var ACH_GLOBAL_BONUS = 0.01;
 
+  // ── Destinations (Phase 32 MVP): cosmetic-only sky/sun palette swaps ─────
+  // "Fares" are a one-time Stargem spend (a real sink, per §9d) that unlocks
+  // travel there forever; switching between already-unlocked destinations is
+  // free and instant. No economy bonuses attach to any destination in this
+  // pass — purely theming-as-progression, the honest MVP slice of the seven-
+  // destination vision in plan.md §32.
+  var DESTINATIONS = [
+    { id: 'home', name: 'Sunny Cove', tagline: 'Where every session begins.', fareG: 0,
+      sky: { hi: '#8fdcff', lo: '#34a8e8', deep: '#2287c9', sunCore: '#fff8d6', sunGlow: '#ffe066' } },
+    { id: 'lagoon', name: 'Turquoise Lagoon', tagline: 'Clear water, cool shade, quiet fizz.', fareG: 70,
+      sky: { hi: '#b6fff0', lo: '#17b8a6', deep: '#0d7a72', sunCore: '#eafff7', sunGlow: '#7be8d1' } },
+    { id: 'sunset', name: 'Citrus Sunset', tagline: 'Last light warming the harbor.', fareG: 210,
+      sky: { hi: '#ffd9a0', lo: '#ff7a59', deep: '#c1416b', sunCore: '#fff3d0', sunGlow: '#ffb15e' } }
+  ];
+
   return {
     CURRENCIES: CURRENCIES, CONVERSION: CONVERSION,
     MATCH3: MATCH3, SLOT: SLOT, DOZER: DOZER,
     CHARM_SETS: CHARM_SETS, CHARMS: CHARMS, RARITY_WEIGHT: RARITY_WEIGHT,
     CHARM_CHEST_COST_G: CHARM_CHEST_COST_G, CHARM_MAXED_DUPE_GEMS: CHARM_MAXED_DUPE_GEMS,
     BUILDINGS: BUILDINGS, UPGRADES: UPGRADES, AUTO: AUTO, OFFLINE: OFFLINE,
-    PRESTIGE: PRESTIGE, ACHIEVEMENTS: ACHIEVEMENTS, ACH_GLOBAL_BONUS: ACH_GLOBAL_BONUS
+    PRESTIGE: PRESTIGE, ACHIEVEMENTS: ACHIEVEMENTS, ACH_GLOBAL_BONUS: ACH_GLOBAL_BONUS,
+    DESTINATIONS: DESTINATIONS
   };
 });

@@ -2,6 +2,9 @@
 :root {
   --sky-hi: #8fdcff;
   --sky-lo: #34a8e8;
+  --sky-deep: #2287c9;
+  --sun-core: #fff8d6;
+  --sun-glow: #ffe066;
   --deep: #0b4d79;
   --glass: rgba(255, 255, 255, 0.16);
   --glass-edge: rgba(255, 255, 255, 0.45);
@@ -27,7 +30,7 @@ html, body { margin: 0; padding: 0; min-height: 100%; }
 body {
   font-family: "Trebuchet MS", "Segoe UI", Verdana, sans-serif;
   color: var(--ink);
-  background: linear-gradient(180deg, var(--sky-hi) 0%, var(--sky-lo) 55%, #2287c9 100%);
+  background: linear-gradient(180deg, var(--sky-hi) 0%, var(--sky-lo) 55%, var(--sky-deep) 100%);
   background-attachment: fixed;
   overflow-x: hidden;
 }
@@ -37,7 +40,7 @@ body {
 #sky .sun {
   position: absolute; top: -70px; right: -70px; width: 260px; height: 260px;
   border-radius: 50%;
-  background: radial-gradient(circle at 40% 40%, #fff8d6 0%, #ffe066 45%, rgba(255, 201, 60, 0.0) 72%);
+  background: radial-gradient(circle at 40% 40%, var(--sun-core) 0%, var(--sun-glow) 45%, rgba(255, 201, 60, 0.0) 72%);
   animation: sunpulse 6s ease-in-out infinite;
 }
 @keyframes sunpulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }

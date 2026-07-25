@@ -97,6 +97,15 @@
       $('btn-daily').classList.add('hidden');
     });
 
+    // Passport (Phase 32 MVP)
+    $('btn-passport').addEventListener('click', function () {
+      ui.renderPassport();
+      $('dlg-passport').showModal();
+    });
+    $('btn-close-passport').addEventListener('click', function () { $('dlg-passport').close(); });
+    ui.applyDestinationPalette(game.s.destination);
+    game.on('destination', function (id) { ui.applyDestinationPalette(id); });
+
     // Settings dialog
     $('btn-settings').addEventListener('click', function () {
       ui.syncSettings(); ui.renderStats();
@@ -366,6 +375,59 @@
       block.appendChild(h);
       block.appendChild(grid);
       wrap.appendChild(block);
+    });
+  };
+
+  // ── Destinations / Passport (Phase 32 MVP) ─────────────────────────────────
+  ui.applyDestinationPalette = function (id) {
+    var dest = null;
+    for (var i = 0; i < D.DESTINATIONS.length; i++) if (D.DESTINATIONS[i].id === id) dest = D.DESTINATIONS[i];
+    if (!dest) return;
+    var root = document.documentElement.style;
+    root.setProperty('--sky-hi', dest.sky.hi);
+    root.setProperty('--sky-lo', dest.sky.lo);
+    root.setProperty('--sky-deep', dest.sky.deep);
+    root.setProperty('--sun-core', dest.sky.sunCore);
+    root.setProperty('--sun-glow', dest.sky.sunGlow);
+  };
+  ui.renderPassport = function () {
+    var wrap = $('passport-list');
+    wrap.innerHTML = '';
+    D.DESTINATIONS.forEach(function (dest) {
+      var unlocked = game.destinationUnlocked(dest.id);
+      var here = game.s.destination === dest.id;
+      var card = document.createElement('div');
+      card.className = 'card' + (here ? ' done' : '');
+      card.innerHTML = '<h3>' + dest.name + (here ? ' <span class="owned">— here now</span>' : '') + '</h3>' +
+        '<p>' + dest.tagline + '</p>' +
+        '<div class="row"><span class="cost"></span><button class="minibtn"></button></div>';
+      var btn = card.querySelector('button');
+      var costEl = card.querySelector('.cost');
+      if (here) {
+        costEl.textContent = '';
+        btn.textContent = 'Here now';
+        btn.disabled = true;
+      } else if (unlocked) {
+        costEl.textContent = 'Unlocked';
+        btn.textContent = 'Travel';
+        btn.addEventListener('click', function () {
+          game.travelTo(dest.id);
+          ui.sfx('select');
+          ui.renderPassport();
+        });
+      } else {
+        costEl.textContent = U.fmt(dest.fareG) + ' G fare';
+        btn.textContent = 'Unlock';
+        btn.disabled = !game.canAfford('stargem', dest.fareG);
+        btn.addEventListener('click', function () {
+          if (!game.unlockDestination(dest.id)) { ui.sfx('bad'); return; }
+          ui.sfx('buy');
+          ui.toast('Welcome to ' + dest.name + '!', 'gold', 'compass');
+          game.travelTo(dest.id);
+          ui.renderPassport();
+        });
+      }
+      wrap.appendChild(card);
     });
   };
 

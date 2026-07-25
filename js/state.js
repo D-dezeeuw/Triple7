@@ -56,7 +56,12 @@
       // Live-ish content claim ledger (Phase 29 MVP): last UTC day claimed
       // per feature, so a clock rewind replays the same already-claimed
       // outcome instead of granting a second gift (§10.9/§11.10).
-      claims: { daily: null }
+      claims: { daily: null },
+      // Destinations (Phase 32 MVP): home is always unlocked and free;
+      // others are one-time Stargem fares (see D.DESTINATIONS). `destination`
+      // is the currently active one (drives the sky/sun palette).
+      destinations: { home: true },
+      destination: 'home'
     };
   }
 
@@ -90,6 +95,12 @@
       s.claims = s.claims || {};
       s.claims.daily = null;
     }
+    // Home is always unlocked (fareG: 0, never spent-for) and the active
+    // destination must be one the save actually unlocked — otherwise a
+    // corrupted/hand-edited save could apply a palette it never paid for.
+    if (!s.destinations || typeof s.destinations !== 'object') s.destinations = {};
+    s.destinations.home = true;
+    if (typeof s.destination !== 'string' || !s.destinations[s.destination]) s.destination = 'home';
     // A corrupted/hand-edited save must never crash the dozer on load — drop
     // any record missing the fields World.deserialize needs.
     if (!Array.isArray(s.dozerTable)) {
@@ -329,6 +340,26 @@
     });
     this.s.lastSeen = now();
     return any ? { seconds: dtSec, gains: gains } : null;
+  };
+
+  // ── Destinations (Phase 32 MVP) ────────────────────────────────────────────
+  Game.prototype.destinationUnlocked = function (id) { return !!this.s.destinations[id]; };
+  Game.prototype.unlockDestination = function (id) {
+    var dest = null;
+    for (var i = 0; i < D.DESTINATIONS.length; i++) if (D.DESTINATIONS[i].id === id) dest = D.DESTINATIONS[i];
+    if (!dest || this.destinationUnlocked(id)) return false;
+    if (dest.fareG > 0 && !this.spend('stargem', dest.fareG)) return false;
+    this.s.destinations[id] = true;
+    this.emit('destinationUnlocked', dest);
+    return true;
+  };
+  // Switching is free and instant once unlocked — the fare is the one-time
+  // cost of the *option* to travel there, not a toll paid on every visit.
+  Game.prototype.travelTo = function (id) {
+    if (!this.destinationUnlocked(id)) return false;
+    this.s.destination = id;
+    this.emit('destination', id);
+    return true;
   };
 
   // ── Live-ish content (Phase 29 MVP: "Daily Squeeze") ──────────────────────

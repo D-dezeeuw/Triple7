@@ -63,6 +63,7 @@ ASSETS = {
     "trophy":  "Subject: a small victory trophy cup of golden-yellow glass (#ffc93c, highlight #fff3b0) with two rounded handles and a little base. No text, no fruit elements. Render on a plain solid pure white background (#FFFFFF) — absolutely no checkerboard pattern anywhere, including inside the handle openings.",
     "gem":     "Subject: a brilliant-cut diamond gemstone of vivid sky-blue glass (#3ec6ff, highlight #c8f0ff), classic pointed diamond silhouette. No fruit elements, no leaf.",
     "bottle":  "Subject: a small round juice bottle of vivid red glass (#ff5a4e, highlight #ffc2b8) with a golden cap and a single droplet emblem on the front. No text.",
+    "compass": "Subject: a chunky travel compass of pale sky-blue glass (#8fdcff, highlight white) with a golden rim, a red-and-gold compass needle visible inside, and small tick marks around the edge. No fruit elements, no leaf. Render on a plain solid pure white background (#FFFFFF) — absolutely no checkerboard pattern anywhere.",
 }
 
 # Glass Charm collectibles (28) — small jewel-like trinkets, one per charm id.

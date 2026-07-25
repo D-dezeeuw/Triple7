@@ -120,6 +120,30 @@ t('daily bonus is date-seeded, single-claim, and sanitizes a corrupted ledger', 
   g4.importSave(code);
   eq(g4.s.claims.daily, null, 'a corrupted claim ledger must sanitize to null, not brick future claims');
 });
+t('destinations: home is free/always unlocked, others cost their fare exactly once', function () {
+  var g = new st.Game();
+  ok(g.destinationUnlocked('home'), 'home must start unlocked');
+  eq(g.s.destination, 'home', 'fresh save starts at home');
+  var lagoon = D.DESTINATIONS.filter(function (d) { return d.id === 'lagoon'; })[0];
+  ok(!g.destinationUnlocked('lagoon'), 'lagoon must start locked');
+  ok(!g.unlockDestination('lagoon'), 'cannot unlock without funds');
+  g.gain('stargem', lagoon.fareG, true);
+  ok(g.unlockDestination('lagoon'), 'unlock must succeed once affordable');
+  eq(g.s.cur.stargem, 0, 'fare must actually be spent');
+  ok(!g.unlockDestination('lagoon'), 'unlocking twice must be a no-op, not a double charge');
+  ok(g.travelTo('lagoon'), 'travel to an unlocked destination must succeed');
+  eq(g.s.destination, 'lagoon');
+  ok(!g.travelTo('sunset'), 'travel to a locked destination must fail');
+  eq(g.s.destination, 'lagoon', 'failed travel must not change the active destination');
+});
+t('destinations: sanitize refuses to keep an active destination that was never unlocked', function () {
+  var g = new st.Game();
+  g.s.destination = 'sunset';           // hand-edited / corrupted, never actually unlocked
+  var code = g.exportSave();
+  var g2 = new st.Game();
+  g2.importSave(code);
+  eq(g2.s.destination, 'home', 'must fall back to home rather than apply an unpaid-for destination');
+});
 t('export/import round-trips exactly', function () {
   var g = new st.Game();
   g.gain('juice', 123.45, true); g.gain('stargem', 9, true);
