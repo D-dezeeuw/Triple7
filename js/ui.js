@@ -484,6 +484,7 @@
       ['Play time', Math.floor(s.playSec / 3600) + 'h ' + Math.floor((s.playSec % 3600) / 60) + 'm'],
       ['Match-3 moves', U.fmtInt(s.matches)],
       ['Best cascade', 'x' + s.bestChain],
+      ['Most cleared in one move', U.fmtInt(s.bestClear)],
       ['Slot spins', U.fmtInt(s.spins)],
       ['Triple Sevens', U.fmtInt(s.jackpots)],
       ['Coins dropped', U.fmtInt(s.drops)],
@@ -592,6 +593,8 @@
       $('lock-slots').classList.toggle('hidden', slotsOpen);
       $('lock-dozer').classList.toggle('hidden', dozerOpen);
       $('btn-daily').classList.toggle('hidden', !game.dailyBonusInfo().available);
+      $('stat-bestchain').textContent = '×' + game.s.stats.bestChain;
+      $('stat-besttiles').textContent = U.fmtInt(game.s.stats.bestClear);
       $('veil-slots').classList.toggle('hidden', slotsOpen);
       $('veil-dozer').classList.toggle('hidden', dozerOpen);
       if (!slotsOpen) {

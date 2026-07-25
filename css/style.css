@@ -213,6 +213,18 @@ main { max-width: 860px; margin: 0 auto; padding: 6px 12px 60px; }
 }
 .slotwrap canvas { height: min(48vh, 380px); }
 
+/* Match-3 best-run stats, just under the board. */
+.m3stats { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px 4px 0; }
+.combostat {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--glass); border: 1px solid var(--glass-edge);
+  backdrop-filter: blur(6px);
+  border-radius: 999px; padding: 5px 12px;
+  color: #fff; text-shadow: 0 1px 2px rgba(7,52,79,0.5);
+  font-size: 0.8rem;
+}
+.combostat b { font-size: 0.95rem; color: var(--sun); }
+
 .actionbar {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 12px 4px;

@@ -27,7 +27,7 @@
       cur: { juice: 0, suncoin: 0, stargem: 0 },
       lifetime: { juice: 0, suncoin: 0, stargem: 0 },
       stats: {
-        matches: 0, bestChain: 0, juiceEarned: 0,
+        matches: 0, bestChain: 0, bestClear: 0, juiceEarned: 0,
         spins: 0, jackpots: 0, sunEarned: 0,
         drops: 0, coinsFallen: 0, gemsEarned: 0,
         charms: 0, sets: 0, buildings: 0, prestiges: 0, playSec: 0,

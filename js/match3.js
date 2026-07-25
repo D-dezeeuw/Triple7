@@ -431,6 +431,7 @@
     var credited = g.gain('juice', res.juice);
     g.s.stats.matches++;
     if (res.chain > g.s.stats.bestChain) g.s.stats.bestChain = res.chain;
+    if (res.tiles > g.s.stats.bestClear) g.s.stats.bestClear = res.tiles;
     if (this.hooks.onJuice) this.hooks.onJuice(credited, res.chain, res.tiles);
     g.checkAchievements();
     if (steps && steps.length) {
@@ -469,13 +470,13 @@
           if (!prev) return;
           var color = prev.sp === RAINBOW ? 'hsl(' + (Math.round(self.time * 140) % 360) + ',85%,60%)' :
                       prev.sp === BURST ? '#ffcf4d' : D.MATCH3.FRUITS[prev.f].color;
-          self.spawnSparkles(gx, gy, color, 4);
+          self.spawnSparkles(gx, gy, color, 6);
         });
         // A Burst/Rainbow being born additionally gets its own warm sparkle
         // burst; a Rainbow (the rarer 5-match) also earns a cozy-grade micro
         // camera shake — a few pixels for a few frames, never anything sharp.
         (st.specials || []).forEach(function (sp) {
-          self.spawnSparkles(sp.x, sp.y);
+          self.spawnSparkles(sp.x, sp.y, null, 10);
           if (sp.cell.sp === RAINBOW) self.triggerShake();
         });
       }
@@ -522,20 +523,29 @@
       text: text, t: 0, chain: chain
     });
   };
-  var SPARKLE_T = 0.45;
-  var MAX_SPARKLES = 180;    // a big cascade clears many cells at once; cap
+  var SPARKLE_T = 0.5;
+  var MAX_SPARKLES = 240;    // a big cascade clears many cells at once; cap
                               // total particles so it can't runaway-allocate
   // Decorative-only burst: direction/speed use Math.random() (same precedent
   // as audio.js's noise texture) since this never touches gameplay fairness.
+  // Each particle is a tiny glassy bubble-droplet — same wet-glass language as
+  // the fruit themselves — that pops outward, arcs under gravity like a real
+  // droplet, then fades: see drawSparkles for the render side.
   View.prototype.spawnSparkles = function (gx, gy, color, count) {
     var m = this.metrics();
     var cx = m.ox + (gx + 0.5) * m.tile, cy = m.oy + (gy + 0.5) * m.tile;
-    var n = count || 7;
+    var n = count || 9;
     for (var i = 0; i < n; i++) {
       var ang = Math.random() * Math.PI * 2;
-      var spd = m.tile * (0.9 + Math.random() * 0.7);
-      this.sparkles.push({ x: cx, y: cy, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, t: 0,
-                           color: color || '#fff8c4' });
+      var spd = m.tile * (1.1 + Math.random() * 1.3);
+      this.sparkles.push({
+        x: cx, y: cy,
+        vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd - m.tile * 0.8,
+        gravity: m.tile * (3.0 + Math.random() * 1.8),
+        r: m.tile * (0.06 + Math.random() * 0.09),
+        t: 0, life: SPARKLE_T * (0.75 + Math.random() * 0.55),
+        color: color || '#fff8c4'
+      });
     }
     if (this.sparkles.length > MAX_SPARKLES) {
       this.sparkles.splice(0, this.sparkles.length - MAX_SPARKLES);   // oldest first — already faded most
@@ -563,8 +573,11 @@
     }
     for (var sp = this.sparkles.length - 1; sp >= 0; sp--) {
       var s = this.sparkles[sp];
-      s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vx *= 0.9; s.vy *= 0.9;
-      if (s.t > SPARKLE_T) this.sparkles.splice(sp, 1);
+      s.t += dt;
+      s.vy += s.gravity * dt;
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      s.vx *= 0.94;
+      if (s.t > s.life) this.sparkles.splice(sp, 1);
     }
     if (this.shake.t > 0) this.shake.t = Math.max(0, this.shake.t - dt);
     // Specular sweep: reduced-motion and "Extra sparkle" both gate it off
@@ -773,13 +786,32 @@
     ctx.fillRect(pos - band, -diag, band * 2, diag * 2);
     ctx.restore();
   };
+  // Glassy bubble-droplets: pop to full size fast, hold, then fade — a soft
+  // radial core-to-rim gradient plus a bright pinpoint highlight, same visual
+  // language as drawGem/drawShine's wet-glass fruit.
   View.prototype.drawSparkles = function (ctx) {
     for (var i = 0; i < this.sparkles.length; i++) {
       var s = this.sparkles[i];
-      var k = s.t / SPARKLE_T;
-      ctx.globalAlpha = 1 - k;
-      ctx.fillStyle = s.color;
-      ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(0.5, 3.5 * (1 - k)), 0, 7); ctx.fill();
+      var k = s.t / s.life;
+      var popIn = Math.min(1, s.t / 0.07);
+      var fadeOut = k > 0.55 ? Math.max(0, 1 - (k - 0.55) / 0.45) : 1;
+      var alpha = popIn * fadeOut;
+      if (alpha <= 0.02) continue;
+      var r = s.r * (0.55 + 0.45 * popIn);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      var grad = ctx.createRadialGradient(s.x - r * 0.35, s.y - r * 0.4, r * 0.12, s.x, s.y, r * 1.15);
+      grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+      grad.addColorStop(0.45, s.color);
+      grad.addColorStop(1, 'rgba(255,255,255,0.04)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = Math.max(0.4, r * 0.2);
+      ctx.beginPath(); ctx.arc(s.x, s.y, r * 0.8, 0, 7); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.beginPath(); ctx.arc(s.x - r * 0.32, s.y - r * 0.34, Math.max(0.35, r * 0.24), 0, 7); ctx.fill();
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
   };
