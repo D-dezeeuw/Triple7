@@ -1,4 +1,4 @@
-# Triple7 — Master Plan
+# Triple7 — The Big Vision Plan
 
 Triple7 is a free, open-source (Apache-2.0), non-monetized cozy idle web game: three mini-games —
 a match-3 grove, a three-reel slot, and a coin dozer — chained together by 7:1 currency conversions.
@@ -9,14 +9,59 @@ dew drops, glass-candy fruit. Pure static site (index.html + classic JS files, n
 GitHub Actions) hosted on GitHub Pages; Node.js is used only for dev tools (`npm start` static
 server, `npm run simulate` Monte-Carlo economy verifier, `npm test` logic tests).
 
-This document is the single source of truth for scope, math, and execution order — written as an
-**agile handoff document**: it is designed to be executed by any competent implementer, human or AI,
+This document is the single source of truth for vision, scope, math, and execution order — a
+**big-vision plan written as an agile handoff document**: it is designed to be executed by any competent implementer, human or AI,
 without access to the original authors. It contains a handoff protocol (§0), reference sections
 (research, art, design, math, architecture §1–§9, algorithms §10, industry pitfalls §11, judgment
 notes §12), followed by **30 phases (epics) × 10 features (stories) × 10 tasks = 3,000 tasks**.
 
-**Scope note: Phases 1–14 describe the shipped v1 scope. Phases 15–30 are the growth roadmap.**
-All tasks are unchecked; check them off as work lands on `main`.
+## The Vision (read me first)
+
+**This plan is deliberately bigger than the code — and always will be.** The repository ships a
+playable v1: the complete J→S→G loop with charms, grove, upgrades, automation and machine-verified
+math. This document describes the game Triple7 *wants to become*. Many tasks below — including
+inside the early phases — are not yet built; that is by design. The gap between the repo and this
+plan **is** the roadmap. Rule of thumb: trust the code for what exists, trust this plan for where
+it is going, and never assume a checkbox is done without auditing the code (see the Status Ledger).
+
+**North star:** the coziest honest game on the open web — a free, forkable, no-build browser idle
+that treats casino mathematics as a garden to grow rather than a trap to spring; where every
+probability is published, every economy claim is machine-verified, and the only stake is a warm
+15 minutes that can happily become endless.
+
+**Horizons:**
+- **Horizon 1 — The Loop (Phases 1–14).** Three machines, one 7:1 chain, provable economy,
+  portable saves. A v1 slice of this horizon is shipped and playable today; the phases still
+  contain unbuilt depth (staged cascades, named RNG streams, table persistence, badges…).
+- **Horizon 2 — The Feel (Phases 15–23).** Collection, automation, full audio, a particle engine,
+  the pseudo-3D depth pass, onboarding, accessibility. The game becomes *lovable*, not merely
+  functional. Cores of 15–19 are shipped; the rest is vision.
+- **Horizon 3 — The Living Game (Phases 24–30).** Tuning workbenches, performance and QA gates,
+  releases, a designed endgame, date-seeded seasons, modding and community governance. The game
+  becomes *self-sustaining* — and Phase 30.10 decides what v2 even is.
+
+**Non-goals, forever:** monetization of any kind, accounts, servers, telemetry, time pressure,
+FOMO. If a future idea needs one of these, the idea is wrong for Triple7.
+
+### Status Ledger — repo vs vision
+
+Legend: ✅ core shipped (audit, then finish the phase) · 🟡 partially shipped · 🔭 pure vision.
+Update this table as work lands on `main`; it is the honest boundary between game and dream.
+
+| Phase | Status | Phase | Status | Phase | Status |
+|---|---|---|---|---|---|
+| 1 Foundation | ✅ | 11 Dozer Physics | ✅ | 21 Depth Pass | 🔭 |
+| 2 Core Engine | 🟡 | 12 Dozer Gameplay | 🟡 | 22 Onboarding | 🔭 |
+| 3 Visual Language | 🟡 | 13 Hub & Interlinking | ✅ | 23 Accessibility | 🔭 |
+| 4 RNG & Fairness | 🟡 | 14 Grove & Offline | ✅ | 24 Balancing Tools | 🔭 |
+| 5 Economy Core | ✅ | 15 Charms | ✅ | 25 Performance | 🔭 |
+| 6 Save System | ✅ | 16 Shop & Upgrades | ✅ | 26 Testing & QA | 🔭 |
+| 7 Match-3 Core | ✅ | 17 Achievements | ✅ | 27 Deploy & Docs | 🔭 |
+| 8 Match-3 Juice | 🟡 | 18 Automation | 🟡 | 28 Endgame | 🔭 |
+| 9 Slot Core | ✅ | 19 Audio | 🟡 | 29 Live-ish Content | 🔭 |
+| 10 Slot Presentation | ✅ | 20 Particles & Feel | 🟡 | 30 Community & v2 | 🔭 |
+
+All 3,000 tasks are unchecked; check them off as work lands on `main`.
 
 ## 0. How to Use This Document (Agile Handoff Protocol)
 
@@ -32,9 +77,10 @@ Read this section first; it defines the vocabulary and the rules everything belo
 
 **Execution order.** Phases are dependency-ordered; execute top to bottom. Within a phase, read all
 10 stories before starting — they are ordered but lightly coupled. Within a story, tasks are ordered.
-Phases 1–14 describe code that already exists in this repository (v1): for those, treat each task as
-a verification checklist — confirm the behavior exists in the named file, implement anything missing,
-then check the box. Phases 15–30 are new work.
+Remember the Vision section above: this plan extends far beyond the current implementation. For any
+phase marked ✅/🟡 in the Status Ledger, audit the code first — confirm what exists in the named
+files, check those boxes, then build the rest of the phase up to its full vision. For 🔭 phases,
+everything is new work. Never assume a task is done because the phase "sounds shipped" — verify.
 
 **Definition of done.**
 - *Task*: implemented; `node --check` clean on touched files; covered by a test when the task names one.
@@ -792,6 +838,11 @@ while visible (by design — offline time is credited separately).
   floor — the casino math serves the coziness, never the reverse.
 
 # The 30 Phases
+
+> **Reminder:** these phases chart the full vision, not the current inventory. The shipped v1 is a
+> slice through Horizons 1–2 (see the Status Ledger). A task being listed — even in Phase 1 — does
+> not mean it is built; a phase being "vision" does not make it optional to the dream. Build toward
+> all of it.
 
 Phases 1–14 = shipped v1. Phases 15–30 = growth roadmap. 10 features per phase, 10 todos each.
 
