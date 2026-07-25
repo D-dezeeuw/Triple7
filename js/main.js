@@ -46,6 +46,26 @@
   var saveTimer = 0, achTimer = 0;
   var lastFrame = 0;
 
+  // ── Debug overlay (Phase 2.10 / 25.1) ──────────────────────────────────────
+  // DOM only (never canvas, so it can't affect game paints); costs nothing
+  // when off beyond one regex test at boot and one keydown listener.
+  var debugOn = /(?:^|[?&])debug=1(?:&|$)/.test(location.search);
+  var debugEl = null, fpsHist = [];
+  function toggleDebug(on) {
+    debugOn = on;
+    if (debugOn && !debugEl) {
+      debugEl = document.createElement('div');
+      debugEl.id = 'debug-overlay';
+      document.body.appendChild(debugEl);
+    } else if (!debugOn && debugEl) {
+      debugEl.remove(); debugEl = null;
+    }
+  }
+  if (debugOn) toggleDebug(true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === '`' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') toggleDebug(!debugOn);
+  });
+
   // ── Canvas DPI ────────────────────────────────────────────────────────────
   function fitCanvas(cv) {
     var dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -130,16 +150,40 @@
     });
 
     // Views: update all (cheap — dozer physics keeps flowing off-tab), draw active.
+    var updateStart = debugOn ? performance.now() : 0;
     views.match3.update(dt);
     views.slots.update(dt);
     views.dozer.update(dt);
+    var updateMs = debugOn ? performance.now() - updateStart : 0;
+
+    var drawStart = debugOn ? performance.now() : 0;
     var active = T7.ui.activeTab;
     if (views[active]) {
       fitCanvas(views[active].cv);
       views[active].draw();
     }
+    var drawMs = debugOn ? performance.now() - drawStart : 0;
 
     T7.ui.tick(dt);
+
+    if (debugOn) {
+      fpsHist.push(dt);
+      if (fpsHist.length > 60) fpsHist.shift();
+      var avgDt = fpsHist.reduce(function (a, b) { return a + b; }, 0) / fpsHist.length;
+      debugEl.textContent =
+        'fps ' + (1 / avgDt).toFixed(0) +
+        '  dt ' + (dt * 1000).toFixed(1) + 'ms' +
+        '  update ' + updateMs.toFixed(2) + 'ms' +
+        '  draw ' + drawMs.toFixed(2) + 'ms\n' +
+        'tab ' + active +
+        '  dozer coins ' + views.dozer.world.coins.length +
+        '  sparkles ' + views.match3.sparkles.length +
+        '  floaters ' + views.match3.floaters.length +
+        '\nJ ' + T7.util.fmtInt(game.s.cur.juice) +
+        '  S ' + T7.util.fmtInt(game.s.cur.suncoin) +
+        '  G ' + T7.util.fmtInt(game.s.cur.stargem) +
+        '  (backtick to hide)';
+    }
 
     game.s.stats.playSec += dt;
     achTimer += dt;

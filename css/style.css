@@ -290,3 +290,11 @@ dialog h2 { margin-top: 0; }
   .gamewrap canvas { height: min(58vh, 430px); }
   #stats-list { columns: 1; }
 }
+
+/* ── Debug overlay (?debug=1 or backtick, dev-only) ───────────────────── */
+#debug-overlay {
+  position: fixed; top: 6px; left: 6px; z-index: 9999;
+  background: rgba(0,0,0,0.78); color: #7dffb0;
+  font: 11px/1.5 "Courier New", monospace; padding: 8px 10px;
+  border-radius: 8px; white-space: pre; pointer-events: none;
+}
