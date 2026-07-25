@@ -54,8 +54,13 @@ body.reduced-motion .cloud, body.reduced-motion #sky .sun { animation: none; }
 .logo {
   margin: 0; font-size: 1.7rem; letter-spacing: 1px; color: #fff;
   text-shadow: 0 2px 0 rgba(7, 52, 79, 0.35), 0 6px 14px rgba(7, 52, 79, 0.25);
+  display: flex; align-items: center; gap: 6px;
 }
 .logo .seven { color: var(--sun); font-size: 2rem; }
+.logo .logomark {
+  width: 44px; height: 44px;
+  filter: drop-shadow(0 3px 5px rgba(7, 52, 79, 0.4));
+}
 #hud { display: flex; gap: 8px; flex: 1; justify-content: center; flex-wrap: wrap; }
 .pill {
   display: flex; align-items: center; gap: 7px;
@@ -235,6 +240,7 @@ dialog h2 { margin-top: 0; }
 
 @media (max-width: 620px) {
   .logo { font-size: 1.2rem; }
+  .logo .logomark { width: 32px; height: 32px; }
   .pill b { font-size: 0.9rem; }
   .gamewrap canvas { height: min(58vh, 430px); }
   #stats-list { columns: 1; }
