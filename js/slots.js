@@ -215,6 +215,14 @@
     ctx.fillStyle = col.c + '33';
     ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.8, r * 0.8, r * 0.26, 0, 0, 7); ctx.fill();
 
+    // Painted sprite skin when loaded; canvas painter below stays the fallback.
+    var spr = typeof T7 !== 'undefined' && T7.sprites && T7.sprites.get(id);
+    if (spr) {
+      var side = r * 2.4;
+      ctx.drawImage(spr, cx - side / 2, cy - side / 2, side, side);
+      return;
+    }
+
     var g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.05, cx, cy, r * 1.15);
     g.addColorStop(0, col.hi); g.addColorStop(0.55, col.c); g.addColorStop(1, col.c);
     ctx.fillStyle = g;

@@ -449,6 +449,19 @@
     ctx.fillStyle = fruit.color + '44';
     ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.75, r * 0.85, r * 0.3, 0, 0, 7); ctx.fill();
 
+    // Painted sprite skin when loaded; canvas painter below stays the fallback.
+    var spr = typeof T7 !== 'undefined' && T7.sprites && T7.sprites.get(fruit.id);
+    if (spr) {
+      var side = size * 0.94;
+      ctx.drawImage(spr, cx - side / 2, cy - side / 2 - r * 0.1, side, side);
+      if (c.sp === BURST) {
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 + 0.35 * Math.sin(this.time * 6)) + ')';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(cx, cy, r * 1.05, 0, 7); ctx.stroke();
+      }
+      return;
+    }
+
     // Glass body: bright core → saturated rim.
     var g2 = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.45, r * 0.05, cx, cy, r * 1.2);
     g2.addColorStop(0, fruit.hi);
