@@ -11,10 +11,18 @@
   --leaf: #37c05e;
   --ink: #07344f;
   --radius: 18px;
+  --focus: #1b6ef3;
   font-size: 16px;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* Phase 23: one visible focus ring everywhere, keyboard-only (mouse/touch
+   clicks never show it) via the browser's own :focus-visible heuristic. */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 html, body { margin: 0; padding: 0; min-height: 100%; }
 body {
   font-family: "Trebuchet MS", "Segoe UI", Verdana, sans-serif;

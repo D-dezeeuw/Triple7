@@ -25,17 +25,45 @@
     game = g; views = v; rng = r;
 
     // Tabs
-    document.querySelectorAll('#tabs .tab').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        document.querySelectorAll('#tabs .tab').forEach(function (b) { b.classList.remove('active'); });
-        document.querySelectorAll('main .panel').forEach(function (p) { p.classList.remove('active'); });
-        btn.classList.add('active');
-        $('panel-' + btn.dataset.tab).classList.add('active');
-        ui.activeTab = btn.dataset.tab;
-        T7.audio.unlock();
+    var tabBtns = Array.prototype.slice.call(document.querySelectorAll('#tabs .tab'));
+    function activateTab(tab) {
+      tabBtns.forEach(function (b) {
+        var on = b.dataset.tab === tab;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
       });
+      document.querySelectorAll('main .panel').forEach(function (p) { p.classList.remove('active'); });
+      $('panel-' + tab).classList.add('active');
+      ui.activeTab = tab;
+      T7.audio.unlock();
+    }
+    tabBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () { activateTab(btn.dataset.tab); });
     });
     ui.activeTab = 'match3';
+
+    // Keyboard: 1-6 jump straight to a tab (Phase 2.4/23.2); arrow keys move
+    // focus between tabs when one already has it (standard ARIA tabs
+    // pattern). Ignored while typing in an input/textarea/select so number
+    // entry (e.g. the reserve fields) or pasting a save code isn't hijacked.
+    document.addEventListener('keydown', function (e) {
+      var tag = (document.activeElement && document.activeElement.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key >= '1' && e.key <= String(tabBtns.length)) {
+        var btn = tabBtns[+e.key - 1];
+        if (btn) { activateTab(btn.dataset.tab); btn.focus(); }
+        return;
+      }
+      if (document.activeElement && document.activeElement.getAttribute('role') === 'tab') {
+        var idx = tabBtns.indexOf(document.activeElement);
+        if (idx < 0) return;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          var next = tabBtns[(idx + (e.key === 'ArrowRight' ? 1 : tabBtns.length - 1)) % tabBtns.length];
+          activateTab(next.dataset.tab); next.focus();
+          e.preventDefault();
+        }
+      }
+    });
 
     // Action buttons
     $('btn-spin').addEventListener('click', function () { views.slots.spin(); });

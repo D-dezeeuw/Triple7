@@ -34,24 +34,24 @@
   <button id="btn-settings" class="iconbtn" title="Settings, save &amp; about"><img src="assets/sprites/gear.png" alt="Settings"></button>
 </header>
 
-<nav id="tabs">
-  <button class="tab active" data-tab="match3"><img class="tabicon" src="assets/sprites/cherry.png" alt=""> Match</button>
-  <button class="tab" data-tab="slots"><img class="tabicon" src="assets/sprites/sun.png" alt=""> Slots<span class="lock" id="lock-slots"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
-  <button class="tab" data-tab="dozer"><img class="tabicon" src="assets/sprites/star.png" alt=""> Dozer<span class="lock" id="lock-dozer"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
-  <button class="tab" data-tab="grove"><img class="tabicon" src="assets/sprites/sprout.png" alt=""> Grove</button>
-  <button class="tab" data-tab="charms"><img class="tabicon" src="assets/sprites/sparkle.png" alt=""> Charms</button>
-  <button class="tab" data-tab="shop"><img class="tabicon" src="assets/sprites/arrowup.png" alt=""> Shop</button>
+<nav id="tabs" role="tablist" aria-label="Games and panels">
+  <button class="tab active" data-tab="match3" role="tab" id="tab-match3" aria-controls="panel-match3" aria-selected="true"><img class="tabicon" src="assets/sprites/cherry.png" alt=""> Match</button>
+  <button class="tab" data-tab="slots" role="tab" id="tab-slots" aria-controls="panel-slots" aria-selected="false"><img class="tabicon" src="assets/sprites/sun.png" alt=""> Slots<span class="lock" id="lock-slots"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
+  <button class="tab" data-tab="dozer" role="tab" id="tab-dozer" aria-controls="panel-dozer" aria-selected="false"><img class="tabicon" src="assets/sprites/star.png" alt=""> Dozer<span class="lock" id="lock-dozer"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
+  <button class="tab" data-tab="grove" role="tab" id="tab-grove" aria-controls="panel-grove" aria-selected="false"><img class="tabicon" src="assets/sprites/sprout.png" alt=""> Grove</button>
+  <button class="tab" data-tab="charms" role="tab" id="tab-charms" aria-controls="panel-charms" aria-selected="false"><img class="tabicon" src="assets/sprites/sparkle.png" alt=""> Charms</button>
+  <button class="tab" data-tab="shop" role="tab" id="tab-shop" aria-controls="panel-shop" aria-selected="false"><img class="tabicon" src="assets/sprites/arrowup.png" alt=""> Shop</button>
 </nav>
 
 <main>
-  <section class="panel active" id="panel-match3">
+  <section class="panel active" id="panel-match3" role="tabpanel" aria-labelledby="tab-match3" tabindex="0">
     <div class="gamewrap"><canvas id="cv-match3"></canvas></div>
     <div class="actionbar">
       <span class="tip">Swap two fruits to match 3+. Every cleared fruit squeezes <b>Juice</b>. 4-in-a-row makes a Burst, 5 makes a Rainbow!</span>
     </div>
   </section>
 
-  <section class="panel" id="panel-slots">
+  <section class="panel" id="panel-slots" role="tabpanel" aria-labelledby="tab-slots" tabindex="0">
     <div class="gamewrap slotwrap"><canvas id="cv-slots"></canvas></div>
     <div class="actionbar">
       <button id="btn-spin" class="bigbtn">SPIN — 7 <img class="ic-img" src="assets/sprites/droplet.png" alt="Juice"></button>
@@ -62,7 +62,7 @@
     </div>
   </section>
 
-  <section class="panel" id="panel-dozer">
+  <section class="panel" id="panel-dozer" role="tabpanel" aria-labelledby="tab-dozer" tabindex="0">
     <div class="gamewrap"><canvas id="cv-dozer"></canvas></div>
     <div class="actionbar">
       <button id="btn-drop" class="bigbtn">DROP — 7 <img class="ic-img" src="assets/sprites/suncoin.png" alt="Suncoins"></button>
@@ -73,7 +73,7 @@
     </div>
   </section>
 
-  <section class="panel" id="panel-grove">
+  <section class="panel" id="panel-grove" role="tabpanel" aria-labelledby="tab-grove" tabindex="0">
     <h2>Sunshine Grove <small>— plant things, earn while you're away</small></h2>
     <div id="grove-list" class="cardlist"></div>
     <div id="prestige-card" class="card prestige hidden">
@@ -83,7 +83,7 @@
     </div>
   </section>
 
-  <section class="panel" id="panel-charms">
+  <section class="panel" id="panel-charms" role="tabpanel" aria-labelledby="tab-charms" tabindex="0">
     <h2>Charm Cabinet <small>— glass fruit, forever bonuses</small></h2>
     <div class="actionbar">
       <button id="btn-chest" class="bigbtn">Charm Chest — 77 <img class="ic-img" src="assets/sprites/gem.png" alt="Stargems"></button>
@@ -92,7 +92,7 @@
     <div id="charm-sets"></div>
   </section>
 
-  <section class="panel" id="panel-shop">
+  <section class="panel" id="panel-shop" role="tabpanel" aria-labelledby="tab-shop" tabindex="0">
     <h2>Upgrade Shop <small>— spend Stargems, bend the odds</small></h2>
     <div id="shop-list" class="cardlist"></div>
     <h2>Milestones <small id="ach-count"></small></h2>
@@ -100,13 +100,14 @@
   </section>
 </main>
 
-<div id="toasts"></div>
+<div id="toasts" role="status" aria-live="polite"></div>
 
 <dialog id="dlg-settings">
   <h2>Settings &amp; Save</h2>
   <div class="setrow"><label><input type="checkbox" id="set-sfx" checked> Sound effects</label></div>
   <div class="setrow"><label><input type="checkbox" id="set-particles" checked> Extra sparkle</label></div>
   <div class="setrow"><label><input type="checkbox" id="set-motion"> Reduce motion</label></div>
+  <p class="mini">Keyboard: press <kbd>1</kbd>–<kbd>6</kbd> to jump straight to a tab, or arrow keys to move between tabs once one has focus.</p>
   <h3>Automation reserves</h3>
   <p class="mini">Auto-Spinner and Auto-Dropper (once bought in the Shop) never spend below these floors — set them to protect Juice or Suncoins you're saving up by hand.</p>
   <div class="setrow">
