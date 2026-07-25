@@ -69,7 +69,11 @@
     $('btn-spin').addEventListener('click', function () { views.slots.spin(); });
     $('btn-drop').addEventListener('click', function () { views.dozer.tryDrop(); });
     $('btn-chest').addEventListener('click', function () {
-      if (!game.spend('stargem', D.CHARM_CHEST_COST_G)) { ui.toast('Need 77 Stargems for a chest.'); return; }
+      if (!game.spend('stargem', D.CHARM_CHEST_COST_G)) {
+        ui.toast('Need 77 Stargems for a chest.');
+        ui.sfx('bad');
+        return;
+      }
       var award = game.awardRandomCharm(rng);
       ui.charmToast(award);
       ui.sfx('buy');
@@ -186,6 +190,7 @@
     $('btn-close-intro').addEventListener('click', function () {
       game.s.onboarding.introSeen = true;
       $('dlg-intro').close();
+      ui.sfx('buy');
     });
     $('btn-replay-intro').addEventListener('click', function () {
       $('dlg-settings').close();

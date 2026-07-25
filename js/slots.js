@@ -120,7 +120,12 @@
   };
 
   View.prototype.spin = function () {
-    if (!this.canSpin()) return false;
+    if (!this.canSpin()) {
+      // Mirrors dozer.js's tryDrop: only the "can't afford it" case earns a
+      // 'bad' cue — already-spinning is just a no-op, not a failed purchase.
+      if (this.hooks.sfx && !this.g.canAfford('juice', D.CONVERSION.SPIN_COST_J)) this.hooks.sfx('bad');
+      return false;
+    }
     var g = this.g;
     g.spend('juice', D.CONVERSION.SPIN_COST_J);
     var res = resolveSpin(this.rng, g.upLvl('luckysevens'));
