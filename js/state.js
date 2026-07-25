@@ -30,7 +30,12 @@
         matches: 0, bestChain: 0, juiceEarned: 0,
         spins: 0, jackpots: 0, sunEarned: 0,
         drops: 0, coinsFallen: 0, gemsEarned: 0,
-        charms: 0, sets: 0, buildings: 0, prestiges: 0, playSec: 0
+        charms: 0, sets: 0, buildings: 0, prestiges: 0, playSec: 0,
+        // Personal RTP (Phase 28.7 / §11.11): Suncoins credited specifically
+        // by slot settlements, and Stargems credited specifically by dozer
+        // front-exits/specials — separate from sunEarned/gemsEarned, which
+        // blend in Grove passive income and can't isolate a per-stake rate.
+        slotSunWon: 0, dozerGemsWon: 0
       },
       charms: {},        // charmId -> level (1..7)
       upgrades: {},      // upgradeId -> level
@@ -89,6 +94,9 @@
       if (!isFinite(s.lifetime[c]) || s.lifetime[c] < 0) s.lifetime[c] = 0;
     });
     if (!isFinite(s.seeds) || s.seeds < 0) s.seeds = 0;
+    ['slotSunWon', 'dozerGemsWon'].forEach(function (k) {
+      if (!isFinite(s.stats[k]) || s.stats[k] < 0) s.stats[k] = 0;
+    });
     ['juice', 'suncoin'].forEach(function (c) {
       if (!s.settings.reserve || !isFinite(s.settings.reserve[c]) || s.settings.reserve[c] < 0) {
         s.settings.reserve = s.settings.reserve || {};
@@ -352,6 +360,22 @@
     });
     this.s.lastSeen = now();
     return any ? { seconds: dtSec, gains: gains } : null;
+  };
+
+  // ── Personal RTP (Phase 28.7 / §11.11) ─────────────────────────────────────
+  // 1 spin ≡ 1 Suncoin stake and 1 drop ≡ 1 Stargem stake by the game's own
+  // nominal conversion (7 J/spin, 7 S/drop), so "Suncoins won ÷ spins" and
+  // "Stargems won ÷ drops" land directly in the same units as the published
+  // base EVs (1.18401 S/spin, ~1.31 G/drop) — no unit conversion needed.
+  // MIN_SAMPLE guards against a tiny sample producing a wild, meaningless %.
+  var RTP_MIN_SAMPLE = 20;
+  Game.prototype.personalSlotRTP = function () {
+    var n = this.s.stats.spins;
+    return { ratio: n >= RTP_MIN_SAMPLE ? this.s.stats.slotSunWon / n : null, n: n };
+  };
+  Game.prototype.personalDozerRTP = function () {
+    var n = this.s.stats.drops;
+    return { ratio: n >= RTP_MIN_SAMPLE ? this.s.stats.dozerGemsWon / n : null, n: n };
   };
 
   // ── Destinations (Phase 32 MVP) ────────────────────────────────────────────

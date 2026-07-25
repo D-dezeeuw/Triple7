@@ -358,5 +358,32 @@ t('deserialize does not consume the live rng stream for tier/kind lookup', funct
   eq(probe.getState(), before, 'deserialize must not roll the rng it is given');
 });
 
+console.log('personal rtp');
+t('personal slot/dozer RTP withholds a ratio until the minimum sample size, then computes it', function () {
+  var g = new st.Game();
+  eq(g.personalSlotRTP().ratio, null, 'fresh game must not report a ratio yet');
+  eq(g.personalDozerRTP().ratio, null, 'fresh game must not report a ratio yet');
+
+  g.s.stats.spins = 19;
+  g.s.stats.slotSunWon = 19 * 2;
+  eq(g.personalSlotRTP().ratio, null, 'one spin short of the sample floor must still withhold');
+  g.s.stats.spins = 20;
+  g.s.stats.slotSunWon = 20 * 2;
+  near(g.personalSlotRTP().ratio, 2, 1e-9, 'ratio must be slotSunWon / spins once the floor is met');
+
+  g.s.stats.drops = 25;
+  g.s.stats.dozerGemsWon = 25 * 1.3;
+  near(g.personalDozerRTP().ratio, 1.3, 1e-9, 'ratio must be dozerGemsWon / drops once the floor is met');
+});
+t('personal RTP source stats sanitize corrupted values to finite non-negative numbers', function () {
+  var g = new st.Game();
+  g.s.stats.slotSunWon = -5;
+  g.s.stats.dozerGemsWon = NaN;
+  var code = g.exportSave();
+  var g2 = new st.Game();
+  g2.importSave(code);
+  ok(isFinite(g2.s.stats.slotSunWon) && g2.s.stats.slotSunWon >= 0, 'negative slotSunWon must sanitize to >=0');
+  ok(isFinite(g2.s.stats.dozerGemsWon) && g2.s.stats.dozerGemsWon >= 0, 'NaN dozerGemsWon must sanitize to a finite >=0 number');
+});
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

@@ -281,12 +281,18 @@
       if (c.kind === 'coin') {
         var got = g.gain('stargem', c.tier ? c.tier.gems : 1);
         g.s.stats.coinsFallen++;
+        g.s.stats.dozerGemsWon += got;
         label = '+' + U.fmt(got) + ' G';
         if (this.hooks.sfx) this.hooks.sfx(c.tier && c.tier.gems > 1 ? 'special' : 'coinfall');
       } else {
         var sp = c.special;
         if (sp.kind === 'gems') {
-          label = '+' + U.fmt(g.gain('stargem', sp.gems)) + ' G';
+          // Personal RTP (Phase 28.7) only tallies directly Stargem-denominated
+          // credits — plain coins plus this special — so the figure never has
+          // to invent a cross-currency exchange rate for sunpouch/bottle/charm.
+          var gotGems = g.gain('stargem', sp.gems);
+          g.s.stats.dozerGemsWon += gotGems;
+          label = '+' + U.fmt(gotGems) + ' G';
         } else if (sp.kind === 'sun') {
           label = '+' + U.fmt(g.gain('suncoin', sp.sun)) + ' S';
         } else if (sp.kind === 'juice') {

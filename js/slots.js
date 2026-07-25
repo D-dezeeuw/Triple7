@@ -197,6 +197,7 @@
     var creditedSun = 0, creditedGems = 0;
     if (res.sun > 0) creditedSun = g.gain('suncoin', res.sun);
     if (res.gems > 0) creditedGems = g.gain('stargem', res.gems);
+    g.s.stats.slotSunWon += creditedSun;   // Phase 28.7: personal RTP tracking
     if (res.kind === 'jackpot') {
       g.s.stats.jackpots++;
       this.flash = 3.5;

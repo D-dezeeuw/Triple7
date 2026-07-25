@@ -465,6 +465,25 @@
       ['Golden Seeds', U.fmtInt(game.s.seeds)],
       ['Global multiplier', '×' + game.allMult().toFixed(2)]
     ];
+    // Personal RTP (Phase 28.7 / fairness.md): each player's own measured
+    // return vs. the published par figure, so anyone can audit the math
+    // themselves. Base par is fetched live from the paytable (never a
+    // hardcoded copy) so it can't drift out of sync with data.js.
+    var slotRtp = game.personalSlotRTP();
+    if (slotRtp.ratio == null) {
+      rows.push(['Personal slot RTP', 'need ' + (20 - slotRtp.n) + ' more spins']);
+    } else {
+      var basePar = T7.slots.enumerateRTP(0).ev;
+      rows.push(['Personal slot RTP', slotRtp.ratio.toFixed(3) + ' S/spin (base par ' +
+        basePar.toFixed(3) + ' S — your upgrades & multiplier push this higher)']);
+    }
+    var dozerRtp = game.personalDozerRTP();
+    if (dozerRtp.ratio == null) {
+      rows.push(['Personal dozer RTP', 'need ' + (20 - dozerRtp.n) + ' more drops']);
+    } else {
+      rows.push(['Personal dozer RTP', dozerRtp.ratio.toFixed(3) +
+        ' G/drop (coins + gemfruit only — excludes Sunpouch/Bottle/Charm specials)']);
+    }
     $('stats-list').innerHTML = rows.map(function (r) {
       return '<div><b>' + r[0] + ':</b> ' + r[1] + '</div>';
     }).join('');
