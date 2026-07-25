@@ -69,6 +69,8 @@
     </div>
     <div class="lockveil" id="veil-slots">
       <p><img class="veilicon" src="assets/sprites/lock.png" alt=""><br>The Sunshine Sevens wake up once you've squeezed <b>7 Juice</b>.<br>Go match some fruit!</p>
+      <div class="veilprogress"><div class="veilprogress-bar" id="veilbar-slots"></div></div>
+      <p class="mini" id="veiltext-slots"></p>
     </div>
   </section>
 
@@ -80,6 +82,8 @@
     </div>
     <div class="lockveil" id="veil-dozer">
       <p><img class="veilicon" src="assets/sprites/lock.png" alt=""><br>Star Harbor opens once you've won <b>7 Suncoins</b> at the slots.</p>
+      <div class="veilprogress"><div class="veilprogress-bar" id="veilbar-dozer"></div></div>
+      <p class="mini" id="veiltext-dozer"></p>
     </div>
   </section>
 
@@ -118,6 +122,7 @@
   <div class="setrow"><label><input type="checkbox" id="set-particles" checked> Extra sparkle</label></div>
   <div class="setrow"><label><input type="checkbox" id="set-motion"> Reduce motion</label></div>
   <p class="mini">Keyboard: press <kbd>1</kbd>–<kbd>6</kbd> to jump straight to a tab, or arrow keys to move between tabs once one has focus.</p>
+  <div class="setrow"><button id="btn-replay-intro" class="minibtn">Replay welcome intro</button></div>
   <h3>Automation reserves</h3>
   <p class="mini">Auto-Spinner and Auto-Dropper (once bought in the Shop) never spend below these floors — set them to protect Juice or Suncoins you're saving up by hand.</p>
   <div class="setrow">
@@ -142,6 +147,18 @@
   <p class="mini">Triple7 is free &amp; open source (Apache-2.0). No ads, no accounts, no purchases — just fruit.
     Every odds table in this game is published in <a href="docs/fairness.md" target="_blank" rel="noopener">the fairness contract</a> and verified by <code>npm run simulate</code>.</p>
   <div class="setrow"><button id="btn-close-settings" class="bigbtn">Back to the fruit</button></div>
+</dialog>
+
+<dialog id="dlg-intro">
+  <h2><img class="h3icon" src="assets/sprites/strawberry.png" alt=""> Welcome to Triple7!</h2>
+  <p>Three little machines, one juicy chain:</p>
+  <ol class="intro-steps">
+    <li><img class="intro-ic" src="assets/sprites/cherry.png" alt=""><span><b>Match</b> glass fruit on the board below — every match squeezes <b>Juice</b>, always free.</span></li>
+    <li><img class="intro-ic" src="assets/sprites/sun.png" alt=""><span>Feed 7 Juice to the <b>Slots</b> for a spin — wins pay <b>Suncoins</b>.</span></li>
+    <li><img class="intro-ic" src="assets/sprites/gem.png" alt=""><span>Drop 7 Suncoins into the <b>Dozer</b> — coins pushed off the edge pay <b>Stargems</b>.</span></li>
+  </ol>
+  <p class="mini">Spend Stargems on charms, upgrades and automation to make the whole loop faster. No ads, no accounts, no purchases — just fruit. (Replay this anytime from Settings.)</p>
+  <div class="setrow"><button id="btn-close-intro" class="bigbtn">Let's play!</button></div>
 </dialog>
 
 <dialog id="dlg-welcome">

@@ -182,6 +182,16 @@
     $('btn-close-paytable').addEventListener('click', function () { $('dlg-paytable').close(); });
     $('btn-close-welcome').addEventListener('click', function () { $('dlg-welcome').close(); });
 
+    // Onboarding (Phase 22 MVP)
+    $('btn-close-intro').addEventListener('click', function () {
+      game.s.onboarding.introSeen = true;
+      $('dlg-intro').close();
+    });
+    $('btn-replay-intro').addEventListener('click', function () {
+      $('dlg-settings').close();
+      ui.showIntro();
+    });
+
     // Currency pill bumps
     var lastBump = 0;
     game.on('currency', function (ev) {
@@ -258,6 +268,9 @@
     }
     ui.renderCharms();
   };
+
+  // ── Onboarding (Phase 22 MVP) ───────────────────────────────────────────────
+  ui.showIntro = function () { $('dlg-intro').showModal(); };
 
   // ── Welcome back ──────────────────────────────────────────────────────────
   ui.showWelcome = function (off) {
@@ -520,7 +533,7 @@
         var r = game.groveRate(c);
         $('rate-' + c).textContent = r > 0 ? '+' + U.fmt(r) + '/s' : '';
       });
-      // Unlocks
+      // Unlocks (Phase 22.3: locked tabs tease progress toward opening)
       var slotsOpen = game.s.lifetime.juice >= D.CONVERSION.SPIN_COST_J;
       var dozerOpen = game.s.lifetime.suncoin >= D.CONVERSION.DROP_COST_S;
       $('lock-slots').classList.toggle('hidden', slotsOpen);
@@ -528,6 +541,18 @@
       $('btn-daily').classList.toggle('hidden', !game.dailyBonusInfo().available);
       $('veil-slots').classList.toggle('hidden', slotsOpen);
       $('veil-dozer').classList.toggle('hidden', dozerOpen);
+      if (!slotsOpen) {
+        var slotsPct = U.clamp(game.s.lifetime.juice / D.CONVERSION.SPIN_COST_J * 100, 0, 100);
+        $('veilbar-slots').style.width = slotsPct + '%';
+        $('veiltext-slots').textContent = U.fmt(game.s.lifetime.juice) + ' / ' +
+          D.CONVERSION.SPIN_COST_J + ' Juice squeezed';
+      }
+      if (!dozerOpen) {
+        var dozerPct = U.clamp(game.s.lifetime.suncoin / D.CONVERSION.DROP_COST_S * 100, 0, 100);
+        $('veilbar-dozer').style.width = dozerPct + '%';
+        $('veiltext-dozer').textContent = U.fmt(game.s.lifetime.suncoin) + ' / ' +
+          D.CONVERSION.DROP_COST_S + ' Suncoins won';
+      }
       $('btn-spin').disabled = !views.slots.canSpin();
       $('btn-drop').disabled = !views.dozer.canDrop();
     }

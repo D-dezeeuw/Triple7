@@ -96,6 +96,29 @@ t('automation reserve defaults to 0 and sanitizes bad values', function () {
   ok(g2.s.settings.reserve.juice >= 0, 'negative reserve must sanitize to >=0');
   ok(isFinite(g2.s.settings.reserve.suncoin), 'NaN reserve must sanitize to a finite number');
 });
+t('onboarding intro shows only for genuinely fresh saves, never a returning player', function () {
+  var fresh = st.defaultState();
+  eq(fresh.onboarding.introSeen, false, 'a brand new save must see the intro');
+
+  // A save with real progress but no onboarding field (predates the feature)
+  // must be backfilled to introSeen:true on load, never shown the intro.
+  var g = new st.Game();
+  g.gain('juice', 50, true);
+  g.s.stats.matches = 3;
+  delete g.s.onboarding;
+  var code = g.exportSave();
+  var g2 = new st.Game();
+  g2.importSave(code);
+  eq(g2.s.onboarding.introSeen, true, 'a returning player must never see the fresh-save intro');
+
+  // Corrupted onboarding field must sanitize to a safe boolean, not throw.
+  var g3 = new st.Game();
+  g3.s.onboarding = { introSeen: 'yes please' };
+  var code3 = g3.exportSave();
+  var g4 = new st.Game();
+  g4.importSave(code3);
+  eq(typeof g4.s.onboarding.introSeen, 'boolean', 'corrupted introSeen must sanitize to a boolean');
+});
 t('daily bonus is date-seeded, single-claim, and sanitizes a corrupted ledger', function () {
   var g1 = new st.Game(), g2 = new st.Game();
   var infoA = g1.dailyBonusInfo(), infoB = g2.dailyBonusInfo();

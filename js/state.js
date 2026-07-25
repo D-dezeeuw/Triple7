@@ -61,7 +61,11 @@
       // others are one-time Stargem fares (see D.DESTINATIONS). `destination`
       // is the currently active one (drives the sky/sun palette).
       destinations: { home: true },
-      destination: 'home'
+      destination: 'home',
+      // Onboarding (Phase 22 MVP): a fresh save shows the welcome intro once;
+      // an existing save (migrating in) is never interrupted by it — see the
+      // "true on old saves" backfill in sanitize().
+      onboarding: { introSeen: false }
     };
   }
 
@@ -101,6 +105,14 @@
     if (!s.destinations || typeof s.destinations !== 'object') s.destinations = {};
     s.destinations.home = true;
     if (typeof s.destination !== 'string' || !s.destinations[s.destination]) s.destination = 'home';
+    // Onboarding backfill: any save with real progress predates this feature
+    // (or was exported before finishing the intro) — never show a returning
+    // player the first-run welcome, only genuinely fresh saves get it.
+    if (!s.onboarding || typeof s.onboarding !== 'object') s.onboarding = {};
+    if (typeof s.onboarding.introSeen !== 'boolean') s.onboarding.introSeen = false;
+    if (s.stats.matches > 0 || s.stats.spins > 0 || s.stats.drops > 0 || s.lifetime.juice > 0) {
+      s.onboarding.introSeen = true;
+    }
     // A corrupted/hand-edited save must never crash the dozer on load — drop
     // any record missing the fields World.deserialize needs.
     if (!Array.isArray(s.dozerTable)) {

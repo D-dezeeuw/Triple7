@@ -88,6 +88,11 @@
     // for awardRandomCharm); `rngs` exposes every named stream.
     T7.app = { game: game, views: views, rng: rngs.charms, rngs: rngs };
 
+    if (!game.s.onboarding.introSeen) {
+      // A genuinely fresh save: lastSeen is this same session, so applyOffline()
+      // below is a no-op anyway (dtSec < 30s) — the two dialogs never collide.
+      T7.ui.showIntro();
+    }
     var off = game.applyOffline();
     if (off && (off.gains.juice > 1 || off.gains.suncoin > 0.5 || off.gains.stargem > 0.1)) {
       T7.ui.showWelcome(off);

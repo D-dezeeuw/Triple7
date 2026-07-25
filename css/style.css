@@ -187,11 +187,20 @@ main { max-width: 860px; margin: 0 auto; padding: 6px 12px 60px; }
 .lockveil {
   position: absolute; inset: 0; border-radius: var(--radius);
   background: rgba(7, 52, 79, 0.72); backdrop-filter: blur(4px);
-  display: flex; align-items: center; justify-content: center; text-align: center;
-  color: #fff; font-size: 1.05rem; padding: 20px; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  gap: 10px; color: #fff; font-size: 1.05rem; padding: 20px; z-index: 5;
 }
 .lockveil.hidden { display: none; }
 .veilicon { width: 44px; height: 44px; filter: drop-shadow(0 3px 5px rgba(0,0,0,0.35)); }
+.veilprogress {
+  width: 100%; max-width: 220px; height: 10px; border-radius: 999px;
+  background: rgba(255,255,255,0.2); overflow: hidden;
+}
+.veilprogress-bar {
+  height: 100%; width: 0%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--sun), #fff3c4);
+  transition: width 0.3s ease;
+}
 .h3icon { width: 26px; height: 26px; vertical-align: -6px; margin-right: 4px; }
 
 /* ── Cards (grove, shop, achievements) ───────────────────────── */
@@ -263,6 +272,9 @@ dialog h2 { margin-top: 0; }
 .setrow { margin: 10px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .setrow.danger { border-top: 1px dashed #d88; padding-top: 10px; }
 .mini { font-size: 0.8rem; opacity: 0.85; }
+.intro-steps { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.intro-steps li { display: flex; align-items: center; gap: 10px; line-height: 1.35; }
+.intro-ic { width: 30px; height: 30px; flex: none; }
 #save-code { width: 100%; font-family: monospace; font-size: 0.7rem; border-radius: 8px;
   border: 1px solid #9cc; padding: 8px; resize: vertical; }
 #stats-list { columns: 2; }
