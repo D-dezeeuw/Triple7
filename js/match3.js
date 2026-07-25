@@ -285,7 +285,11 @@
                      juice: juice - juice0, chain: chain });
       }
     }
-    if (!findAllMoves(board).length) reshuffle(board, rng);
+    if (!findAllMoves(board).length) {
+      var preShuffle = steps ? snap(board) : null;
+      reshuffle(board, rng);
+      if (steps) steps.push({ reshuffle: true, pre: preShuffle, post: snap(board) });
+    }
     return { valid: true, juice: juice, tiles: tiles, chain: chain, specialsMade: specialsMade };
   }
   function adjacent(m) { return Math.abs(m.x1 - m.x2) + Math.abs(m.y1 - m.y2) === 1; }
@@ -313,11 +317,15 @@
     this.time = 0;
     this.floaters = [];                    // "+12 J" popups
     this.pb = null;                        // cascade playback (recorded steps)
+    this.sparkles = [];                    // decorative burst-birth particles (cosmetic only)
+    this.shake = { t: 0, mag: 0 };          // micro camera shake on a Rainbow birth
     this.bindInput();
   }
 
   var POP_T = 0.22;                        // seconds: cleared fruit shrink+fade
   var FALL_T = 0.30;                       // seconds: gravity slide + refill drop
+  var SHUFFLE_OUT_T = 0.30;                // seconds: deadlock reshuffle fade-out
+  var SHUFFLE_IN_T = 0.55;                 // seconds: "fresh rain" — new board falling in
 
   View.prototype.metrics = function () {
     var w = this.cv.width / (window.devicePixelRatio || 1);
@@ -411,15 +419,31 @@
     var st = pb.steps[pb.i];
     if (!st.begun) {
       st.begun = true;
-      // Per-step floater: this step's share of the credited total.
-      var share = Math.max(1, Math.round(pb.credited * st.juice / pb.totalJuice));
-      this.spawnFloater(stepCentroid(st), '+' + U.fmtInt(share), st.chain);
-      if (this.hooks.sfx) this.hooks.sfx(st.chain >= 3 ? 'cascade' : 'match');
+      if (st.reshuffle) {
+        // A deadlocked board refreshing — a neutral, informational moment,
+        // not a reward: no juice floater, a light chime instead of a match cue.
+        if (this.hooks.sfx) this.hooks.sfx('sparkle');
+      } else {
+        // Per-step floater: this step's share of the credited total.
+        var share = Math.max(1, Math.round(pb.credited * st.juice / pb.totalJuice));
+        this.spawnFloater(stepCentroid(st), '+' + U.fmtInt(share), st.chain);
+        if (this.hooks.sfx) this.hooks.sfx(st.chain >= 3 ? 'cascade' : 'match');
+        // A Burst/Rainbow being born gets a sparkle burst; a Rainbow (the
+        // rarer 5-match) additionally earns a cozy-grade micro camera shake —
+        // a few pixels for a few frames, never anything sharp or violent.
+        var self = this;
+        (st.specials || []).forEach(function (sp) {
+          self.spawnSparkles(sp.x, sp.y);
+          if (sp.cell.sp === RAINBOW) self.triggerShake();
+        });
+      }
     }
     pb.t += dt;
-    if (pb.phase === 'pop' && pb.t >= POP_T) {
+    var outT = st.reshuffle ? SHUFFLE_OUT_T : POP_T;
+    var inT = st.reshuffle ? SHUFFLE_IN_T : FALL_T;
+    if (pb.phase === 'pop' && pb.t >= outT) {
       pb.phase = 'fall'; pb.t = 0;
-    } else if (pb.phase === 'fall' && pb.t >= FALL_T) {
+    } else if (pb.phase === 'fall' && pb.t >= inT) {
       pb.phase = 'pop'; pb.t = 0; pb.i++;
       if (pb.i >= pb.steps.length) {
         this.pb = null;
@@ -456,6 +480,22 @@
       text: text, t: 0, chain: chain
     });
   };
+  var SPARKLE_T = 0.45;
+  // Decorative-only burst: direction/speed use Math.random() (same precedent
+  // as audio.js's noise texture) since this never touches gameplay fairness.
+  View.prototype.spawnSparkles = function (gx, gy) {
+    var m = this.metrics();
+    var cx = m.ox + (gx + 0.5) * m.tile, cy = m.oy + (gy + 0.5) * m.tile;
+    for (var i = 0; i < 7; i++) {
+      var ang = Math.random() * Math.PI * 2;
+      var spd = m.tile * (0.9 + Math.random() * 0.7);
+      this.sparkles.push({ x: cx, y: cy, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, t: 0 });
+    }
+  };
+  View.prototype.triggerShake = function () {
+    if (this.g.s.settings.reducedMotion) return;   // cozy-grade: off entirely under reduced motion
+    this.shake.t = 0.16; this.shake.mag = 3.2;      // a few px, a few frames — never sharp
+  };
 
   View.prototype.update = function (dt) {
     this.time += dt;
@@ -472,6 +512,12 @@
       this.floaters[f].t += dt;
       if (this.floaters[f].t > 1.2) this.floaters.splice(f, 1);
     }
+    for (var sp = this.sparkles.length - 1; sp >= 0; sp--) {
+      var s = this.sparkles[sp];
+      s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vx *= 0.9; s.vy *= 0.9;
+      if (s.t > SPARKLE_T) this.sparkles.splice(sp, 1);
+    }
+    if (this.shake.t > 0) this.shake.t = Math.max(0, this.shake.t - dt);
     // Hint after 6 idle seconds.
     if (!this.busy && this.time - this.hintAt > 6 && !this.hintMove) {
       var moves = findAllMoves(this.board);
@@ -612,6 +658,15 @@
     var W = this.cv.clientWidth, H = this.cv.clientHeight;
     ctx.clearRect(0, 0, W, H);
 
+    // Cozy-grade camera nudge (Phase 21.9-ish, render-only): a few px for a
+    // few frames on a Rainbow birth, decaying to nothing; never applied under
+    // reduced motion (triggerShake refuses to arm itself in that case).
+    ctx.save();
+    if (this.shake.t > 0) {
+      var sk = this.shake.t / 0.16 * this.shake.mag;
+      ctx.translate((Math.random() - 0.5) * 2 * sk, (Math.random() - 0.5) * 2 * sk);
+    }
+
     // Board plate with depth edge (pseudo-3D).
     roundRect(ctx, m.ox - 10, m.oy - 10, m.tile * COLS + 20, m.tile * ROWS + 20, 18);
     ctx.fillStyle = 'rgba(9, 60, 96, 0.35)'; ctx.fill();
@@ -629,7 +684,19 @@
 
     if (this.pb) this.drawPlayback(ctx, m);
     else this.drawBoard(ctx, m);
+    this.drawSparkles(ctx);
     this.drawFloaters(ctx);
+    ctx.restore();
+  };
+  View.prototype.drawSparkles = function (ctx) {
+    for (var i = 0; i < this.sparkles.length; i++) {
+      var s = this.sparkles[i];
+      var k = s.t / SPARKLE_T;
+      ctx.globalAlpha = 1 - k;
+      ctx.fillStyle = '#fff8c4';
+      ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(0.5, 3.5 * (1 - k)), 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   };
 
   View.prototype.drawBoard = function (ctx, m) {
@@ -682,6 +749,7 @@
   View.prototype.drawPlayback = function (ctx, m) {
     var pb = this.pb, st = pb.steps[pb.i];
     var x, y, px, py, key, c;
+    if (st.reshuffle) { this.drawReshuffle(ctx, m, pb, st); return; }
     if (!st.maps) {
       var cs = {}, sm = {}, fm = {};
       st.cleared.forEach(function (k) { cs[k] = true; });
@@ -722,6 +790,40 @@
           if (!c) continue;
           var from = st.maps.from[x + ',' + y];
           var vy = from === undefined ? y : from + (y - from) * ease;
+          this.drawScaled(ctx, c, m.ox + x * m.tile, m.oy + vy * m.tile, m.tile, 1, 1);
+        }
+      }
+      ctx.restore();
+    }
+  };
+  // Deadlock reshuffle ("fresh rain," §4a): fade the stuck board out, then
+  // rain the fresh layout in as a diagonal wave rather than a flat curtain —
+  // a distinct, informational beat, not a reward (see stepPlayback: no
+  // floater, a light chime instead of the match/cascade cue).
+  View.prototype.drawReshuffle = function (ctx, m, pb, st) {
+    var x, y, px, py, c;
+    if (pb.phase === 'pop') {
+      var k = Math.min(1, pb.t / SHUFFLE_OUT_T);
+      var scale = 1 - U.easeOutCubic(k), alpha = 1 - k;
+      for (y = 0; y < ROWS; y++) {
+        for (x = 0; x < COLS; x++) {
+          c = st.pre[y][x];
+          if (!c) continue;
+          px = m.ox + x * m.tile; py = m.oy + y * m.tile;
+          this.drawScaled(ctx, c, px, py, m.tile, scale, alpha);
+        }
+      }
+    } else {
+      ctx.save();
+      roundRect(ctx, m.ox - 6, m.oy - 6, m.tile * COLS + 12, m.tile * ROWS + 12, 14);
+      ctx.clip();
+      for (y = 0; y < ROWS; y++) {
+        for (x = 0; x < COLS; x++) {
+          c = st.post[y][x];
+          if (!c) continue;
+          var delay = (x + y) / (COLS + ROWS) * 0.3;   // diagonal wave, top-left leads
+          var local = U.clamp((pb.t - delay) / Math.max(0.05, SHUFFLE_IN_T - delay), 0, 1);
+          var vy = -3 + (y + 3) * U.easeOutCubic(local);
           this.drawScaled(ctx, c, m.ox + x * m.tile, m.oy + vy * m.tile, m.tile, 1, 1);
         }
       }
