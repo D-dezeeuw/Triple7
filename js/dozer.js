@@ -57,6 +57,7 @@
   World.prototype.spawn = function (kind, x, z) {
     var r = kind === 'coin' ? C.COIN_R : C.COIN_R * 1.25;
     var c = { id: this.nextId++, kind: kind, x: x, z: z, vx: 0, vz: 0, r: r };
+    if (kind === 'coin') c.tier = this.rng.weighted(C.COIN_TIERS);
     this.coins.push(c);
     return c;
   };
@@ -239,32 +240,33 @@
   View.prototype.handleEvent = function (ev) {
     var g = this.g, c = ev.coin;
     if (ev.type === 'front') {
-      this.falling.push({ x: c.x, kind: c.kind, t: 0 });
+      this.falling.push({ x: c.x, kind: c.kind, tier: c.tier, t: 0 });
       var label = '';
       if (c.kind === 'coin') {
-        var got = g.gain('stargem', 1);
+        var got = g.gain('stargem', c.tier ? c.tier.gems : 1);
         g.s.stats.coinsFallen++;
-        label = '+' + U.fmt(got) + ' ★';
-        if (this.hooks.sfx) this.hooks.sfx('coinfall');
+        label = '+' + U.fmt(got) + ' G';
+        if (this.hooks.sfx) this.hooks.sfx(c.tier && c.tier.gems > 1 ? 'special' : 'coinfall');
       } else {
         var sp = c.special;
         if (sp.kind === 'gems') {
-          label = '+' + U.fmt(g.gain('stargem', sp.gems)) + ' ★';
+          label = '+' + U.fmt(g.gain('stargem', sp.gems)) + ' G';
         } else if (sp.kind === 'sun') {
-          label = '+' + U.fmt(g.gain('suncoin', sp.sun)) + ' ☀';
+          label = '+' + U.fmt(g.gain('suncoin', sp.sun)) + ' S';
         } else if (sp.kind === 'juice') {
           // Worth `seconds` of current total Juice income, floor 77.
           var jps = g.groveRate('juice');
           label = '+' + U.fmt(g.gain('juice', Math.max(77, jps * sp.seconds), true)) + ' J';
         } else if (sp.kind === 'charm') {
           var award = g.awardRandomCharm(this.rng);
-          label = award.refined ? '↻ +' + U.fmt(award.refined) + ' ★' : '✦ ' + award.charm.name + '!';
+          label = award.refined ? '+' + U.fmt(award.refined) + ' G refined' : award.charm.name + '!';
           if (this.hooks.onCharm) this.hooks.onCharm(award);
         }
         if (this.hooks.sfx) this.hooks.sfx('special');
       }
       var p = this.proj(c.x, C.TABLE_D);
-      this.floaters.push({ x: p.x, y: p.y, text: label, t: 0, big: c.kind !== 'coin' });
+      this.floaters.push({ x: p.x, y: p.y, text: label, t: 0,
+                           big: c.kind !== 'coin' || (c.tier && c.tier.gems > 1) });
       if (this.hooks.onPayout) this.hooks.onPayout(ev);
       g.checkAchievements();
     } else if (ev.type === 'side') {
@@ -275,11 +277,19 @@
   };
 
   // ── Drawing ───────────────────────────────────────────────────────────────
+  // Canvas fallback palettes for the coin denominations (sprite absent).
+  var TIER_STYLE = {
+    coin7:  { rim: '#b7791f', hi: '#ffe9a6', c: '#ffc93c', lo: '#e8a20c', ink: 'rgba(160,100,10,0.85)', face: '7' },
+    coin21: { rim: '#96552e', hi: '#ffd9c4', c: '#e8956a', lo: '#c06a3a', ink: 'rgba(120,60,20,0.85)', face: '21' },
+    coin49: { rim: '#8a6a00', hi: '#fff3c0', c: '#f0b400', lo: '#c08900', ink: 'rgba(130,80,0,0.9)',  face: '49' }
+  };
+  // sprite: painted icon drawn on the prize disc when loaded; glyph is the
+  // zero-asset canvas fallback.
   var SPECIAL_STYLE = {
-    gemfruit: { c: '#3ec6ff', hi: '#c8f0ff', glyph: '◆' },
-    charm:    { c: '#b06ce8', hi: '#ecd4ff', glyph: '✦' },
-    bottle:   { c: '#ff5a4e', hi: '#ffc2b8', glyph: '!' },
-    sunpouch: { c: '#ffc93c', hi: '#fff3b0', glyph: '☀' }
+    gemfruit: { c: '#3ec6ff', hi: '#c8f0ff', glyph: '◆', sprite: 'gem' },
+    charm:    { c: '#b06ce8', hi: '#ecd4ff', glyph: '✦', sprite: 'sparkle' },
+    bottle:   { c: '#ff5a4e', hi: '#ffc2b8', glyph: '!', sprite: 'bottle' },
+    sunpouch: { c: '#ffc93c', hi: '#fff3b0', glyph: '☀', sprite: 'sun' }
   };
 
   View.prototype.draw = function () {
@@ -358,7 +368,7 @@
       var pp = this.proj(fc.x, C.TABLE_D);
       ctx.globalAlpha = 1 - t;
       var fy = pp.y + t * t * 90;
-      this.drawCoinShape(ctx, fc.kind, pp.x, fy, pp.s * (1 - t * 0.3), 1 - t * 0.5);
+      this.drawCoinShape(ctx, fc.kind, pp.x, fy, pp.s * (1 - t * 0.3), 1 - t * 0.5, fc);
       ctx.globalAlpha = 1;
     }
 
@@ -400,19 +410,31 @@
     if (kind !== 'coin') { rx *= 1.25; ry *= 1.25; thick *= 1.2; }
 
     if (kind === 'coin') {
+      var tier = TIER_STYLE[(c && c.tier && c.tier.id) || 'coin7'] || TIER_STYLE.coin7;
       // Rim (side)
-      ctx.fillStyle = '#b7791f';
+      ctx.fillStyle = tier.rim;
       ctx.beginPath(); ctx.ellipse(sx, sy + thick, rx, ry, 0, 0, 7); ctx.fill();
+      var cspr = typeof T7 !== 'undefined' && T7.sprites &&
+                 T7.sprites.get((c && c.tier && c.tier.id) || 'coin7');
+      if (cspr) {
+        // Painted face, squashed into the table's perspective ellipse.
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.scale(1, ry / rx);
+        ctx.drawImage(cspr, -rx, -rx, rx * 2, rx * 2);
+        ctx.restore();
+        return;
+      }
       // Face
       var g = ctx.createRadialGradient(sx - rx * 0.3, sy - ry * 0.4, rx * 0.1, sx, sy, rx * 1.1);
-      g.addColorStop(0, '#ffe9a6'); g.addColorStop(0.6, '#ffc93c'); g.addColorStop(1, '#e8a20c');
+      g.addColorStop(0, tier.hi); g.addColorStop(0.6, tier.c); g.addColorStop(1, tier.lo);
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.ellipse(sx, sy, rx, ry, 0, 0, 7); ctx.fill();
-      // Embossed 7
-      ctx.fillStyle = 'rgba(160, 100, 10, 0.85)';
-      ctx.font = '900 ' + Math.max(8, Math.round(rx * 0.9)) + 'px "Trebuchet MS", sans-serif';
+      // Embossed face value (in Suncoins: 7 / 21 / 49)
+      ctx.fillStyle = tier.ink;
+      ctx.font = '900 ' + Math.max(8, Math.round(rx * (tier.face.length > 1 ? 0.7 : 0.9))) + 'px "Trebuchet MS", sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('7', sx, sy + 1);
+      ctx.fillText(tier.face, sx, sy + 1);
       // Glint
       ctx.fillStyle = 'rgba(255,255,255,0.75)';
       ctx.beginPath(); ctx.ellipse(sx - rx * 0.35, sy - ry * 0.35, rx * 0.2, ry * 0.18, -0.5, 0, 7); ctx.fill();
@@ -428,10 +450,16 @@
       ctx.strokeStyle = 'rgba(255,255,255,' + (0.35 + 0.3 * Math.sin(this.time * 5 + sx)) * (alpha || 1) + ')';
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.ellipse(sx, sy, rx * 1.12, ry * 1.12, 0, 0, 7); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
-      ctx.font = '800 ' + Math.max(8, Math.round(rx * 0.8)) + 'px "Trebuchet MS", sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(st.glyph, sx, sy + 1);
+      var spr = typeof T7 !== 'undefined' && T7.sprites && T7.sprites.get(st.sprite);
+      if (spr) {
+        var side = rx * 1.3;
+        ctx.drawImage(spr, sx - side / 2, sy - side / 2 - ry * 0.25, side, side);
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.font = '800 ' + Math.max(8, Math.round(rx * 0.8)) + 'px "Trebuchet MS", sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(st.glyph, sx, sy + 1);
+      }
     }
   };
 

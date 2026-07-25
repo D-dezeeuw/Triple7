@@ -7,16 +7,6 @@
   var U = T7.util, D = T7.data;
   var $ = function (id) { return document.getElementById(id); };
 
-  var CHARM_GLYPHS = {
-    lemondrop: '🍋', limewedge: '🍏', orangeslice: '🍊', grapefruit: '🌅',
-    yuzu: '✨', citron: '💛', tangerine: '🧡',
-    cherrytwin: '🍒', strawheart: '🍓', bluepearl: '🫐', raspcluster: '🍇',
-    blacknight: '🌑', cranbead: '🔴', elderstar: '⭐',
-    pinecrown: '🍍', mangosunset: '🥭', cocomoon: '🥥', papayadawn: '🌄',
-    kiwieye: '🥝', dragonflame: '🐉', passionswirl: '🌀',
-    sunprism: '☀️', moonmelon: '🌙', starseed: '🌟', cometgrape: '☄️',
-    aurorapeach: '🌈', nebulaplum: '🔮', galaxyfig: '🌌'
-  };
   var RARITY_NAME = { 1: 'Common', 2: 'Uncommon', 3: 'Rare', 4: 'Legendary' };
 
   var ui = {};
@@ -58,8 +48,8 @@
       game.doPrestige();
       game.checkAchievements();
       ui.sfx('jackpot');
-      ui.toast('🫙 Preserves made! ' + game.s.seeds + ' Golden Seeds — everything earns +' +
-               Math.round(game.s.seeds * 10) + '% forever.', 'gold');
+      ui.toast('Preserves made! ' + game.s.seeds + ' Golden Seeds — everything earns +' +
+               Math.round(game.s.seeds * 10) + '% forever.', 'gold', 'jar');
       ui.rebuildAll();
     });
 
@@ -147,7 +137,7 @@
     });
     game.on('achievements', function (list) {
       list.forEach(function (a) {
-        ui.toast('🏆 ' + a.name + (a.gems ? ' — +' + a.gems + ' Stargems!' : '') + ' (+1% everything)', 'gold');
+        ui.toast(a.name + (a.gems ? ' — +' + a.gems + ' Stargems!' : '') + ' (+1% everything)', 'gold', 'trophy');
       });
       ui.sfx('achieve');
     });
@@ -169,20 +159,29 @@
   };
 
   // ── Toasts ────────────────────────────────────────────────────────────────
-  ui.toast = function (msg, cls) {
+  ui.toast = function (msg, cls, icon) {
     var el = document.createElement('div');
     el.className = 'toast' + (cls ? ' ' + cls : '');
-    el.textContent = msg;
+    if (icon) {
+      var img = document.createElement('img');
+      img.src = 'assets/sprites/' + icon + '.png';
+      img.alt = '';
+      el.appendChild(img);
+    }
+    var span = document.createElement('span');
+    span.textContent = msg;
+    el.appendChild(span);
     $('toasts').appendChild(el);
     setTimeout(function () { el.remove(); }, 4200);
   };
   ui.charmToast = function (award) {
+    var icon = award.charm ? 'charms/' + award.charm.id : 'sparkle';
     if (award.refined) {
-      ui.toast('✦ Duplicate maxed charm refined into ' + U.fmt(award.refined) + ' Stargems.', 'charm');
+      ui.toast('Duplicate maxed charm refined into ' + U.fmt(award.refined) + ' Stargems.', 'charm', icon);
     } else if (award.level > 1) {
-      ui.toast('✦ ' + award.charm.name + ' leveled up to Lv' + award.level + '!', 'charm');
+      ui.toast(award.charm.name + ' leveled up to Lv' + award.level + '!', 'charm', icon);
     } else {
-      ui.toast('✦ New charm: ' + award.charm.name + ' (' + RARITY_NAME[award.charm.rarity] + ')!', 'charm');
+      ui.toast('New charm: ' + award.charm.name + ' (' + RARITY_NAME[award.charm.rarity] + ')!', 'charm', icon);
     }
     ui.renderCharms();
   };
@@ -264,7 +263,7 @@
       charms: 'unique charms', sets: 'complete charm sets', buildings: 'grove plants',
       prestiges: 'Preserves made', playSec: 'seconds played'
     }[a.stat] || a.stat;
-    return 'Reach ' + U.fmt(a.at) + ' ' + what + (a.gems ? ' · +' + a.gems + ' ★' : '');
+    return 'Reach ' + U.fmt(a.at) + ' ' + what + (a.gems ? ' · +' + a.gems + ' G' : '');
   }
 
   ui.renderCharms = function () {
@@ -287,7 +286,7 @@
         el.className = 'charm r' + c.rarity + (lvl > 0 ? '' : ' unowned');
         el.title = c.name + ' (' + RARITY_NAME[c.rarity] + ')' +
           (lvl > 0 ? ' — Lv' + lvl : ' — not found yet');
-        el.innerHTML = '<span class="glyph">' + CHARM_GLYPHS[c.id] + '</span>' +
+        el.innerHTML = '<span class="glyph"><img src="assets/sprites/charms/' + c.id + '.png" alt=""></span>' +
           '<span class="cname">' + (lvl > 0 ? c.name : '???') + '</span>' +
           (lvl > 0 ? '<span class="lvl">Lv' + lvl + '</span>' : '');
         grid.appendChild(el);
@@ -298,7 +297,7 @@
       h.innerHTML = set.name + ' <small>' + ownedInSet + '/' + totalInSet +
         ' · each level +' + Math.round(set.perLevel * 100) + '% ' + boostName +
         (ownedInSet === totalInSet
-          ? ' · <b>SET BONUS +' + Math.round(set.setBonus * 100) + '% ACTIVE ✔</b>'
+          ? ' · <b>SET BONUS +' + Math.round(set.setBonus * 100) + '% ACTIVE</b>'
           : ' · complete for +' + Math.round(set.setBonus * 100) + '%') + '</small>';
       block.appendChild(h);
       block.appendChild(grid);
@@ -348,7 +347,7 @@
       var lvl = game.upLvl(u.id);
       var maxed = lvl >= u.max;
       card.querySelector('.owned').textContent = lvl > 0 ? 'Lv' + lvl + '/' + u.max : '';
-      card.querySelector('.cost').textContent = maxed ? 'MAX' : U.fmt(game.upgradeCost(u)) + ' ★';
+      card.querySelector('.cost').textContent = maxed ? 'MAX' : U.fmt(game.upgradeCost(u)) + ' G';
       card.querySelector('button').disabled = maxed || !game.canAfford(u.cur, game.upgradeCost(u));
       card.classList.toggle('done', maxed);
     });

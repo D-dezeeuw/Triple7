@@ -72,11 +72,8 @@ body.reduced-motion .cloud, body.reduced-motion #sky .sun { animation: none; }
   transition: transform 0.15s ease;
 }
 .pill.bump { transform: scale(1.12); }
-.pill .dot { width: 16px; height: 16px; border-radius: 50%; flex: none;
-  box-shadow: inset -2px -3px 4px rgba(0,0,0,0.25), inset 2px 3px 4px rgba(255,255,255,0.6); }
-.pill.juice .dot { background: var(--juice); }
-.pill.sun .dot { background: var(--sun); }
-.pill.gem .dot { background: var(--gem); }
+.pill .cur-ic { width: 19px; height: 19px; flex: none;
+  filter: drop-shadow(0 1px 2px rgba(7,52,79,0.45)); }
 .pill b { font-size: 1.02rem; }
 .pill small { opacity: 0.85; font-size: 0.68rem; }
 .iconbtn {
@@ -84,6 +81,7 @@ body.reduced-motion .cloud, body.reduced-motion #sky .sun { animation: none; }
   width: 40px; height: 40px; border-radius: 50%; font-size: 1.2rem; cursor: pointer;
 }
 .iconbtn:hover { background: rgba(255,255,255,0.3); }
+.iconbtn img { width: 24px; height: 24px; vertical-align: middle; }
 
 /* ── Tabs ────────────────────────────────────────────────────── */
 #tabs {
@@ -104,8 +102,10 @@ body.reduced-motion .cloud, body.reduced-motion #sky .sun { animation: none; }
   color: var(--deep); text-shadow: none;
   border-color: #fff;
 }
-.tab .lock { margin-left: 5px; font-size: 0.8em; }
+.tab .lock { margin-left: 5px; }
 .tab .lock.hidden { display: none; }
+.tab .tabicon { width: 18px; height: 18px; vertical-align: -3px; margin-right: 1px; }
+.tab .lock img { width: 13px; height: 13px; vertical-align: -1px; }
 
 /* ── Panels ──────────────────────────────────────────────────── */
 main { max-width: 860px; margin: 0 auto; padding: 6px 12px 60px; }
@@ -151,10 +151,7 @@ main { max-width: 860px; margin: 0 auto; padding: 6px 12px 60px; }
   padding: 8px 16px; cursor: pointer;
 }
 .minibtn:hover { background: #fff; }
-.ic { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 50%; vertical-align: -0.05em; }
-.ic.juice { background: var(--juice); }
-.ic.sun { background: var(--sun); }
-.ic.gem { background: var(--gem); }
+.ic-img { width: 1em; height: 1em; vertical-align: -0.12em; }
 
 .lockveil {
   position: absolute; inset: 0; border-radius: var(--radius);
@@ -163,6 +160,8 @@ main { max-width: 860px; margin: 0 auto; padding: 6px 12px 60px; }
   color: #fff; font-size: 1.05rem; padding: 20px; z-index: 5;
 }
 .lockveil.hidden { display: none; }
+.veilicon { width: 44px; height: 44px; filter: drop-shadow(0 3px 5px rgba(0,0,0,0.35)); }
+.h3icon { width: 26px; height: 26px; vertical-align: -6px; margin-right: 4px; }
 
 /* ── Cards (grove, shop, achievements) ───────────────────────── */
 .cardlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
@@ -192,8 +191,9 @@ main { max-width: 860px; margin: 0 auto; padding: 6px 12px 60px; }
   text-align: center; padding: 10px 6px; color: #fff; position: relative;
   backdrop-filter: blur(4px);
 }
-.charm .glyph { font-size: 1.8rem; display: block;
+.charm .glyph { display: block; height: 34px;
   filter: drop-shadow(0 3px 3px rgba(7,52,79,0.4)); }
+.charm .glyph img { width: 34px; height: 34px; }
 .charm.unowned .glyph { filter: grayscale(1) brightness(0.6) opacity(0.5); }
 .charm .cname { font-size: 0.62rem; display: block; margin-top: 4px; line-height: 1.15; }
 .charm .lvl {
@@ -209,10 +209,12 @@ main { max-width: 860px; margin: 0 auto; padding: 6px 12px 60px; }
 .toast {
   background: rgba(7, 52, 79, 0.92); color: #fff; border-radius: 12px;
   padding: 10px 16px; font-size: 0.9rem; max-width: 300px;
+  display: flex; align-items: center; gap: 8px;
   border-left: 4px solid var(--sun);
   animation: toastin 0.25s ease, toastout 0.4s ease 3.6s forwards;
   box-shadow: 0 8px 18px rgba(0,0,0,0.3);
 }
+.toast img { width: 22px; height: 22px; flex: none; }
 .toast.charm { border-left-color: #b06ce8; }
 .toast.gold { border-left-color: var(--sun); background: rgba(122, 62, 0, 0.95); }
 @keyframes toastin { from { transform: translateX(120%); } to { transform: none; } }

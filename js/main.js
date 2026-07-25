@@ -39,8 +39,8 @@
     views.slots = new T7.slots.View(document.getElementById('cv-slots'), game, rng, {
       sfx: sfx,
       onJackpot: function (sun, gems) {
-        T7.ui.toast('★★★ TRIPLE SEVEN! +' + T7.util.fmt(sun) + ' Suncoins, +' +
-                    T7.util.fmt(gems) + ' Stargems! ★★★', 'gold');
+        T7.ui.toast('TRIPLE SEVEN! +' + T7.util.fmt(sun) + ' Suncoins, +' +
+                    T7.util.fmt(gems) + ' Stargems!', 'gold', 'seven');
       }
     });
     views.dozer = new T7.dozer.View(document.getElementById('cv-dozer'), game, rng, {

@@ -11,7 +11,20 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var IDS = ['strawberry', 'cherry', 'lemon', 'melon', 'berry', 'orange', 'plum', 'seven', 'star'];
+  var IDS = [
+    'strawberry', 'cherry', 'lemon', 'melon', 'berry', 'orange', 'plum', 'seven', 'star',
+    'sun', 'sprout', 'sparkle', 'arrowup', 'lock', 'gear', 'jar', 'trophy', 'gem', 'bottle',
+    'suncoin', 'coin7', 'coin21', 'coin49', 'droplet',
+    // Glass Charm collectibles live in charms/<id>.png; ids never collide.
+    'charms/lemondrop', 'charms/limewedge', 'charms/orangeslice', 'charms/grapefruit',
+    'charms/yuzu', 'charms/citron', 'charms/tangerine',
+    'charms/cherrytwin', 'charms/strawheart', 'charms/bluepearl', 'charms/raspcluster',
+    'charms/blacknight', 'charms/cranbead', 'charms/elderstar',
+    'charms/pinecrown', 'charms/mangosunset', 'charms/cocomoon', 'charms/papayadawn',
+    'charms/kiwieye', 'charms/dragonflame', 'charms/passionswirl',
+    'charms/sunprism', 'charms/moonmelon', 'charms/starseed', 'charms/cometgrape',
+    'charms/aurorapeach', 'charms/nebulaplum', 'charms/galaxyfig'
+  ];
   var ready = {};
 
   if (typeof document !== 'undefined') {

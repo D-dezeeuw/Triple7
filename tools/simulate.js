@@ -103,7 +103,7 @@ hr('3. COIN DOZER — "Star Harbor" (stake: 7 S ≡ 1.000 G per drop)');
 function runDozer(params, drops, seed, label) {
   var drng = new rngMod.Rng(seed);
   var world = new dozer.World(drng, params);
-  var front = 0, side = 0, specialFront = { gems: 0, sun: 0, juice: 0, charm: 0 };
+  var front = 0, frontGems = 0, side = 0, specialFront = { gems: 0, sun: 0, juice: 0, charm: 0 };
   var dropInterval = 1.15, tNext = 3, done = 0, warmFront = 0, warmup = Math.floor(drops * 0.15);
   var step = 1 / 60;
   // Run until we've dropped `drops` coins and let the table settle after.
@@ -118,13 +118,13 @@ function runDozer(params, drops, seed, label) {
       var ev = evs[e];
       if (ev.type === 'front') {
         if (done <= warmup) { warmFront++; continue; }
-        if (ev.coin.kind === 'coin') front++;
+        if (ev.coin.kind === 'coin') { front++; frontGems += ev.coin.tier ? ev.coin.tier.gems : 1; }
         else specialFront[ev.coin.special.kind]++;
       } else if (ev.type === 'side' && done > warmup) side++;
     }
   }
   var counted = drops - warmup;
-  var gemsFromCoins = front / counted;
+  var gemsFromCoins = frontGems / counted;   // tier-weighted (COIN_TIERS)
   var gemsFromSpecials = (specialFront.gems * D.DOZER.SPECIALS[0].gems +
                           specialFront.charm * 5 +                    // charm ≈ 5 G value
                           specialFront.juice * 1 +                    // ≈ 1 G of juice-time
