@@ -368,7 +368,7 @@
       ctx.font = '800 26px "Trebuchet MS", sans-serif';
       ctx.textAlign = 'center';
       var msg = this.lastWin.kind === 'jackpot'
-        ? '★ TRIPLE SEVEN! +' + U.fmt(this.lastWin.sun) + ' S  +' + U.fmt(this.lastWin.gems) + ' G ★'
+        ? 'TRIPLE SEVEN! +' + U.fmt(this.lastWin.sun) + ' S  +' + U.fmt(this.lastWin.gems) + ' G'
         : '+' + U.fmt(this.lastWin.sun) + ' Suncoins!';
       ctx.fillStyle = 'rgba(80,20,0,0.65)';
       ctx.strokeStyle = 'rgba(80,20,0,0.65)';

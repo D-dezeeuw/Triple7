@@ -244,21 +244,21 @@
       if (c.kind === 'coin') {
         var got = g.gain('stargem', 1);
         g.s.stats.coinsFallen++;
-        label = '+' + U.fmt(got) + ' ★';
+        label = '+' + U.fmt(got) + ' G';
         if (this.hooks.sfx) this.hooks.sfx('coinfall');
       } else {
         var sp = c.special;
         if (sp.kind === 'gems') {
-          label = '+' + U.fmt(g.gain('stargem', sp.gems)) + ' ★';
+          label = '+' + U.fmt(g.gain('stargem', sp.gems)) + ' G';
         } else if (sp.kind === 'sun') {
-          label = '+' + U.fmt(g.gain('suncoin', sp.sun)) + ' ☀';
+          label = '+' + U.fmt(g.gain('suncoin', sp.sun)) + ' S';
         } else if (sp.kind === 'juice') {
           // Worth `seconds` of current total Juice income, floor 77.
           var jps = g.groveRate('juice');
           label = '+' + U.fmt(g.gain('juice', Math.max(77, jps * sp.seconds), true)) + ' J';
         } else if (sp.kind === 'charm') {
           var award = g.awardRandomCharm(this.rng);
-          label = award.refined ? '↻ +' + U.fmt(award.refined) + ' ★' : '✦ ' + award.charm.name + '!';
+          label = award.refined ? '+' + U.fmt(award.refined) + ' G refined' : award.charm.name + '!';
           if (this.hooks.onCharm) this.hooks.onCharm(award);
         }
         if (this.hooks.sfx) this.hooks.sfx('special');
@@ -275,11 +275,13 @@
   };
 
   // ── Drawing ───────────────────────────────────────────────────────────────
+  // sprite: painted icon drawn on the prize disc when loaded; glyph is the
+  // zero-asset canvas fallback.
   var SPECIAL_STYLE = {
-    gemfruit: { c: '#3ec6ff', hi: '#c8f0ff', glyph: '◆' },
-    charm:    { c: '#b06ce8', hi: '#ecd4ff', glyph: '✦' },
-    bottle:   { c: '#ff5a4e', hi: '#ffc2b8', glyph: '!' },
-    sunpouch: { c: '#ffc93c', hi: '#fff3b0', glyph: '☀' }
+    gemfruit: { c: '#3ec6ff', hi: '#c8f0ff', glyph: '◆', sprite: 'gem' },
+    charm:    { c: '#b06ce8', hi: '#ecd4ff', glyph: '✦', sprite: 'sparkle' },
+    bottle:   { c: '#ff5a4e', hi: '#ffc2b8', glyph: '!', sprite: 'bottle' },
+    sunpouch: { c: '#ffc93c', hi: '#fff3b0', glyph: '☀', sprite: 'sun' }
   };
 
   View.prototype.draw = function () {
@@ -428,10 +430,16 @@
       ctx.strokeStyle = 'rgba(255,255,255,' + (0.35 + 0.3 * Math.sin(this.time * 5 + sx)) * (alpha || 1) + ')';
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.ellipse(sx, sy, rx * 1.12, ry * 1.12, 0, 0, 7); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
-      ctx.font = '800 ' + Math.max(8, Math.round(rx * 0.8)) + 'px "Trebuchet MS", sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(st.glyph, sx, sy + 1);
+      var spr = typeof T7 !== 'undefined' && T7.sprites && T7.sprites.get(st.sprite);
+      if (spr) {
+        var side = rx * 1.3;
+        ctx.drawImage(spr, sx - side / 2, sy - side / 2 - ry * 0.25, side, side);
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.font = '800 ' + Math.max(8, Math.round(rx * 0.8)) + 'px "Trebuchet MS", sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(st.glyph, sx, sy + 1);
+      }
     }
   };
 
