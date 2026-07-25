@@ -173,6 +173,16 @@
     window.removeEventListener('pointerdown', once);
   });
 
+  // Offline play (sw.js): registered after load so it never competes with
+  // the game's own first-load resources. Feature-detected and best-effort —
+  // a browser without service worker support (or file:// with no SW
+  // support) just plays online-only, same as before this existed.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () { /* offline caching is a bonus, never a requirement */ });
+    });
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
   } else {

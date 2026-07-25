@@ -49,6 +49,16 @@ Progress autosaves to `localStorage`. In **⚙ Settings** you can export your
 save as a checksummed `T71.xxxxxxxx.…` code and import it anywhere — codes are
 versioned, validated and rejected gracefully when corrupted.
 
+## Offline & installing
+
+Triple7 is an installable PWA: visit it once with a connection and `sw.js`
+caches the whole game (shell files + every sprite), so it keeps playing with
+no network at all afterward — add it to your home screen (iOS/Android/desktop
+Chrome) for a standalone, full-screen app. Progress lives in `localStorage`
+either way, completely independent of the offline cache. The page also locks
+to 100% zoom (`touch-action` + a strict viewport meta) so it doesn't jump
+around from an accidental iOS double-tap or pinch.
+
 ## Tech
 
 Pure static site: vanilla JS + canvas, zero runtime dependencies. Sound is
@@ -64,6 +74,12 @@ the simulator verifies the *actual* game logic. Randomness is mulberry32,
 seeded from `crypto.getRandomValues`, running as independent named streams
 per subsystem (match-3, slots, dozer, charms) so one never perturbs another —
 see [`docs/fairness.md`](docs/fairness.md) for the full contract.
+
+`sw.js` (a plain service worker, no bundler involved) is the only thing
+standing between "static site" and "installable offline app" — it precaches
+the shell at install and runtime-caches everything else via
+stale-while-revalidate; delete it and the game is still exactly the static
+site it always was.
 
 The full design document and 32-phase roadmap live in
 [`.claude/context/plan.md`](.claude/context/plan.md).

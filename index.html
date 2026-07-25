@@ -2,13 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Triple7 — a juicy idle of three little machines</title>
 <meta name="description" content="Match fruit, spin suns, push stars. A free cozy idle game of three linked mini-games. No ads, no purchases, saves in your browser.">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="64x64" href="assets/icons/favicon-64.png">
 <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
 <link rel="stylesheet" href="css/style.css">
+<!-- App-like install + offline (installable PWA; the shipped game still makes
+     zero runtime network calls once cached — see sw.js). -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#34a8e8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Triple7">
 </head>
 <body>
 <div id="sky">
