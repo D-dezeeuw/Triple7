@@ -28,16 +28,19 @@ Match-3  ──earn──▶  JUICE ─7:1─▶  SLOTS  ──win──▶  SUN
 Every stage is **deliberately player-positive** (this is a cozy idle, so the
 house edge is inverted): the slot pays an exact, enumerable **118.4 % RTP**
 (3 reels × 64 weighted virtual stops — the same par-sheet model real slots
-use), and the dozer returns ~**129 %** per drop at steady state (conservation:
-coins in ≈ coins out, minus the side gutters). Match-3 is free to play and the
-grove drips Juice passively, so the chain can never dead-end. Exponential
-upgrade costs are the sink that keeps numbers meaningful.
+use), and the dozer returns ~**131 %** per drop at steady state (conservation:
+coins in ≈ coins out, minus the side gutters, plus rare higher-value coin
+denominations). Match-3 is free to play and the grove drips Juice passively,
+so the chain can never dead-end. Exponential upgrade costs are the sink that
+keeps numbers meaningful.
 
-Don't take the numbers on faith:
+Don't take the numbers on faith — every odds table is written down in full in
+[`docs/fairness.md`](docs/fairness.md), and both of these commands run the
+*exact* code the browser runs, not a separate model:
 
 ```
 npm run simulate   # exact slot par sheet + Monte Carlo, match-3 EV, full dozer physics sim
-npm test           # logic unit tests (board, reels, physics, saves, prestige)
+npm test           # logic unit tests (board, reels, physics, saves, prestige, rng streams)
 ```
 
 ## Saving
@@ -48,13 +51,21 @@ versioned, validated and rejected gracefully when corrupted.
 
 ## Tech
 
-Pure static site: vanilla JS + canvas, zero runtime dependencies, zero assets
-(even the sounds are synthesized WebAudio). Node.js is used only for dev
-tooling (`tools/serve.js`, `tools/simulate.js`, `tools/test.js`) — the same UMD
-modules run in the browser and in Node, so the simulator verifies the *actual*
-game logic. Randomness is mulberry32 seeded from `crypto.getRandomValues`.
+Pure static site: vanilla JS + canvas, zero runtime dependencies. Sound is
+entirely synthesized WebAudio (zero audio assets, ever); the fruit, slot
+symbols, coins and charm icons in `assets/sprites/` are optional dev-time
+generated art (`tools/genart/`, see Phase 31 in the plan) — delete the whole
+`assets/` folder and every one of those visuals falls back seamlessly to the
+original hand-coded canvas painters, so the shipped game has zero *required*
+assets and zero runtime network calls either way. Node.js is used only for
+dev tooling (`tools/serve.js`, `tools/simulate.js`, `tools/test.js`,
+`tools/genart/`) — the same UMD modules run in the browser and in Node, so
+the simulator verifies the *actual* game logic. Randomness is mulberry32,
+seeded from `crypto.getRandomValues`, running as independent named streams
+per subsystem (match-3, slots, dozer, charms) so one never perturbs another —
+see [`docs/fairness.md`](docs/fairness.md) for the full contract.
 
-The full design document and 30-phase roadmap live in
+The full design document and 32-phase roadmap live in
 [`.claude/context/plan.md`](.claude/context/plan.md).
 
 ## License
