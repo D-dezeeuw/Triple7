@@ -217,9 +217,8 @@
   // ── Drawing ───────────────────────────────────────────────────────────────
   function drawSymbol(ctx, id, cx, cy, r, time) {
     var col = SYM_COLORS[id];
-    // Wet colored shadow
-    ctx.fillStyle = col.c + '33';
-    ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.8, r * 0.8, r * 0.26, 0, 0, 7); ctx.fill();
+    // Shared wet-glass shadow (Phase 21.5) — same painter match3/dozer use.
+    U.drawSoftShadow(ctx, cx, cy + r * 0.8, r * 0.8, r * 0.26, col.c, 0.2);
 
     // Painted sprite skin when loaded; canvas painter below stays the fallback.
     var spr = typeof T7 !== 'undefined' && T7.sprites && T7.sprites.get(id);

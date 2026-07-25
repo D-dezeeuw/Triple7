@@ -58,12 +58,23 @@
 
   function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
 
+  // Shared "wet-glass" shadow (Phase 21.5): one soft-shadow painter used by
+  // match-3 gems, slot symbols and dozer coins alike, so all three scenes
+  // read the same depth cue. `color` is the body's own hex color (e.g. the
+  // fruit/symbol/coin's base tint) — shadows here are always a darkened
+  // tint of the thing casting them, never flat gray.
+  function drawSoftShadow(ctx, cx, cy, rx, ry, color, alpha) {
+    var a = Math.max(0, Math.min(255, Math.round((alpha == null ? 0.25 : alpha) * 255)));
+    ctx.fillStyle = color + ('0' + a.toString(16)).slice(-2);
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
   return {
     clamp: clamp, lerp: lerp,
     easeOutCubic: easeOutCubic, easeInCubic: easeInCubic,
     easeOutBack: easeOutBack, easeOutElastic: easeOutElastic,
     fmt: fmt, fmtInt: fmtInt,
     fnv1a: fnv1a, b64encode: b64encode, b64decode: b64decode,
-    deepClone: deepClone
+    deepClone: deepClone, drawSoftShadow: drawSoftShadow
   };
 });

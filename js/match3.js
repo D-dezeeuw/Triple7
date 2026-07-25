@@ -319,6 +319,12 @@
     this.pb = null;                        // cascade playback (recorded steps)
     this.sparkles = [];                    // decorative burst-birth particles (cosmetic only)
     this.shake = { t: 0, mag: 0 };          // micro camera shake on a Rainbow birth
+    // Specular sweep (Phase 21.6, feasibility-scoped to match-3 only): a slow
+    // diagonal light band crosses the glass every SWEEP_PERIOD seconds. The
+    // first delay is randomized (decorative Math.random(), never the seeded
+    // gameplay rng) so boards across a session don't sweep in lockstep.
+    this.sweepNext = 8 + Math.random() * SWEEP_PERIOD;
+    this.sweep = null;                     // { t } while a sweep is animating
     this.bindInput();
   }
 
@@ -326,6 +332,8 @@
   var FALL_T = 0.30;                       // seconds: gravity slide + refill drop
   var SHUFFLE_OUT_T = 0.30;                // seconds: deadlock reshuffle fade-out
   var SHUFFLE_IN_T = 0.55;                 // seconds: "fresh rain" — new board falling in
+  var SWEEP_PERIOD = 45;                   // seconds between specular sweeps
+  var SWEEP_T = 1.4;                       // seconds a sweep takes to cross the board
 
   View.prototype.metrics = function () {
     var w = this.cv.width / (window.devicePixelRatio || 1);
@@ -518,6 +526,18 @@
       if (s.t > SPARKLE_T) this.sparkles.splice(sp, 1);
     }
     if (this.shake.t > 0) this.shake.t = Math.max(0, this.shake.t - dt);
+    // Specular sweep: reduced-motion and "Extra sparkle" both gate it off
+    // entirely (not just visually — the timer itself stops ticking), same
+    // policy as triggerShake above.
+    if (!this.g.s.settings.reducedMotion && this.g.s.settings.particles) {
+      if (this.sweep) {
+        this.sweep.t += dt;
+        if (this.sweep.t >= SWEEP_T) this.sweep = null;
+      } else {
+        this.sweepNext -= dt;
+        if (this.sweepNext <= 0) { this.sweep = { t: 0 }; this.sweepNext = SWEEP_PERIOD; }
+      }
+    }
     // Hint after 6 idle seconds.
     if (!this.busy && this.time - this.hintAt > 6 && !this.hintMove) {
       var moves = findAllMoves(this.board);
@@ -564,9 +584,8 @@
     }
 
     var fruit = D.MATCH3.FRUITS[c.f];
-    // Colored translucent shadow — the "wet" look.
-    ctx.fillStyle = fruit.color + '44';
-    ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.75, r * 0.85, r * 0.3, 0, 0, 7); ctx.fill();
+    // Shared wet-glass shadow (Phase 21.5) — same painter dozer/slots use.
+    U.drawSoftShadow(ctx, cx, cy + r * 0.75, r * 0.85, r * 0.3, fruit.color, 0.267);
 
     // Painted sprite skin when loaded; canvas painter below stays the fallback.
     // Sprites sit on a baked white card, so the shimmer ring goes gold.
@@ -685,7 +704,32 @@
     if (this.pb) this.drawPlayback(ctx, m);
     else this.drawBoard(ctx, m);
     this.drawSparkles(ctx);
+    if (this.sweep) this.drawSweep(ctx, m);
     this.drawFloaters(ctx);
+    ctx.restore();
+  };
+  // Specular sweep (Phase 21.6): one soft diagonal light band, clipped to the
+  // board plate, drawn only during its ~1.4s crossing — no per-frame cost the
+  // rest of the time. No allocations at rest; the gradient/path only get
+  // built while `this.sweep` is truthy.
+  View.prototype.drawSweep = function (ctx, m) {
+    var x0 = m.ox - 10, y0 = m.oy - 10, w = m.tile * COLS + 20, h = m.tile * ROWS + 20;
+    var k = this.sweep.t / SWEEP_T;
+    var envelope = Math.sin(Math.min(1, k) * Math.PI);       // smooth fade in/out, never a hard pop
+    ctx.save();
+    roundRect(ctx, x0, y0, w, h, 18);
+    ctx.clip();
+    var diag = Math.sqrt(w * w + h * h);
+    ctx.translate(x0 + w / 2, y0 + h / 2);
+    ctx.rotate(-Math.PI / 5);
+    var band = Math.max(40, m.tile * 0.9);
+    var pos = -diag * 0.7 + k * diag * 1.4;
+    var grad = ctx.createLinearGradient(pos - band, 0, pos + band, 0);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,' + (0.32 * envelope).toFixed(3) + ')');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(pos - band, -diag, band * 2, diag * 2);
     ctx.restore();
   };
   View.prototype.drawSparkles = function (ctx) {

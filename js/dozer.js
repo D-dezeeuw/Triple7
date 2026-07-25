@@ -457,6 +457,10 @@
 
     if (kind === 'coin') {
       var tier = TIER_STYLE[(c && c.tier && c.tier.id) || 'coin7'] || TIER_STYLE.coin7;
+      // Shared wet-glass ground shadow (Phase 21.5) — a soft pool the coin
+      // sits in on the table, same painter match3/slots use. Sits behind
+      // the rim so it only peeks out at the coin's edges.
+      U.drawSoftShadow(ctx, sx, sy + thick * 1.8, rx * 1.08, ry * 0.6, tier.lo, 0.28);
       // Rim (side)
       ctx.fillStyle = tier.rim;
       ctx.beginPath(); ctx.ellipse(sx, sy + thick, rx, ry, 0, 0, 7); ctx.fill();
@@ -486,6 +490,7 @@
       ctx.beginPath(); ctx.ellipse(sx - rx * 0.35, sy - ry * 0.35, rx * 0.2, ry * 0.18, -0.5, 0, 7); ctx.fill();
     } else {
       var st = SPECIAL_STYLE[kind] || SPECIAL_STYLE.gemfruit;
+      U.drawSoftShadow(ctx, sx, sy + thick * 1.8, rx * 1.08, ry * 0.6, st.c, 0.28);
       ctx.fillStyle = st.c + '55';
       ctx.beginPath(); ctx.ellipse(sx, sy + thick, rx, ry, 0, 0, 7); ctx.fill();
       var g2 = ctx.createRadialGradient(sx - rx * 0.3, sy - ry * 0.5, rx * 0.05, sx, sy, rx * 1.2);
