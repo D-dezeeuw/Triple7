@@ -68,6 +68,14 @@
       game.s.settings.reducedMotion = e.target.checked;
       document.body.classList.toggle('reduced-motion', e.target.checked);
     });
+    $('set-reserve-juice').addEventListener('change', function (e) {
+      game.s.settings.reserve.juice = Math.max(0, +e.target.value || 0);
+      e.target.value = game.s.settings.reserve.juice;
+    });
+    $('set-reserve-suncoin').addEventListener('change', function (e) {
+      game.s.settings.reserve.suncoin = Math.max(0, +e.target.value || 0);
+      e.target.value = game.s.settings.reserve.suncoin;
+    });
 
     // Save / export / import
     $('btn-export').addEventListener('click', function () {
@@ -154,6 +162,8 @@
     $('set-sfx').checked = game.s.settings.sfx;
     $('set-particles').checked = game.s.settings.particles;
     $('set-motion').checked = game.s.settings.reducedMotion;
+    $('set-reserve-juice').value = game.s.settings.reserve.juice;
+    $('set-reserve-suncoin').value = game.s.settings.reserve.suncoin;
     T7.audio.setEnabled(game.s.settings.sfx);
     document.body.classList.toggle('reduced-motion', game.s.settings.reducedMotion);
   };

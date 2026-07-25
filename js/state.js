@@ -37,7 +37,13 @@
       buildings: {},     // buildingId -> count
       achievements: {},  // achId -> true
       seeds: 0,          // prestige currency
-      settings: { sfx: true, music: true, reducedMotion: false, particles: true, theme: 'day' },
+      settings: {
+        sfx: true, music: true, reducedMotion: false, particles: true, theme: 'day',
+        // Automation reserves (Phase 18.5): Auto-Spinner/Auto-Dropper never
+        // spend a currency below its reserve floor, so idle automation can
+        // never eat into Juice/Suncoins a player is manually saving up.
+        reserve: { juice: 0, suncoin: 0 }
+      },
       // Named RNG stream positions (Phase 4.2): {seed, a} per system, written
       // by main.js so match3/slots/dozer/charms draws stay independent across
       // a save/load instead of reseeding. Absent/null on old saves — main.js
@@ -70,6 +76,12 @@
       if (!isFinite(s.lifetime[c]) || s.lifetime[c] < 0) s.lifetime[c] = 0;
     });
     if (!isFinite(s.seeds) || s.seeds < 0) s.seeds = 0;
+    ['juice', 'suncoin'].forEach(function (c) {
+      if (!s.settings.reserve || !isFinite(s.settings.reserve[c]) || s.settings.reserve[c] < 0) {
+        s.settings.reserve = s.settings.reserve || {};
+        s.settings.reserve[c] = 0;
+      }
+    });
     // A corrupted/hand-edited save must never crash the dozer on load — drop
     // any record missing the fields World.deserialize needs.
     if (!Array.isArray(s.dozerTable)) {

@@ -109,10 +109,20 @@
       if (r > 0) game.gain(c, r * dt, true);
     });
 
-    // Automation.
+    // Automation. Auto-Spinner/Auto-Dropper respect the player's reserve
+    // floors (Phase 18.5) so idle play never eats into Juice/Suncoins being
+    // saved up manually — Auto-Juicer has no cost, so no reserve applies.
     stepAuto('autojuicer', dt, function () { return views.match3.autoMove(); });
-    stepAuto('autospinner', dt, function () { return views.slots.spin(); });
-    stepAuto('autodropper', dt, function () { return views.dozer.tryDrop(); });
+    stepAuto('autospinner', dt, function () {
+      var reserve = game.s.settings.reserve.juice || 0;
+      if (game.s.cur.juice - D.CONVERSION.SPIN_COST_J < reserve) return false;
+      return views.slots.spin();
+    });
+    stepAuto('autodropper', dt, function () {
+      var reserve = game.s.settings.reserve.suncoin || 0;
+      if (game.s.cur.suncoin - D.CONVERSION.DROP_COST_S < reserve) return false;
+      return views.dozer.tryDrop();
+    });
 
     // Views: update all (cheap — dozer physics keeps flowing off-tab), draw active.
     views.match3.update(dt);

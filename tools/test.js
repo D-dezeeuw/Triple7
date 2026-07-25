@@ -83,6 +83,19 @@ t('gain applies multipliers, spend enforces funds', function () {
   ok(g.spend('juice', 10));
   eq(g.s.cur.juice, 0);
 });
+t('automation reserve defaults to 0 and sanitizes bad values', function () {
+  var fresh = st.defaultState();
+  eq(fresh.settings.reserve.juice, 0);
+  eq(fresh.settings.reserve.suncoin, 0);
+  var g = new st.Game();
+  g.s.settings.reserve.juice = -5;
+  g.s.settings.reserve.suncoin = NaN;
+  var code = g.exportSave();
+  var g2 = new st.Game();
+  g2.importSave(code);
+  ok(g2.s.settings.reserve.juice >= 0, 'negative reserve must sanitize to >=0');
+  ok(isFinite(g2.s.settings.reserve.suncoin), 'NaN reserve must sanitize to a finite number');
+});
 t('export/import round-trips exactly', function () {
   var g = new st.Game();
   g.gain('juice', 123.45, true); g.gain('stargem', 9, true);
