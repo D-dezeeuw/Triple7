@@ -486,6 +486,8 @@
       ['Best cascade', 'x' + s.bestChain],
       ['Most cleared in one move', U.fmtInt(s.bestClear)],
       ['Slot spins', U.fmtInt(s.spins)],
+      ['Beach Getaway', 'Level ' + T7.slots.resortLevel(s.spins) + ' — ' +
+        D.RESORT.LEVELS[T7.slots.resortLevel(s.spins) - 1].name],
       ['Triple Sevens', U.fmtInt(s.jackpots)],
       ['Coins dropped', U.fmtInt(s.drops)],
       ['Coins pushed off', U.fmtInt(s.coinsFallen)],

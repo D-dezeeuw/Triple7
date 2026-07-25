@@ -94,6 +94,11 @@
       onJackpot: function (sun, gems) {
         T7.ui.toast('TRIPLE SEVEN! +' + T7.util.fmt(sun) + ' Suncoins, +' +
                     T7.util.fmt(gems) + ' Stargems!', 'gold', 'seven');
+      },
+      onResort: function (def, level) {
+        T7.ui.toast('Beach Getaway upgraded: ' + def.name + '!' +
+                    (def.sun ? ' A gift of ' + def.sun + ' Suncoins washes ashore.' : ''),
+                    'gold', 'sun');
       }
     });
     views.dozer = new T7.dozer.View(document.getElementById('cv-dozer'), game, rngs.dozer, {

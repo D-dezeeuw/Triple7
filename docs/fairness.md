@@ -105,6 +105,15 @@ Triple7 will never add a "win" smaller than what you spent to get it — the
 industry calls those losses disguised as wins, and they are banned here by
 design, not just by accident of current tuning.
 
+**The Beach Getaway top screen is not part of the odds.** The vacation
+scene above the reels levels up on lifetime spin *count* alone
+(`D.RESORT.LEVELS` in `js/data.js`) — never on outcomes — and each level-up
+pays a one-time fixed Suncoin gift, the same deterministic-milestone pattern
+as achievement rewards. Weather changes are pure cosmetics on a decorative
+random source. None of it reads or perturbs the seeded slots stream, none of
+it changes any probability above, and the gifts are excluded from the
+personal-RTP stat so that audit stays a clean per-stake measure.
+
 ## Coin dozer — "Star Harbor"
 
 The dozer has no separate "roll" at all — the randomness *is* the physics.

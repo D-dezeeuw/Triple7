@@ -211,7 +211,9 @@ main { max-width: 860px; margin: 0 auto; padding: 6px 12px 60px; }
      + the viewport meta), so this only tightens behavior over the canvas. */
   touch-action: none;
 }
-.slotwrap canvas { height: min(48vh, 380px); }
+/* Taller than the other games: the slots canvas stacks the Beach Getaway
+   top screen above the reel cabinet (a modern cabinet's dual display). */
+.slotwrap canvas { height: min(58vh, 470px); }
 
 /* Match-3 best-run stats, just under the board. */
 .m3stats { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px 4px 0; }
@@ -354,6 +356,9 @@ dialog h2 { margin-top: 0; }
   .logo .logomark { width: 32px; height: 32px; }
   .pill b { font-size: 0.9rem; }
   .gamewrap canvas { height: min(58vh, 430px); }
+  /* Must follow the .gamewrap rule (equal specificity): keeps the slots
+     canvas tall enough for its two stacked screens on phones too. */
+  .slotwrap canvas { height: min(62vh, 470px); }
   #stats-list { columns: 1; }
 }
 @media (max-width: 480px) {

@@ -94,6 +94,23 @@
      *  ── total 1.18401 S / spin  (RTP 118.40 %, hit rate 30.11 %) ── */
   };
 
+  // ── Beach Getaway (slots top screen) ──────────────────────────────────────
+  // Vacation-resort progression drawn above the reels. Levels derive from
+  // lifetime spin COUNT only — never from outcomes — so the meter is pure
+  // pacing and cannot touch the published odds above. Each level-up pays a
+  // one-time fixed Suncoin gift, the same deterministic-milestone pattern as
+  // achievement gems (raw credit, excluded from slotSunWon so the personal
+  // RTP audit stays a clean per-stake measure).
+  var RESORT = {
+    LEVELS: [
+      { at: 0,   name: 'Empty Beach',   sun: 0 },
+      { at: 25,  name: 'Palm Tree',     sun: 7 },
+      { at: 77,  name: 'Beach Bar',     sun: 21 },
+      { at: 200, name: 'Sailboat',      sun: 49 },
+      { at: 500, name: 'Sunset Resort', sun: 77 }
+    ]
+  };
+
   // ── Coin dozer ─────────────────────────────────────────────────────────────
   var DOZER = {
     TABLE_W: 320, TABLE_D: 420,     // world units (x across, z toward player)
@@ -251,7 +268,7 @@
 
   return {
     CURRENCIES: CURRENCIES, CONVERSION: CONVERSION,
-    MATCH3: MATCH3, SLOT: SLOT, DOZER: DOZER,
+    MATCH3: MATCH3, SLOT: SLOT, RESORT: RESORT, DOZER: DOZER,
     CHARM_SETS: CHARM_SETS, CHARMS: CHARMS, RARITY_WEIGHT: RARITY_WEIGHT,
     CHARM_CHEST_COST_G: CHARM_CHEST_COST_G, CHARM_MAXED_DUPE_GEMS: CHARM_MAXED_DUPE_GEMS,
     BUILDINGS: BUILDINGS, UPGRADES: UPGRADES, AUTO: AUTO, OFFLINE: OFFLINE,

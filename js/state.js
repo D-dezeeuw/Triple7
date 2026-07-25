@@ -62,6 +62,10 @@
       // per feature, so a clock rewind replays the same already-claimed
       // outcome instead of granting a second gift (§10.9/§11.10).
       claims: { daily: null },
+      // Beach Getaway (slots top screen): highest resort level whose one-time
+      // gift has been paid out (0 = only the starting beach). The level itself
+      // always derives from stats.spins; this ledger only stops double-pays.
+      resort: { rewarded: 0 },
       // Destinations (Phase 32 MVP): home is always unlocked and free;
       // others are one-time Stargem fares (see D.DESTINATIONS). `destination`
       // is the currently active one (drives the sky/sun palette).
@@ -107,6 +111,11 @@
       s.claims = s.claims || {};
       s.claims.daily = null;
     }
+    // Resort gift ledger: a whole number within the defined levels — a
+    // corrupted value must never re-pay gifts or block future ones.
+    if (!s.resort || typeof s.resort !== 'object') s.resort = { rewarded: 0 };
+    if (!isFinite(s.resort.rewarded) || s.resort.rewarded < 0) s.resort.rewarded = 0;
+    s.resort.rewarded = Math.min(Math.floor(s.resort.rewarded), D.RESORT.LEVELS.length - 1);
     // Home is always unlocked (fareG: 0, never spent-for) and the active
     // destination must be one the save actually unlocked — otherwise a
     // corrupted/hand-edited save could apply a palette it never paid for.
