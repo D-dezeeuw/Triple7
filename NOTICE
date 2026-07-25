@@ -1,0 +1,12 @@
+Triple7
+Copyright 2026 Triple7 contributors
+
+This product includes software developed as part of the Triple7 project
+(https://github.com/D-dezeeuw/Triple7), licensed under the Apache License,
+Version 2.0. See the LICENSE file for the full license text.
+
+Triple7 has zero third-party runtime dependencies. Sound is synthesized at
+runtime via the Web Audio API (no audio assets). Visual assets under
+assets/sprites/ are optional, dev-time-generated art (see tools/genart/ and
+Phase 31 of .claude/context/plan.md); every one of them has a hand-coded
+canvas-painter fallback, and the game runs identically with assets/ deleted.

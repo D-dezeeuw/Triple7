@@ -68,6 +68,11 @@ see [`docs/fairness.md`](docs/fairness.md) for the full contract.
 The full design document and 32-phase roadmap live in
 [`.claude/context/plan.md`](.claude/context/plan.md).
 
+## Contributing
+
+Want to help? [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the philosophy,
+the hard invariants a PR must respect, and local setup.
+
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
