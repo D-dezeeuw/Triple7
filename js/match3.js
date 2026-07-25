@@ -179,9 +179,25 @@
     return true;
   }
 
+  // Deep-ish copy of the board for animation snapshots (cells are tiny).
+  function snap(board) {
+    var s = [];
+    for (var y = 0; y < ROWS; y++) {
+      s.push([]);
+      for (var x = 0; x < COLS; x++) {
+        var c = board[y][x];
+        s[y].push(c ? { f: c.f, sp: c.sp } : null);
+      }
+    }
+    return s;
+  }
+
   /* Resolve a full move instantly (no animation) — used by the Node simulator
    * and as ground truth for the animated view. Returns:
-   *   { valid, juice, tiles, chain, specialsMade } — juice is pre-multiplier. */
+   *   { valid, juice, tiles, chain, specialsMade } — juice is pre-multiplier.
+   * If `steps` is an array, each cascade iteration is recorded into it for the
+   * view's playback: { pre, post, cleared, specials, falls, spawns, juice,
+   * chain } — recording never touches logic or the RNG stream. */
   // Where a 4/5-match spawns its special: the swapped cell when it sits in the
   // run (feels intentional), otherwise the run's middle cell (cascade spawns).
   function pickSpawnCell(run, move, firstChain) {
@@ -194,7 +210,7 @@
     return run.cells[Math.floor(run.cells.length / 2)];
   }
 
-  function resolveMove(board, move, rng, kettleLvl) {
+  function resolveMove(board, move, rng, kettleLvl, steps) {
     var a = board[move.y1][move.x1], b = board[move.y2] && board[move.y2][move.x2];
     if (!a || !b) return { valid: false };
     var juice = 0, tiles = 0, chain = 0, specialsMade = 0;
@@ -214,9 +230,15 @@
         set[move.x1 + ',' + move.y1] = true; set[move.x2 + ',' + move.y2] = true;
       }
       expandSpecials(board, set);
+      var pre0 = steps ? snap(board) : null;
       var n0 = clearCells(board, set);
       tiles += n0; chain = 1; juice += n0 * D.MATCH3.JUICE_PER_TILE;
-      collapse(board, rng);
+      var col0 = collapse(board, rng);
+      if (steps) {
+        steps.push({ pre: pre0, post: snap(board), cleared: Object.keys(set),
+                     specials: [], falls: col0.moves, spawns: col0.spawns,
+                     juice: juice, chain: 1 });
+      }
     } else {
       if (!adjacent(move) || !trySwapMatch(board, move.x1, move.y1, move.x2, move.y2)) return { valid: false };
       var t = board[move.y1][move.x1];
@@ -229,6 +251,9 @@
       var m = findMatches(board);
       if (!m.cells.length) break;
       chain++;
+      var juice0 = juice;
+      var pre = steps ? snap(board) : null;
+      var specialsRec = steps ? [] : null;
       // Special spawns: one per run of 4/5+, placed at the swap cell when possible.
       for (var r = 0; r < m.runs.length; r++) {
         var run = m.runs[r];
@@ -240,15 +265,25 @@
           board[spawnAt.y][spawnAt.x] = cell(sp === RAINBOW ? RAINBOW_FRUIT : keep.f, sp);
           juice += sp === RAINBOW ? D.MATCH3.SPECIAL5_BONUS : D.MATCH3.SPECIAL4_BONUS;
           specialsMade++;
+          if (specialsRec) {
+            var nc = board[spawnAt.y][spawnAt.x];
+            specialsRec.push({ x: spawnAt.x, y: spawnAt.y, cell: { f: nc.f, sp: nc.sp } });
+          }
         }
       }
       var setC = {};
       for (var i2 = 0; i2 < m.cells.length; i2++) setC[m.cells[i2].x + ',' + m.cells[i2].y] = true;
       expandSpecials(board, setC);
+      var clearedKeys = steps ? Object.keys(setC) : null;
       var n = clearCells(board, setC);
       tiles += n;
       juice += n * D.MATCH3.JUICE_PER_TILE * (1 + D.MATCH3.CASCADE_STEP * kettle * (chain - 1));
-      collapse(board, rng);
+      var colr = collapse(board, rng);
+      if (steps) {
+        steps.push({ pre: pre, post: snap(board), cleared: clearedKeys,
+                     specials: specialsRec, falls: colr.moves, spawns: colr.spawns,
+                     juice: juice - juice0, chain: chain });
+      }
     }
     if (!findAllMoves(board).length) reshuffle(board, rng);
     return { valid: true, juice: juice, tiles: tiles, chain: chain, specialsMade: specialsMade };
@@ -277,9 +312,12 @@
     this.hintMove = null;
     this.time = 0;
     this.floaters = [];                    // "+12 J" popups
-    this.pop = {};                         // cell pop scale on clear "x,y" -> t
+    this.pb = null;                        // cascade playback (recorded steps)
     this.bindInput();
   }
+
+  var POP_T = 0.22;                        // seconds: cleared fruit shrink+fade
+  var FALL_T = 0.30;                       // seconds: gravity slide + refill drop
 
   View.prototype.metrics = function () {
     var w = this.cv.width / (window.devicePixelRatio || 1);
@@ -341,25 +379,64 @@
         if (self.hooks.sfx) self.hooks.sfx('bad');
         return;
       }
+      var steps = [];
       var res = resolveMove(self.board, { x1: a.x, y1: a.y, x2: b.x, y2: b.y },
-                            self.rng, self.g.upLvl('combokettle'));
-      self.finishMove(res, b);
+                            self.rng, self.g.upLvl('combokettle'), steps);
+      self.finishMove(res, b, steps);
     });
   };
 
-  View.prototype.finishMove = function (res, at) {
-    this.busy = false;
-    if (!res.valid) return;
+  // Credit is immediate (state stays authoritative); the recorded steps then
+  // play back visually — pop, fall, repeat — while input stays locked.
+  View.prototype.finishMove = function (res, at, steps) {
+    if (!res.valid) { this.busy = false; return; }
     var g = this.g;
     var credited = g.gain('juice', res.juice);
     g.s.stats.matches++;
     if (res.chain > g.s.stats.bestChain) g.s.stats.bestChain = res.chain;
-    this.spawnFloater(at, '+' + U.fmtInt(credited), res.chain);
-    this.burstPop();
     if (this.hooks.onJuice) this.hooks.onJuice(credited, res.chain, res.tiles);
-    if (this.hooks.sfx) this.hooks.sfx(res.chain >= 3 ? 'cascade' : 'match');
     g.checkAchievements();
+    if (steps && steps.length) {
+      this.pb = { steps: steps, i: 0, phase: 'pop', t: 0,
+                  credited: credited, totalJuice: res.juice || 1 };
+    } else {
+      this.busy = false;
+      this.spawnFloater(at, '+' + U.fmtInt(credited), res.chain);
+      if (this.hooks.sfx) this.hooks.sfx(res.chain >= 3 ? 'cascade' : 'match');
+    }
   };
+
+  View.prototype.stepPlayback = function (dt) {
+    var pb = this.pb;
+    var st = pb.steps[pb.i];
+    if (!st.begun) {
+      st.begun = true;
+      // Per-step floater: this step's share of the credited total.
+      var share = Math.max(1, Math.round(pb.credited * st.juice / pb.totalJuice));
+      this.spawnFloater(stepCentroid(st), '+' + U.fmtInt(share), st.chain);
+      if (this.hooks.sfx) this.hooks.sfx(st.chain >= 3 ? 'cascade' : 'match');
+    }
+    pb.t += dt;
+    if (pb.phase === 'pop' && pb.t >= POP_T) {
+      pb.phase = 'fall'; pb.t = 0;
+    } else if (pb.phase === 'fall' && pb.t >= FALL_T) {
+      pb.phase = 'pop'; pb.t = 0; pb.i++;
+      if (pb.i >= pb.steps.length) {
+        this.pb = null;
+        this.busy = false;
+        this.hintAt = this.time;
+      }
+    }
+  };
+  function stepCentroid(st) {
+    var sx = 0, sy = 0;
+    for (var i = 0; i < st.cleared.length; i++) {
+      var p = st.cleared[i].split(',');
+      sx += +p[0]; sy += +p[1];
+    }
+    var n = Math.max(1, st.cleared.length);
+    return { x: sx / n, y: sy / n };
+  }
 
   // Simple tween helpers — the animated view re-resolves visuals from board
   // snapshots; logic stays authoritative in resolveMove.
@@ -372,10 +449,6 @@
     if (this.hooks.sfx) this.hooks.sfx('swap');
     void self;
   };
-  View.prototype.burstPop = function () {
-    // Pop animation timestamps decay in draw(); board is already final.
-    this.popT = 0.001;
-  };
   View.prototype.spawnFloater = function (at, text, chain) {
     var m = this.metrics();
     this.floaters.push({
@@ -386,7 +459,7 @@
 
   View.prototype.update = function (dt) {
     this.time += dt;
-    if (this.popT) { this.popT += dt; if (this.popT > 0.35) this.popT = 0; }
+    if (this.pb) this.stepPlayback(dt);
     for (var i = this.anim.length - 1; i >= 0; i--) {
       var an = this.anim[i];
       an.t += dt;
@@ -545,6 +618,21 @@
     roundRect(ctx, m.ox - 10, m.oy - 6, m.tile * COLS + 20, m.tile * ROWS + 16, 18);
     ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fill();
 
+    // Checker glass tiles for the whole grid.
+    for (var ty = 0; ty < ROWS; ty++) {
+      for (var tx = 0; tx < COLS; tx++) {
+        ctx.fillStyle = (tx + ty) % 2 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.05)';
+        roundRect(ctx, m.ox + tx * m.tile + 1, m.oy + ty * m.tile + 1, m.tile - 2, m.tile - 2, 8);
+        ctx.fill();
+      }
+    }
+
+    if (this.pb) this.drawPlayback(ctx, m);
+    else this.drawBoard(ctx, m);
+    this.drawFloaters(ctx);
+  };
+
+  View.prototype.drawBoard = function (ctx, m) {
     var swap = null;
     for (var i = 0; i < this.anim.length; i++) if (this.anim[i].kind === 'swap') swap = this.anim[i];
 
@@ -553,10 +641,6 @@
         var c = this.board[y][x];
         if (!c) continue;
         var px = m.ox + x * m.tile, py = m.oy + y * m.tile;
-
-        // Checker glass tiles.
-        ctx.fillStyle = (x + y) % 2 ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.05)';
-        roundRect(ctx, px + 1, py + 1, m.tile - 2, m.tile - 2, 8); ctx.fill();
 
         // Animated swap offset (visual only — board already holds the result).
         // During the tween the board still holds pre-swap gems, so each gem
@@ -573,8 +657,6 @@
             oy = (swap.a.y - swap.b.y) * m.tile * wiggle;
           }
         }
-        var scale = 1;
-        if (this.popT) scale = 1 + 0.08 * Math.sin(Math.min(1, this.popT / 0.35) * Math.PI);
 
         // Selection / hint glow.
         if (this.sel && this.sel.x === x && this.sel.y === y) {
@@ -589,15 +671,75 @@
         }
 
         ctx.save();
-        ctx.translate(px + ox + m.tile / 2, py + oy + m.tile / 2);
-        ctx.scale(scale, scale);
-        ctx.translate(-(px + m.tile / 2), -(py + m.tile / 2));
-        this.drawGem(ctx, c, px, py, m.tile, this.time * 2 + x * 0.7 + y * 1.3);
+        ctx.translate(px + ox, py + oy);
+        this.drawGem(ctx, c, 0, 0, m.tile, this.time * 2 + x * 0.7 + y * 1.3);
         ctx.restore();
       }
     }
+  };
 
-    // Floating "+N J" popups.
+  // ── Cascade playback: pop phase then fall phase per recorded step ─────────
+  View.prototype.drawPlayback = function (ctx, m) {
+    var pb = this.pb, st = pb.steps[pb.i];
+    var x, y, px, py, key, c;
+    if (!st.maps) {
+      var cs = {}, sm = {}, fm = {};
+      st.cleared.forEach(function (k) { cs[k] = true; });
+      st.specials.forEach(function (s) { sm[s.x + ',' + s.y] = s.cell; });
+      st.falls.forEach(function (f2) { fm[f2.x + ',' + f2.toY] = f2.fromY; });
+      st.spawns.forEach(function (s) { fm[s.x + ',' + s.y] = -1 - s.order; });
+      st.maps = { cleared: cs, specials: sm, from: fm };
+    }
+    if (pb.phase === 'pop') {
+      var k = Math.min(1, pb.t / POP_T);
+      for (y = 0; y < ROWS; y++) {
+        for (x = 0; x < COLS; x++) {
+          c = st.pre[y][x];
+          key = x + ',' + y;
+          px = m.ox + x * m.tile; py = m.oy + y * m.tile;
+          var born = st.maps.specials[key];
+          if (born) {
+            // A Burst/Rainbow being born pulses up over its popping run.
+            this.drawScaled(ctx, born, px, py, m.tile, 1 + 0.25 * Math.sin(k * Math.PI), 1);
+          } else if (st.maps.cleared[key]) {
+            if (c) this.drawScaled(ctx, c, px, py, m.tile, 1 - U.easeOutCubic(k), 1 - k);
+          } else if (c) {
+            this.drawScaled(ctx, c, px, py, m.tile, 1, 1);
+          }
+        }
+      }
+    } else {
+      // Gravity: tiles slide down into the gaps, refills drop in from above
+      // the frame (clipped to the board plate).
+      var kf = Math.min(1, pb.t / FALL_T);
+      var ease = kf * kf;
+      ctx.save();
+      roundRect(ctx, m.ox - 6, m.oy - 6, m.tile * COLS + 12, m.tile * ROWS + 12, 14);
+      ctx.clip();
+      for (y = 0; y < ROWS; y++) {
+        for (x = 0; x < COLS; x++) {
+          c = st.post[y][x];
+          if (!c) continue;
+          var from = st.maps.from[x + ',' + y];
+          var vy = from === undefined ? y : from + (y - from) * ease;
+          this.drawScaled(ctx, c, m.ox + x * m.tile, m.oy + vy * m.tile, m.tile, 1, 1);
+        }
+      }
+      ctx.restore();
+    }
+  };
+  View.prototype.drawScaled = function (ctx, c, px, py, tile, scale, alpha) {
+    if (scale <= 0.02 || alpha <= 0.02) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(px + tile / 2, py + tile / 2);
+    ctx.scale(scale, scale);
+    ctx.translate(-tile / 2, -tile / 2);
+    this.drawGem(ctx, c, 0, 0, tile, this.time * 2);
+    ctx.restore();
+  };
+
+  View.prototype.drawFloaters = function (ctx) {
     for (var f = 0; f < this.floaters.length; f++) {
       var fl = this.floaters[f];
       var ft = fl.t / 1.2;
