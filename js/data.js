@@ -23,14 +23,14 @@
  *
  * ── DOZER MATH (conservation argument) ──────────────────────────────────────
  *   At steady state the table holds ~constant coins, so E[coins leaving] per
- *   coin dropped = 1. A leaving coin exits front (paid, worth 1 G) with
- *   probability (1 − sideLoss) or into a side gutter (lost). Each drop also has
- *   specialChance to spawn a bonus item (avg value ≈ 4.7 G) that follows the
- *   same exit distribution.
- *     E[G per drop] = (1−s)·1 + specialChance·(1−s)·E[specialValue]
- *   Measured (tools/simulate.js): s ≈ 0.06–0.08 base → ≈ 0.93 + 0.06·0.93·4.68
- *   ≈ 1.19 G per 7 S stake → RTP ≈ 115–125 % base, ~160 % with maxed
- *   rails/magnet. Run `npm run simulate` for the current measured figures.
+ *   coin dropped = 1. A leaving coin exits front (paid its denomination,
+ *   E[tier] = 1.10 G — see COIN_TIERS) with probability (1 − sideLoss) or into
+ *   a side gutter (lost). Each drop also has specialChance to spawn a bonus
+ *   item (avg value ≈ 4.7 G) that follows the same exit distribution.
+ *     E[G per drop] = (1−s)·E[tier] + specialChance·(1−s)·E[specialValue]
+ *   Measured (tools/simulate.js): s ≈ 0.07 base → ≈ 0.93·1.10 + 0.28 ≈ 1.31 G
+ *   per 7 S stake → RTP ≈ 130 % base, ~165 % with maxed rails/magnet. Run
+ *   `npm run simulate` for the current measured figures.
  *
  * ── MATCH-3 ─────────────────────────────────────────────────────────────────
  *   Each cleared tile = 1 J × cascade multiplier ×(1 + 0.5·(chain−1)).
@@ -107,6 +107,14 @@
       { id: 'charm',     w: 18, kind: 'charm' },              // random collectible
       { id: 'bottle',    w: 22, kind: 'juice', seconds: 300 },// 5 min of J income, min 77
       { id: 'sunpouch',  w: 16, kind: 'sun',   sun: 21 }
+    ],
+    // Coin denominations (face value in Suncoins = gems·7). Every spawned coin
+    // draws a tier; rare high-value coins pay more Stargems when they drop off
+    // the front. E[tier] = (97·1 + 2·3 + 1·7)/100 = 1.10 G per exiting coin.
+    COIN_TIERS: [
+      { id: 'coin7',  gems: 1, w: 97 },
+      { id: 'coin21', gems: 3, w: 2 },
+      { id: 'coin49', gems: 7, w: 1 }
     ]
     // E[special] ≈ 0.44·7 + 0.18·~5 + 0.22·~1 + 0.16·3 ≈ 4.68 G (charm valued at
     // its 77 G ÷ ~15 duplicates-adjusted shop price; bottle ≈ 1 G of juice-time).

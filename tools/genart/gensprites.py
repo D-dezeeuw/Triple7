@@ -32,9 +32,11 @@ STYLE = (
     "premium mobile-game icon quality. "
 )
 ISOLATE = (
-    "Render the subject completely ISOLATED on a fully transparent background (PNG alpha). "
-    "No backdrop, no scenery, no ground plane, no cast shadow, no reflection surface, "
-    "no text, no watermark. The subject floats alone, centered, filling ~85% of a square frame."
+    "Render the subject completely ISOLATED on a plain solid pure white background (#FFFFFF). "
+    "Absolutely no checkerboard 'transparency' pattern anywhere — not even inside holes, gaps "
+    "or between stems. No backdrop, no scenery, no ground plane, no cast shadow, no reflection "
+    "surface, no text, no watermark. The subject floats alone, centered, filling ~85% of a "
+    "square 1:1 frame."
 )
 
 ASSETS = {
@@ -98,6 +100,23 @@ CHARM_STYLE = "It is a tiny jewel-like collectible charm trinket, cute and reada
 for _cid, _prompt in CHARM_ASSETS.items():
     ASSETS["charms/" + _cid] = CHARM_STYLE + _prompt
 
+# Coins are METAL, not glass — same lighting/quality, different material.
+COIN_STYLE = (
+    "Match the lighting, quality and cheerful mood of the attached reference image, but this "
+    "asset's material is GLISTENING POLISHED GOLD METAL, not glass: mirror-bright metallic "
+    "shine, warm golden reflections, sharp specular glints, crisp embossed relief. "
+)
+COIN_ASSETS = {
+    "suncoin": "Subject: a round gold coin, face-on, with an embossed radiant sun (disc with rays) on its face and a beaded rim. No numerals, no letters.",
+    "coin7":   "Subject: a round gold coin, face-on, with a large embossed numeral 7 on its face and a beaded rim. The numeral 7 is required.",
+    "coin21":  "Subject: a round rose-gold coin, face-on, with a large embossed number 21 on its face and an ornate double rim. The number 21 is required.",
+    "coin49":  "Subject: an ornate precious coin of deep radiant gold, face-on, with a large embossed number 49 on its face and a gem-studded decorated rim, clearly the most valuable coin. The number 49 is required.",
+}
+for _cid, _prompt in COIN_ASSETS.items():
+    ASSETS[_cid] = _prompt
+STYLE_OVERRIDE = dict.fromkeys(COIN_ASSETS, COIN_STYLE)
+ASSETS["droplet"] = "Subject: a single plump droplet of vivid red juice as shiny glass (#ff5a4e, highlight #ffc2b8), classic teardrop shape. No fruit, no leaf."
+
 
 def call_model(prompt, ref_path):
     with open(ref_path, "rb") as f:
@@ -156,7 +175,12 @@ def has_alpha(img):
     return lo < 250
 
 
-def key_out_white(img):
+# Assets whose pale/iridescent interiors fool the enclosed-hole detector:
+# skip the hole punch and trust the border flood alone.
+NO_HOLE_PUNCH = {"charms/aurorapeach"}
+
+
+def key_out_white(img, punch_holes=True):
     """Remove the painted fake-transparency background: flood neutral tones
     (white / checker gray, light or dark) from the borders, then kill enclosed
     flat-tone neutral patches (checker holes), then erode+blur the mask."""
@@ -200,7 +224,7 @@ def key_out_white(img):
         r, g, b, _ = px[x, y]
         return max(r, g, b) - min(r, g, b) <= 34
 
-    for y0 in range(h):
+    for y0 in range(h if punch_holes else 0):
         for x0 in range(w):
             if seen[y0 * w + x0] or not near_neutral(x0, y0):
                 continue
@@ -231,11 +255,11 @@ def key_out_white(img):
     return img
 
 
-def process(raw_path, out_path, size=256):
+def process(raw_path, out_path, size=256, punch_holes=True):
     img = Image.open(raw_path).convert("RGBA")
     if not has_alpha(img):
         print("  no alpha in render — keying out white background")
-        img = key_out_white(img)
+        img = key_out_white(img, punch_holes)
     # trim to content bounding box, then pad to square and downscale
     bbox = img.getchannel("A").getbbox()
     if bbox:
@@ -261,8 +285,8 @@ if __name__ == "__main__":
         raw = os.path.join(RAW_DIR, aid + ".png")
         os.makedirs(os.path.dirname(raw), exist_ok=True)
         if not os.path.exists(raw):
-            data = call_model_retry(STYLE + ASSETS[aid] + " " + ISOLATE, REF)
+            data = call_model_retry(STYLE_OVERRIDE.get(aid, STYLE) + ASSETS[aid] + " " + ISOLATE, REF)
             with open(raw, "wb") as f:
                 f.write(data)
             print("  raw", len(data), "bytes")
-        process(raw, os.path.join(OUT_DIR, aid + ".png"))
+        process(raw, os.path.join(OUT_DIR, aid + ".png"), punch_holes=aid not in NO_HOLE_PUNCH)

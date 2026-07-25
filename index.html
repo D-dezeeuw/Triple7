@@ -22,13 +22,13 @@
   <h1 class="logo"><img class="logomark" src="assets/sprites/strawberry.png" alt="" width="44" height="44">Triple<span class="seven">7</span></h1>
   <div id="hud">
     <div class="pill juice" id="pill-juice" title="Juice — squeeze it in the Grove match-3">
-      <span class="dot"></span><b id="cur-juice">0</b><small id="rate-juice"></small>
+      <img class="cur-ic" src="assets/sprites/droplet.png" alt=""><b id="cur-juice">0</b><small id="rate-juice"></small>
     </div>
     <div class="pill sun" id="pill-suncoin" title="Suncoins — won at the Sunshine Sevens slots (7 Juice per spin)">
-      <span class="dot"></span><b id="cur-suncoin">0</b><small id="rate-suncoin"></small>
+      <img class="cur-ic" src="assets/sprites/suncoin.png" alt=""><b id="cur-suncoin">0</b><small id="rate-suncoin"></small>
     </div>
     <div class="pill gem" id="pill-stargem" title="Stargems — pushed off the Star Harbor dozer (7 Suncoins per coin)">
-      <span class="dot"></span><b id="cur-stargem">0</b><small id="rate-stargem"></small>
+      <img class="cur-ic" src="assets/sprites/gem.png" alt=""><b id="cur-stargem">0</b><small id="rate-stargem"></small>
     </div>
   </div>
   <button id="btn-settings" class="iconbtn" title="Settings, save &amp; about"><img src="assets/sprites/gear.png" alt="Settings"></button>
@@ -54,7 +54,7 @@
   <section class="panel" id="panel-slots">
     <div class="gamewrap slotwrap"><canvas id="cv-slots"></canvas></div>
     <div class="actionbar">
-      <button id="btn-spin" class="bigbtn">SPIN — 7 <span class="ic juice"></span></button>
+      <button id="btn-spin" class="bigbtn">SPIN — 7 <img class="ic-img" src="assets/sprites/droplet.png" alt="Juice"></button>
       <button id="btn-paytable" class="minibtn">Paytable</button>
     </div>
     <div class="lockveil" id="veil-slots">
@@ -65,7 +65,7 @@
   <section class="panel" id="panel-dozer">
     <div class="gamewrap"><canvas id="cv-dozer"></canvas></div>
     <div class="actionbar">
-      <button id="btn-drop" class="bigbtn">DROP — 7 <span class="ic sun"></span></button>
+      <button id="btn-drop" class="bigbtn">DROP — 7 <img class="ic-img" src="assets/sprites/suncoin.png" alt="Suncoins"></button>
       <span class="tip">…or tap the table to aim your coin. Coins off the front edge become <b>Stargems</b>. Mind the side gutters!</span>
     </div>
     <div class="lockveil" id="veil-dozer">
@@ -86,7 +86,7 @@
   <section class="panel" id="panel-charms">
     <h2>Charm Cabinet <small>— glass fruit, forever bonuses</small></h2>
     <div class="actionbar">
-      <button id="btn-chest" class="bigbtn">Charm Chest — 77 <span class="ic gem"></span></button>
+      <button id="btn-chest" class="bigbtn">Charm Chest — 77 <img class="ic-img" src="assets/sprites/gem.png" alt="Stargems"></button>
       <span class="tip">Chests and dozer prizes hold random charms. Duplicates level a charm up (max 7).</span>
     </div>
     <div id="charm-sets"></div>
