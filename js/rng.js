@@ -31,15 +31,30 @@
     return (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
   }
 
+  // Inlined mulberry32 step (bit-identical to the mulberry32() closure above)
+  // so a stream's exact position is a single uint32 an instance can expose
+  // and restore — needed to persist named per-system streams across saves.
   function Rng(seed) {
     this.seed = (seed === undefined ? randomSeed() : seed) >>> 0;
-    this.next = mulberry32(this.seed);
+    this.a = this.seed;
   }
-  Rng.prototype.float = function () { return this.next(); };
-  Rng.prototype.range = function (min, max) { return min + this.next() * (max - min); };
-  Rng.prototype.int = function (min, maxIncl) { return min + Math.floor(this.next() * (maxIncl - min + 1)); };
-  Rng.prototype.chance = function (p) { return this.next() < p; };
-  Rng.prototype.pick = function (arr) { return arr[Math.floor(this.next() * arr.length)]; };
+  Rng.prototype.float = function () {
+    var a = this.a;
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    this.a = a;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  // Exposing/restoring the raw state lets a persistent named stream (match3,
+  // slots, dozer, charms — see main.js) resume its exact position across a
+  // save/load instead of reseeding, so streams stay independent forever.
+  Rng.prototype.getState = function () { return this.a >>> 0; };
+  Rng.prototype.setState = function (a) { this.a = a >>> 0; };
+  Rng.prototype.range = function (min, max) { return min + this.float() * (max - min); };
+  Rng.prototype.int = function (min, maxIncl) { return min + Math.floor(this.float() * (maxIncl - min + 1)); };
+  Rng.prototype.chance = function (p) { return this.float() < p; };
+  Rng.prototype.pick = function (arr) { return arr[Math.floor(this.float() * arr.length)]; };
 
   // Weighted pick over [{w: number, ...}] — the core of the slot's virtual reel
   // and the dozer's prize spawner. O(n) linear scan; n is tiny everywhere we use it.
@@ -47,7 +62,7 @@
     var key = weightKey || 'w';
     var total = 0, i;
     for (i = 0; i < items.length; i++) total += items[i][key];
-    var roll = this.next() * total;
+    var roll = this.float() * total;
     for (i = 0; i < items.length; i++) {
       roll -= items[i][key];
       if (roll < 0) return items[i];
@@ -56,7 +71,7 @@
   };
   Rng.prototype.shuffle = function (arr) {
     for (var i = arr.length - 1; i > 0; i--) {
-      var j = Math.floor(this.next() * (i + 1));
+      var j = Math.floor(this.float() * (i + 1));
       var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
     }
     return arr;

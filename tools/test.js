@@ -48,6 +48,31 @@ t('weighted respects weights (statistically)', function () {
   for (var i = 0; i < 10000; i++) if (r.weighted(items).id === 'a') hits++;
   ok(hits > 8700 && hits < 9300, 'a hit ' + hits + '/10000, expected ~9000');
 });
+t('getState/setState round-trips a stream exactly', function () {
+  var r = new rngMod.Rng(99);
+  for (var i = 0; i < 50; i++) r.float();
+  var saved = r.getState();
+  var expected = [];
+  for (var j = 0; j < 20; j++) expected.push(r.float());
+  var resumed = new rngMod.Rng(0);           // seed irrelevant once state is set
+  resumed.setState(saved);
+  for (var k = 0; k < 20; k++) eq(resumed.float(), expected[k], 'draw ' + k);
+});
+t('Rng.float matches the standalone mulberry32 closure bit-for-bit', function () {
+  var seed = 123456;
+  var gen = rngMod.mulberry32(seed);
+  var r = new rngMod.Rng(seed);
+  for (var i = 0; i < 30; i++) eq(r.float(), gen(), 'draw ' + i);
+});
+t('independent streams never perturb each other', function () {
+  var a1 = new rngMod.Rng(11), b1 = new rngMod.Rng(22);
+  var aSeq = []; for (var i = 0; i < 10; i++) aSeq.push(a1.float());
+  // A fresh "b" stream draws in between; "a"'s own next value must be unaffected
+  // by how many times "b" was drawn — the whole point of separate streams.
+  for (var j = 0; j < 37; j++) b1.float();
+  var a2 = new rngMod.Rng(11);
+  for (var k = 0; k < 10; k++) eq(a2.float(), aSeq[k], 'a draw ' + k + ' shifted by b activity');
+});
 
 console.log('state / save');
 t('gain applies multipliers, spend enforces funds', function () {
@@ -195,6 +220,31 @@ t('pusher face oscillates within its designed travel', function () {
   }
   near(min, dozer.PUSHER_MIN_Z, 0.5);
   near(max, dozer.PUSHER_MIN_Z + D.DOZER.PUSHER_TRAVEL, 0.5);
+});
+t('table serialize/deserialize round-trips coin count, kind, tier and special', function () {
+  var rng = new rngMod.Rng(9);
+  var w = new dozer.World(rng, {});
+  for (var i = 0; i < 90; i++) w.step(1 / 60);          // let a few specials spawn in
+  var before = w.coins.length;
+  var kindsBefore = w.coins.map(function (c) { return c.kind; }).sort();
+  var rec = w.serialize();
+  eq(rec.length, before);
+  var w2 = dozer.World.deserialize(new rngMod.Rng(1), {}, rec);
+  eq(w2.coins.length, before, 'restored coin count');
+  eq(w2.coins.map(function (c) { return c.kind; }).sort().join(), kindsBefore.join(), 'restored kinds');
+  w2.coins.forEach(function (c, idx) {
+    if (c.kind === 'coin') ok(c.tier && D.DOZER.COIN_TIERS.indexOf(c.tier) >= 0, 'coin ' + idx + ' lost its tier');
+    else ok(c.special && D.DOZER.SPECIALS.indexOf(c.special) >= 0, 'special ' + idx + ' lost its kind');
+  });
+});
+t('deserialize does not consume the live rng stream for tier/kind lookup', function () {
+  var seedRng = new rngMod.Rng(9);
+  var w = new dozer.World(seedRng, {});
+  var rec = w.serialize();
+  var probe = new rngMod.Rng(4242);
+  var before = probe.getState();
+  dozer.World.deserialize(probe, {}, rec);
+  eq(probe.getState(), before, 'deserialize must not roll the rng it is given');
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

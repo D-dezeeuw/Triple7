@@ -37,7 +37,16 @@
       buildings: {},     // buildingId -> count
       achievements: {},  // achId -> true
       seeds: 0,          // prestige currency
-      settings: { sfx: true, music: true, reducedMotion: false, particles: true, theme: 'day' }
+      settings: { sfx: true, music: true, reducedMotion: false, particles: true, theme: 'day' },
+      // Named RNG stream positions (Phase 4.2): {seed, a} per system, written
+      // by main.js so match3/slots/dozer/charms draws stay independent across
+      // a save/load instead of reseeding. Absent/null on old saves — main.js
+      // seeds fresh streams from crypto in that case, same as v1 behavior.
+      rng: { match3: null, slots: null, dozer: null, charms: null },
+      // Dozer table snapshot (Phase 12.9): World.serialize() array, written by
+      // main.js's persist(). Null/empty on old or fresh saves — the dozer
+      // view then restocks the table fresh (original v1 behavior).
+      dozerTable: null
     };
   }
 
@@ -61,6 +70,15 @@
       if (!isFinite(s.lifetime[c]) || s.lifetime[c] < 0) s.lifetime[c] = 0;
     });
     if (!isFinite(s.seeds) || s.seeds < 0) s.seeds = 0;
+    // A corrupted/hand-edited save must never crash the dozer on load — drop
+    // any record missing the fields World.deserialize needs.
+    if (!Array.isArray(s.dozerTable)) {
+      s.dozerTable = null;
+    } else {
+      s.dozerTable = s.dozerTable.filter(function (r) {
+        return r && typeof r.kind === 'string' && isFinite(r.x) && isFinite(r.z);
+      });
+    }
     return s;
   }
 

@@ -26,13 +26,14 @@
   var RESTITUTION = 0.12;
   var PUSH_SPEED = 52;            // world units/s the pusher imparts
 
-  function World(rng, params) {
+  function World(rng, params, opts) {
     this.rng = rng;
     this.t = 0;
-    this.coins = [];              // {x, z, vx, vz, r, kind, id}
+    this.coins = [];              // {x, z, vx, vz, r, kind, id, tier?, special?}
     this.nextId = 1;
     this.params = params || {};   // {railLvl, pusherLvl, specialChance}
     this.events = [];
+    if (opts && opts.noStock) return;
     // Pre-stock near saturation so the pile behaves like a broken-in arcade
     // table from the first drop (steady state ⇒ coins in ≈ coins out).
     for (var i = 0; i < C.START_COINS; i++) {
@@ -41,6 +42,34 @@
         150 + rng.float() * (C.TABLE_D - 190));
     }
   }
+
+  // Table persistence (Phase 12.9): plain, save-safe records — tier/special
+  // are stored by id and looked back up in data.js on restore, since the live
+  // objects are shared references into D.DOZER.COIN_TIERS/SPECIALS.
+  World.prototype.serialize = function () {
+    return this.coins.map(function (c) {
+      var rec = { kind: c.kind, x: c.x, z: c.z, vx: c.vx, vz: c.vz };
+      if (c.tier) rec.tier = c.tier.id;
+      if (c.special) rec.special = c.special.id;
+      return rec;
+    });
+  };
+  // Restores a saved table verbatim (no restock) — the returned world starts
+  // at t=0, which only affects the (purely cosmetic) pusher animation phase.
+  function findById(list, id) {
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+  World.deserialize = function (rng, params, records) {
+    var w = new World(rng, params, { noStock: true });
+    (records || []).forEach(function (rec) {
+      var tier = rec.tier ? findById(C.COIN_TIERS, rec.tier) : null;
+      var c = w.spawn(rec.kind, rec.x, rec.z, tier);
+      c.vx = rec.vx || 0; c.vz = rec.vz || 0;
+      if (rec.special) c.special = findById(C.SPECIALS, rec.special);
+    });
+    return w;
+  };
 
   World.prototype.railEnd = function () {
     return Math.min(C.TABLE_D - 10, RAIL_END_BASE + (this.params.railLvl || 0) * RAIL_END_PER_RAIL_LVL);
@@ -54,10 +83,12 @@
     return PUSHER_MIN_Z + (C.PUSHER_TRAVEL / 2) * (1 - Math.cos(phase * Math.PI * 2));
   };
 
-  World.prototype.spawn = function (kind, x, z) {
+  // tierOverride skips the weighted roll (used by deserialize() to restore an
+  // exact saved tier without burning an extra draw from the live stream).
+  World.prototype.spawn = function (kind, x, z, tierOverride) {
     var r = kind === 'coin' ? C.COIN_R : C.COIN_R * 1.25;
     var c = { id: this.nextId++, kind: kind, x: x, z: z, vx: 0, vz: 0, r: r };
-    if (kind === 'coin') c.tier = this.rng.weighted(C.COIN_TIERS);
+    if (kind === 'coin') c.tier = tierOverride || this.rng.weighted(C.COIN_TIERS);
     this.coins.push(c);
     return c;
   };
@@ -158,11 +189,16 @@
 
   // ── Perspective view ──────────────────────────────────────────────────────
   // World (x,z) → screen: scale grows toward the player; the table is a trapezoid.
-  function View(canvas, game, rng, hooks) {
+  // savedTable: optional World.serialize() array (Phase 12.9) — when present,
+  // the table restores exactly as left; otherwise it restocks fresh (v1
+  // behavior, still the fallback for a first run or a corrupt/missing record).
+  function View(canvas, game, rng, hooks, savedTable) {
     this.cv = canvas; this.g = game; this.rng = rng;
     this.hooks = hooks || {};
     this.ctx = canvas.getContext('2d');
-    this.world = new World(rng, {});
+    this.world = (savedTable && savedTable.length)
+      ? World.deserialize(rng, {}, savedTable)
+      : new World(rng, {});
     this.syncParams();
     this.time = 0;
     this.falling = [];             // visual-only falling coins after front exit
@@ -258,7 +294,11 @@
           var jps = g.groveRate('juice');
           label = '+' + U.fmt(g.gain('juice', Math.max(77, jps * sp.seconds), true)) + ' J';
         } else if (sp.kind === 'charm') {
-          var award = g.awardRandomCharm(this.rng);
+          // Charm draws are a collection-system event, not dozer physics — use
+          // the charms stream (hooks.charmRng) so they never perturb the
+          // physics stream's sequence. Falls back to the physics stream when
+          // no charm stream is wired (e.g. ad-hoc test harnesses).
+          var award = g.awardRandomCharm(this.hooks.charmRng || this.rng);
           label = award.refined ? '+' + U.fmt(award.refined) + ' G refined' : award.charm.name + '!';
           if (this.hooks.onCharm) this.hooks.onCharm(award);
         }
