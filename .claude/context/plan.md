@@ -13,7 +13,7 @@ This document is the single source of truth for vision, scope, math, and executi
 **big-vision plan written as an agile handoff document**: it is designed to be executed by any competent implementer, human or AI,
 without access to the original authors. It contains a handoff protocol (§0), reference sections
 (research, art, design, math, architecture §1–§9, algorithms §10, industry pitfalls §11, judgment
-notes §12), followed by **30 phases (epics) × 10 features (stories) × 10 tasks = 3,000 tasks**.
+notes §12), followed by **32 phases (epics) × 10 features (stories) × 10 tasks = 3,200 tasks**.
 
 ## The Vision (read me first)
 
@@ -40,12 +40,26 @@ probability is published, every economy claim is machine-verified, and the only 
   releases, a designed endgame, date-seeded seasons, modding and community governance. The game
   becomes *self-sustaining* — and Phase 30.10 decides what v2 even is.
 
+- **Horizon 4 — The Postcard Era (Phases 31–32).** Generated art (an OpenRouter / Nano Banana 2
+  dev-time pipeline for fruit, slot icons, coins and backdrops — with the canvas painters kept as
+  eternal fallback) and unlockable **holiday destinations** that turn theming into progression:
+  the game becomes a *place you travel to*.
+
 **Non-goals, forever:** monetization of any kind, accounts, servers, telemetry, time pressure,
 FOMO. If a future idea needs one of these, the idea is wrong for Triple7.
 
+**Current priority directives (set 2026-07; re-order here as the game evolves):**
+1. ⭐ **Phase 8 — staged Match-3 animations.** HIGH priority, first among all open work. v1
+   resolves cascades instantly (§12.3); replacing that with staged swap→clear→fall→refill
+   animation is the single biggest feel win available.
+2. **Phase 31 — generated art pipeline** (OpenRouter, Nano Banana 2): real sprite art for fruits,
+   slot symbols, coins and destination backdrops, generated at dev time, shipped as static files.
+3. **Phase 32 — holiday destinations**: theming as an unlockable progression layer.
+
 ### Status Ledger — repo vs vision
 
-Legend: ✅ core shipped (audit, then finish the phase) · 🟡 partially shipped · 🔭 pure vision.
+Legend: ✅ core shipped (audit, then finish the phase) · 🟡 partially shipped · 🔭 pure vision ·
+⭐ current top priority.
 Update this table as work lands on `main`; it is the honest boundary between game and dream.
 
 | Phase | Status | Phase | Status | Phase | Status |
@@ -57,11 +71,12 @@ Update this table as work lands on `main`; it is the honest boundary between gam
 | 5 Economy Core | ✅ | 15 Charms | ✅ | 25 Performance | 🔭 |
 | 6 Save System | ✅ | 16 Shop & Upgrades | ✅ | 26 Testing & QA | 🔭 |
 | 7 Match-3 Core | ✅ | 17 Achievements | ✅ | 27 Deploy & Docs | 🔭 |
-| 8 Match-3 Juice | 🟡 | 18 Automation | 🟡 | 28 Endgame | 🔭 |
+| 8 Match-3 Juice | 🟡 ⭐ | 18 Automation | 🟡 | 28 Endgame | 🔭 |
 | 9 Slot Core | ✅ | 19 Audio | 🟡 | 29 Live-ish Content | 🔭 |
 | 10 Slot Presentation | ✅ | 20 Particles & Feel | 🟡 | 30 Community & v2 | 🔭 |
+| 31 Generated Art | 🔭 | 32 Destinations | 🔭 |  |  |
 
-All 3,000 tasks are unchecked; check them off as work lands on `main`.
+All 3,200 tasks are unchecked; check them off as work lands on `main`.
 
 ## 0. How to Use This Document (Agile Handoff Protocol)
 
@@ -71,9 +86,9 @@ Read this section first; it defines the vocabulary and the rules everything belo
 
 | Plan element | Agile term | Description lives in | Count |
 |---|---|---|---|
-| `## Phase N` | Epic | `Goal:` (intent) + `Deliverable:` (definition of done) | 30 |
-| `### Feature N.M` | Story | `Story:` line under the heading (intent + acceptance) | 300 |
-| `- [ ]` line | Task | the line itself — one concrete, commit-sized unit | 3,000 |
+| `## Phase N` | Epic | `Goal:` (intent) + `Deliverable:` (definition of done) | 32 |
+| `### Feature N.M` | Story | `Story:` line under the heading (intent + acceptance) | 320 |
+| `- [ ]` line | Task | the line itself — one concrete, commit-sized unit | 3,200 |
 
 **Execution order.** Phases are dependency-ordered; execute top to bottom. Within a phase, read all
 10 stories before starting — they are ordered but lightly coupled. Within a story, tasks are ordered.
@@ -93,7 +108,9 @@ everything is new work. Never assume a task is done because the phase "sounds sh
 2. Outcomes are decided *before* presentation begins; animation may never alter a result (§11.2).
 3. No backward currency conversion — G→S and S→J must remain impossible.
 4. No build step: `index.html` + classic `<script>` files must run from `file://` and GitHub Pages as-is.
-5. No runtime network calls, no telemetry; saves live in the player's browser only.
+5. No runtime network calls, no telemetry; saves live in the player's browser only. (Dev-time
+   tools — e.g. the Phase 31 art pipeline calling OpenRouter — may use the network; the shipped
+   game never does, and must keep working with zero generated assets present.)
 6. Save compatibility: an older exported code must always import (write a migration, never break parsing).
 7. Every tuned number lives in `js/data.js`; logic reads constants and never hardcodes them.
 8. Free forever: no ads, no purchases, no dark patterns (no streak pressure, no FOMO-exclusive power).
@@ -787,6 +804,8 @@ The judgment calls, traps, and bookkeeping an implementer must carry across all 
 | Multiplier sources | §10.7 formula, upgrade-sweep ceiling (§11.8) |
 | Number magnitudes beyond 1e30 | extend `SUFFIXES` in util.js (currently caps at Oc = 1e27·k) |
 | Any player-facing string | strings table once Phase 30.4 lands |
+| Generated art (Phase 31) | regenerate via the prompt manifest; verify canvas fallback still renders everything |
+| Destination palettes/bonuses (Phase 32) | contrast audit per destination; RTP sims if any bonus touches the economy |
 
 Also track: localStorage can throw in private mode (all saves are try/caught — keep it that way);
 DPR is capped at 2 for canvas memory; `MAX_COINS = 90` includes specials; `playSec` accrues only
@@ -837,7 +856,7 @@ while visible (by design — offline time is credited separately).
   streaks that break, limited-time power. The fantasy is a sunny shelf of glass fruit, not a casino
   floor — the casino math serves the coziness, never the reverse.
 
-# The 30 Phases
+# The 32 Phases
 
 > **Reminder:** these phases chart the full vision, not the current inventory. The shipped v1 is a
 > slice through Horizons 1–2 (see the Status Ledger). A task being listed — even in Phase 1 — does
@@ -1932,6 +1951,11 @@ Story: Deadlocks fix themselves silently. Done when reshuffle produces a valid b
 - [ ] Count reshuffles in stats (rare-event sanity metric)
 
 ## Phase 8 — Match-3 Juice & Specials
+
+**Priority: ⭐ HIGH — first among all open work (see Vision → priority directives).** v1 resolves
+cascades in one tick with only a pop; this phase replaces that with a fully staged animation
+pipeline — swap → clear pop → fall → refill → next cascade, each step eased and voiced — while
+`resolveMove()` stays the byte-identical logic oracle for sims and tests (§12.3).
 
 Goal: the faucet made delightful — cascade celebration, specials, hints, glass-fruit rendering.
 Deliverable: Juicy Grove looks/feels finished: tweens, particles hooks, popups, hint idle timer.
@@ -5498,3 +5522,320 @@ Story: v2 is a decision, not a drift. Done when the 4th-machine RFC resolves go/
 - [ ] If go: author Phases 31–36 in this plan following the same 10×10 format
 - [ ] If no-go: document why and redirect energy to live-ish depth
 - [ ] Celebrate the journey: v2 announcement draft referencing v1's numbers 🍒☀★
+
+## Phase 31 — Generated Art Pipeline (OpenRouter · Nano Banana 2)
+
+Goal: real painted-glass sprite art — fruits, slot symbols, coins, backdrops — generated at dev
+time through OpenRouter's image API (Google's "Nano Banana 2" image model), shipped as ordinary
+static files, with the existing canvas painters kept forever as the zero-asset fallback.
+Deliverable: `tools/genart/` produces the full sprite set from a versioned prompt manifest; the
+game auto-uses sprites when present and draws canvas art when not; invariant 5 (no runtime
+network) untouched.
+
+### Feature 31.1 — OpenRouter Client
+
+Story: A tiny dev-only client turns prompts into images. Done when tools/genart/client.js calls OpenRouter's image endpoint with retries and zero runtime footprint.
+
+- [ ] tools/genart/client.js: Node https wrapper for OpenRouter chat/images API, no dependencies
+- [ ] Model id in one constant: google/gemini-3-pro-image-preview ("Nano Banana 2" — verify current id at build time)
+- [ ] API key from OPENROUTER_API_KEY env var only; never read from or written to any repo file
+- [ ] Request shape: prompt + size + transparent-background directive per asset spec
+- [ ] Retry with exponential backoff (2/4/8/16 s) on 429/5xx; hard fail with readable message otherwise
+- [ ] Cost guard: print token/image cost estimate and require --yes above a configurable budget
+- [ ] Response decoding: base64 → PNG file under tools/genart/out/raw/
+- [ ] Dry-run mode prints prompts without calling the API (CI-safe)
+- [ ] Client unit-tested against a mocked HTTP layer (no live calls in npm test)
+- [ ] README section: setup, key handling, cost expectations, and the dev-time-only rule
+
+### Feature 31.2 — Prompt Library & Style Bible
+
+Story: One style, many assets — prompts as versioned data. Done when tools/genart/prompts.js encodes the wet-glassy-fruit style and every asset's prompt derives from it.
+
+- [ ] STYLE_BIBLE constant: wet glass-candy material, bright sun, heavy reds/greens, soft specular, cozy
+- [ ] Per-asset prompt = STYLE_BIBLE + subject fragment + framing/size/transparency directives
+- [ ] Negative directives: no text, no watermark, no photorealism, no busy backgrounds
+- [ ] Prompt manifest lists every asset id with prompt, size, and output path (single source of truth)
+- [ ] Seed/reference-image slots reserved for consistency runs (feed prior renders as style refs)
+- [ ] Palette anchors embedded in prompts from data.js token hexes (cherry #e8283c, etc.)
+- [ ] Prompt linting: every manifest entry names subject, material, background, size
+- [ ] Manifest versioned: bump on any prompt change so regen diffs are attributable
+- [ ] Sample gallery doc showing accepted vs rejected renders per prompt iteration
+- [ ] Prompts reviewed against the theme section (§2) for vocabulary consistency
+
+### Feature 31.3 — Match-3 Fruit Sprite Set
+
+Story: The six fruits become painted glass. Done when cherry/lemon/melon/berry/orange/plum plus Burst and Rainbow render as sprites with silhouettes matching the canvas originals.
+
+- [ ] Generate 6 fruit sprites at 256px transparent PNG, one per data.js fruit
+- [ ] Silhouette parity: each sprite's outline matches its canvas painter shape (colorblind identity preserved)
+- [ ] Burst variant: fruit with a white shimmer ring baked or composited
+- [ ] Rainbow orb sprite with iridescent gradient
+- [ ] Selection/hint states remain renderer overlays (no extra sprite variants needed — verify)
+- [ ] Downscale set generated: 128/64px buckets for small boards
+- [ ] Contrast check of every sprite against the board tray background
+- [ ] A/B screenshot: sprite board vs canvas board, reviewed for identity drift
+- [ ] Sprites wired through the loader (31.8) behind the fruit ids
+- [ ] Fallback verified: deleting the sprite folder restores canvas fruit seamlessly
+
+### Feature 31.4 — Slot Symbol Set
+
+Story: The reels get cabinet-grade icons. Done when all six symbols render as sprites on the reels with the seven staying typographic-red and legible at speed.
+
+- [ ] Generate seven/star/berry/melon/lemon/cherry symbol sprites, 256px transparent
+- [ ] The seven: glossy red numeral with rim light — must read at 50% blur (motion test)
+- [ ] Symbol sprites visually heavier than match-3 fruit (cabinet contrast rules)
+- [ ] Cylinder squash applied to sprites at draw time (no pre-squashed variants)
+- [ ] Payline highlight compatible: sprites pop above shading on wins
+- [ ] Motion-blur variant or draw-twice technique validated with sprites
+- [ ] Paytable dialog reuses the same sprites at list size
+- [ ] Reel strip render perf measured with sprites (must beat or match path drawing)
+- [ ] A/B with canvas symbols; near-miss legibility verified
+- [ ] Fallback verified per-symbol (mixed sprite/canvas reels must still align)
+
+### Feature 31.5 — Coin & Dozer Sprites
+
+Story: The dozer's cast gets minted. Done when coin faces and all four specials render as sprites in perspective without breaking the ellipse-squash pseudo-3D.
+
+- [ ] Gold 7-coin face sprite + rim treatment compatible with the thickness illusion
+- [ ] Perspective handled at draw time (single face sprite, ellipse-scaled — no per-angle renders)
+- [ ] Special sprites: gem-fruit, charm chest, juice bottle, sun pouch at 256px transparent
+- [ ] Glow/pulse remains a renderer overlay on top of sprites
+- [ ] Scale buckets pre-rendered for the 6 depth sizes used by the projection
+- [ ] Falling-coin tumble: rim-over-face animation validated with the sprite
+- [ ] Pile readability check at max coin density (90 coins)
+- [ ] Table/pusher backdrop textures generated (subtle, non-busy) with plain-color fallback
+- [ ] Perf: sprite blits vs gradient paths measured at worst case
+- [ ] Fallback verified with sprites absent
+
+### Feature 31.6 — UI, Charm & Destination Art
+
+Story: Meta screens get postcard art. Done when charms, jars, brag cards and Phase 32 destinations draw from generated art with graceful text-only fallbacks.
+
+- [ ] 28 charm illustrations replacing OS emoji glyphs (fixes §12.3 emoji portability)
+- [ ] Charm rarity framing baked consistently (border treatments per rarity)
+- [ ] Preserve jar art set (bronze/silver/gold lids) for Phase 28.4
+- [ ] Brag-card backdrop art (1200×630) for Phase 30.3
+- [ ] Destination backdrop set commissioned per Phase 32 destination list (sky, horizon, motif)
+- [ ] Empty-state illustrations for cabinet/shop/grove (Phase 22.8)
+- [ ] Favicon/social-preview art regenerated from the fruit set
+- [ ] All meta art passes the contrast audit over every palette
+- [ ] Loader treats every meta image as optional (text/emoji fallback path tested)
+- [ ] Asset inventory doc: every generated file, its prompt id, and its fallback
+
+### Feature 31.7 — Post-Processing Pipeline
+
+Story: Raw renders become shippable sprites automatically. Done when one command trims, resizes, packs and budget-checks every asset from out/raw to assets/.
+
+- [ ] tools/genart/process.js: trim transparent borders, center, pad to power-of-two canvas
+- [ ] Resize to declared buckets with high-quality downscale
+- [ ] Sprite-sheet packer emitting sheet PNG + JSON atlas (id → rect)
+- [ ] Palette conformance check: dominant hues within tolerance of data.js tokens, else flag
+- [ ] Background-bleed detector: reject sprites with non-transparent halos
+- [ ] PNG optimization pass; per-asset and total size budgets enforced (total ≤ 3 MB)
+- [ ] Deterministic output ordering so regen diffs are reviewable
+- [ ] npm run genart chains client → process → verify with a summary table
+- [ ] Unit tests for trim/pack/atlas math on fixture images
+- [ ] Processed assets land in assets/ (new top-level dir), raw renders stay gitignored
+
+### Feature 31.8 — Runtime Sprite Loader & Canvas Fallback
+
+Story: Sprites are a bonus, never a dependency. Done when the game upgrades to sprites when assets/ exists and draws canvas art identically when it does not.
+
+- [ ] js/sprites.js: atlas JSON + sheet loader with per-image onload registry
+- [ ] Loader is lazy and non-blocking: first frames always render via canvas painters
+- [ ] drawFruit/drawSymbol/drawCoin call sites route through one sprite-or-painter switch
+- [ ] Missing/failed/partial assets degrade per-asset, not all-or-nothing
+- [ ] file:// operation verified (no fetch of missing files spamming errors; use Image onerror)
+- [ ] No layout/gameplay dependence on sprite dimensions (logic never reads asset sizes)
+- [ ] Settings toggle: "Illustrated art" on/off (off = canvas painters, for purists and perf)
+- [ ] Memory: sheets ≤ 2 textures resident per scene; DPR-aware selection of buckets
+- [ ] Playwright journey runs twice: with assets present and with assets/ deleted
+- [ ] README + fork guide updated: forks work with or without regenerating art
+
+### Feature 31.9 — Provenance & Licensing Manifest
+
+Story: Every AI image is accountable. Done when each shipped asset records model, prompt, date and hash, and the repo states its AI-art licensing position.
+
+- [ ] assets/MANIFEST.json: per-asset model id, prompt-manifest version, generation date, sha256
+- [ ] Manifest generated by the pipeline, verified by npm run verify (hash match)
+- [ ] NOTICE updated: assets generated via OpenRouter (Nano Banana 2), prompts in-repo
+- [ ] License review: confirm generated-output terms permit Apache-2.0 redistribution; document conclusion
+- [ ] Human-review gate recorded per asset (reviewer + date) before shipping
+- [ ] Style-similarity pass: reject renders that imitate identifiable artists or franchises
+- [ ] Prompt manifest itself Apache-2.0 licensed (prompts are code)
+- [ ] Regeneration reproducibility caveat documented (model updates change outputs)
+- [ ] Contributor doc: how to propose art changes (edit prompts, not pixels)
+- [ ] docs/credits.md gains a generated-art section
+
+### Feature 31.10 — Regeneration Discipline & QA
+
+Story: Art regen is a controlled release, not a dice roll. Done when regenerating any asset follows a reviewed, diffed, budgeted process that can never touch the runtime invariants.
+
+- [ ] Regen workflow doc: edit prompt → dry-run → generate → process → visual diff → review → commit
+- [ ] Visual diff tool: side-by-side old/new grid image for the PR
+- [ ] Partial regen: --only <asset-id> regenerates one asset without touching others
+- [ ] Style-drift canary: fixed reference prompt rendered each regen run and compared over time
+- [ ] Full-set regen rehearsed once; time and cost recorded in the doc
+- [ ] Asset budget re-checked in CI-less verify (size, count, atlas integrity)
+- [ ] Runtime network audit re-run: shipped game makes zero requests with and without assets
+- [ ] Screenshot matrix refreshed after any accepted regen
+- [ ] Rollback path: git revert of assets/ restores prior art with no code change
+- [ ] Balance-log-style entry per regen (what changed visually and why)
+
+## Phase 32 — Holiday Destinations (Theming as Progression)
+
+Goal: theming becomes the long-game reward — seven unlockable holiday destinations that repaint
+sky, boards, cabinet, harbor and ambience, earned with Stargems and milestones, composing with
+seasons (29.2) and theme packs (30.5). Cosmetic-first: any gameplay bonus stays tiny and simulated.
+Deliverable: a Passport screen where players travel between unlocked destinations; each destination
+is a data-driven token set + backdrop art; all economy invariants untouched.
+
+### Feature 32.1 — Destination Data Model
+
+Story: A destination is data, not code. Done when data.js DESTINATIONS defines palette, sky, ambience, skins and unlock terms for every destination the renderer can consume.
+
+- [ ] DESTINATIONS block: id, name, tagline, palette overrides, sky params, ambience params, unlock cost/condition
+- [ ] Token override mechanism layered under season overlays (destination base → season tint → theme pack)
+- [ ] Fruit/symbol identity hues locked (recognition invariant — destinations may not recolor gameplay meaning)
+- [ ] Backdrop art reference per destination (Phase 31.6) with gradient-only fallback
+- [ ] Ambience params: cloud style, water hue, sun/moon variant, particle flavor
+- [ ] Validation at boot: malformed destination disables itself gracefully
+- [ ] Active destination persisted in save; default = Sunny Harbor
+- [ ] Export/import round-trips destination and unlock states
+- [ ] Unit tests: override layering order and validation
+- [ ] Doc section in architecture.md: how a destination composes
+
+### Feature 32.2 — The Seven Destinations
+
+Story: Seven places worth earning. Done when seven designed destinations ship with distinct palettes, moods and taglines, documented with reference screenshots.
+
+- [ ] Sunny Harbor (default): the current look, canonized as destination #1
+- [ ] Tropic Atoll: turquoise water, palm silhouettes, mango-gold light
+- [ ] Riviera Boardwalk: cream & azure, striped parasols, brass cabinet trim
+- [ ] Blossom Springs: sakura pinks, soft mist, lantern glow accents
+- [ ] Alpine Lake: crisp blues, snow peaks, glacial glass tint
+- [ ] Desert Oasis: amber dunes, date-palm greens, warm night option
+- [ ] Midnight Aurora: deep navy, aurora ribbons, star-glass sparkle (doubles as dark mode)
+- [ ] Each destination: palette table + mood paragraph + accepted backdrop render
+- [ ] Contrast audit passed for all seven (23.5 checklist per destination)
+- [ ] Reference screenshot set committed for regression comparison
+
+### Feature 32.3 — Unlock Progression
+
+Story: Travel is earned in sevens. Done when destinations unlock via Stargem fares and milestones on a curve that paces the mid-game without gating any mechanic.
+
+- [ ] Unlock fares in sevens: 77 / 210 / 490 / 777 / 1,470 / 2,177 G (tune via progression bot)
+- [ ] Alternate unlock conditions where thematic (Midnight Aurora at 7 preserves, Blossom at set completion)
+- [ ] Fares are pure sinks (no power sold) — sink-coverage sim updated
+- [ ] Unlocks permanent, prestige-proof, and recorded in lifetime stats
+- [ ] Locked destinations visible in the Passport with honest fare/condition
+- [ ] Unlock moment: ticket-stamp ceremony + toast + achievement hooks
+- [ ] Pacing target: second destination reachable in the first long session; all seven by lap 3
+- [ ] Progression bot extended to buy destinations on its ROI-neutral path
+- [ ] Tests: unlock persistence, fare spend path, condition triggers
+- [ ] Balance-log entry with the fare curve rationale
+
+### Feature 32.4 — Passport & Travel UI
+
+Story: Choosing where to play feels like planning a holiday. Done when a Passport screen previews, unlocks and switches destinations with polish and accessibility.
+
+- [ ] Passport panel: destination cards with backdrop preview, tagline, unlock state
+- [ ] Instant travel switch with a soft crossfade (reduced-motion: hard cut)
+- [ ] Preview mode: peek at a locked destination for 10 s without unlocking
+- [ ] Stamp visual per unlocked destination (ties into souvenirs 32.8)
+- [ ] Keyboard/screen-reader navigable card list
+- [ ] Current destination shown subtly in the header
+- [ ] Passport reachable from settings and grove (travel agency flavor)
+- [ ] Empty-state coaching for the first visit (22.8 pattern)
+- [ ] Playwright journey: preview → unlock → travel → reload persists
+- [ ] Screenshots per destination for docs
+
+### Feature 32.5 — Sky & Ambience Retheming
+
+Story: Each destination owns its weather. Done when sky, clouds, water and light are driven entirely by destination params with seasons layering on top.
+
+- [ ] Sky gradient/sun/moon rendered from destination params (no hardcoded day look)
+- [ ] Cloud/star/aurora systems selected per destination from the particle engine
+- [ ] Dozer water hue and lip glow themed per destination
+- [ ] Season overlay (29.2) composes on top: e.g. Frost Glass over Tropic Atoll — verified sane
+- [ ] Ambient audio params themed (19.9 hooks): warmer/cooler synth palettes per destination
+- [ ] Transition crossfade budgeted and reduced-motion compliant
+- [ ] Golden Hours (29.5) tint correctly in every destination
+- [ ] Perf: retheme costs zero steady-state frames (token swap, not new systems)
+- [ ] Visual regression screenshots across destinations × seasons
+- [ ] Tuning doc records every ambience param
+
+### Feature 32.6 — Game-Surface Reskins
+
+Story: The machines travel too. Done when board tray, slot cabinet and dozer table pick up destination materials while gameplay reads identically everywhere.
+
+- [ ] Match-3 tray/tile tint from destination tokens (checker contrast preserved)
+- [ ] Slot cabinet material per destination (brass/bamboo/frost variants via palette, art optional)
+- [ ] Dozer table bed and rails themed; gutter warning color kept universal (safety consistency)
+- [ ] Fruit/symbol/coin sprites unchanged across destinations (identity invariant, re-asserted)
+- [ ] Optional micro-flourishes per destination (parasol on the actionbar, lantern by the tabs)
+- [ ] All reskins token-driven; zero per-destination draw code paths
+- [ ] Colorblind + contrast audits re-run per destination surface
+- [ ] Hit-areas and legibility verified unchanged (automated click sweep per destination)
+- [ ] Perf parity measured across destinations
+- [ ] A/B screenshots reviewed against "same game, new postcard" bar
+
+### Feature 32.7 — Destination Flavors (tiny, honest bonuses)
+
+Story: A pinch of mechanical flavor, never power. Done when each destination carries at most one ±7%-scale cosmetic-adjacent flavor, all simulated within global RTP ceilings.
+
+- [ ] Flavor list: e.g. Atoll +7% juice-bottle value, Aurora +1% special chance at night, Riviera cheaper chest by 7 G
+- [ ] Hard cap: no flavor may move any stage RTP by more than 2 points (sim-asserted)
+- [ ] Flavors disclosed on the Passport card in plain numbers
+- [ ] Upgrade-sweep (24.2) extended across destination flavors; ceilings hold
+- [ ] No flavor stacks with challenge modifiers in degenerate ways (matrix sim)
+- [ ] Flavor constants in data.js under the destination entry
+- [ ] Toggle: players may disable flavors for pure-cosmetic travel (fairness option)
+- [ ] Tests: flavor application, cap assertion, toggle behavior
+- [ ] Fairness doc updated with the flavor table
+- [ ] Balance-log entry; revisit after live sims
+
+### Feature 32.8 — Souvenirs & Stamps
+
+Story: Each destination remembers your stay. Done when per-destination souvenirs and passport stamps track visits and milestones, feeding the collection metagame.
+
+- [ ] Stamp earned on first unlock + travel to each destination
+- [ ] Souvenir charm per destination (7 new charms forming a Souvenirs shelf, +2% all each, rarity 3)
+- [ ] Souvenir sources: milestone play within that destination (e.g. jackpot at the Atoll)
+- [ ] Souvenir shelf UI beside the charm cabinet, glassy postcard styling
+- [ ] Stats: per-destination playtime and earnings tracked compactly
+- [ ] Achievements: first travel, three stamps, full passport (7/7)
+- [ ] Souvenirs persist through prestige like charms
+- [ ] Charm-fairness sims (24.5) extended to souvenir sources
+- [ ] Tests: stamp triggers, souvenir awards, persistence
+- [ ] Docs: souvenir table with sources and bonuses
+
+### Feature 32.9 — Composition with Seasons & Theme Packs
+
+Story: One theming pipeline, three layers, no conflicts. Done when destination + season + theme pack compose deterministically and every combination stays readable.
+
+- [ ] Layer order canonized: destination base → season overlay → theme pack override → user toggles
+- [ ] 29.2 seasons refactored to overlays over the active destination (not absolute palettes)
+- [ ] 30.5 theme packs re-scoped: packs may replace layers but must declare which
+- [ ] Combination matrix (7 destinations × 4 seasons) contrast-audited by script
+- [ ] Degenerate combos (dark-on-dark) auto-corrected by scrim rules
+- [ ] Live-content calendar (29.7) shows season effects in destination context
+- [ ] Settings preview shows the composed result before applying
+- [ ] Token pipeline documented with a layering diagram in architecture.md
+- [ ] Tests: layering order, declared-scope enforcement, matrix audit runner
+- [ ] Screenshot matrix archived per release
+
+### Feature 32.10 — Destination QA & Ship Gate
+
+Story: Travel ships only when every postcard is solid. Done when all destinations pass audits, sims, performance and journey tests, and the ledger marks Phase 32 shipped.
+
+- [ ] Full audit sweep: contrast, colorblind, reduced-motion across all seven destinations
+- [ ] Economy sims green with all flavors active and toggled off
+- [ ] Perf matrix run in the heaviest destination (Aurora particle load)
+- [ ] Playwright journeys: unlock path, travel persistence, flavor toggle, souvenir award
+- [ ] Save migration fixtures updated with destination fields
+- [ ] Mobile pass across three destinations minimum
+- [ ] Docs: destination guide with screenshots and flavor table
+- [ ] README media refreshed featuring two destinations
+- [ ] Balance-log + changelog entries; version tagged
+- [ ] Status Ledger updated: Phase 32 ✅ when every box above is real
