@@ -179,6 +179,14 @@ def has_alpha(img):
 # skip the hole punch and trust the border flood alone.
 NO_HOLE_PUNCH = {"charms/aurorapeach"}
 
+# Every sprite is finished on a white rounded card so keying flaws (punched
+# holes, missed white slivers) can never show against the game's blue UI.
+# Exception: the dozer table coins stay free-floating discs — a white tile in
+# the coin pile would read wrong — so their interior gaps are filled white.
+NO_CARD = {"coin7", "coin21", "coin49"}
+CARD_RADIUS = 0.24     # corner radius as a fraction of the card side
+CARD_CONTENT = 0.84    # subject size as a fraction of the card side
+
 
 def key_out_white(img, punch_holes=True):
     """Remove the painted fake-transparency background: flood neutral tones
@@ -255,20 +263,64 @@ def key_out_white(img, punch_holes=True):
     return img
 
 
-def process(raw_path, out_path, size=256, punch_holes=True):
+def fill_holes_white(img):
+    """Turn enclosed transparent pixels opaque white (composited under the
+    original color) so cardless sprites have no see-through gaps."""
+    w, h = img.size
+    px = img.load()
+    outside = bytearray(w * h)
+    q = deque()
+    for x in range(w):
+        q.append((x, 0)); q.append((x, h - 1))
+    for y in range(h):
+        q.append((0, y)); q.append((w - 1, y))
+    while q:
+        x, y = q.popleft()
+        i = y * w + x
+        if outside[i] or px[x, y][3] >= 250:
+            continue
+        outside[i] = 1
+        if x > 0: q.append((x - 1, y))
+        if x < w - 1: q.append((x + 1, y))
+        if y > 0: q.append((x, y - 1))
+        if y < h - 1: q.append((x, y + 1))
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a < 255 and not outside[y * w + x]:
+                f = a / 255.0
+                px[x, y] = (int(r * f + 255 * (1 - f)),
+                            int(g * f + 255 * (1 - f)),
+                            int(b * f + 255 * (1 - f)), 255)
+    return img
+
+
+def process(raw_path, out_path, size=256, punch_holes=True, card=True):
+    from PIL import ImageDraw
     img = Image.open(raw_path).convert("RGBA")
     if not has_alpha(img):
         print("  no alpha in render — keying out white background")
         img = key_out_white(img, punch_holes)
-    # trim to content bounding box, then pad to square and downscale
+    # trim to content bounding box, then pad to square
     bbox = img.getchannel("A").getbbox()
     if bbox:
         img = img.crop(bbox)
     side = max(img.size)
-    pad = int(side * 0.06)
-    canvas = Image.new("RGBA", (side + 2 * pad,) * 2, (0, 0, 0, 0))
-    canvas.paste(img, ((canvas.width - img.width) // 2, (canvas.height - img.height) // 2))
-    canvas = canvas.resize((size, size), Image.LANCZOS)
+    square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    square.paste(img, ((side - img.width) // 2, (side - img.height) // 2))
+    if card:
+        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        ImageDraw.Draw(canvas).rounded_rectangle(
+            [0, 0, size - 1, size - 1], radius=int(size * CARD_RADIUS), fill=(255, 255, 255, 255))
+        content = int(size * CARD_CONTENT)
+        scaled = square.resize((content, content), Image.LANCZOS)
+        canvas.paste(scaled, ((size - content) // 2, (size - content) // 2), scaled)
+    else:
+        square = fill_holes_white(square)
+        pad = int(side * 0.06)
+        canvas = Image.new("RGBA", (side + 2 * pad,) * 2, (0, 0, 0, 0))
+        canvas.paste(square, (pad, pad))
+        canvas = canvas.resize((size, size), Image.LANCZOS)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     canvas.save(out_path)
     print("  ->", out_path, canvas.size)
@@ -289,4 +341,5 @@ if __name__ == "__main__":
             with open(raw, "wb") as f:
                 f.write(data)
             print("  raw", len(data), "bytes")
-        process(raw, os.path.join(OUT_DIR, aid + ".png"), punch_holes=aid not in NO_HOLE_PUNCH)
+        process(raw, os.path.join(OUT_DIR, aid + ".png"),
+                punch_holes=aid not in NO_HOLE_PUNCH, card=aid not in NO_CARD)
