@@ -37,8 +37,31 @@
       ui.activeTab = tab;
       T7.audio.unlock();
     }
+    // Shop menu (Grove/Charms/Shop): a hamburger disclosure standing in for
+    // three more nav buttons, so the header stays 3 games + one icon instead
+    // of 6 buttons crowding one row.
+    var shopBtn = $('btn-shopmenu'), shopPanel = $('shopmenu-panel');
+    function closeShopMenu() {
+      shopPanel.classList.add('hidden');
+      shopBtn.setAttribute('aria-expanded', 'false');
+    }
+    function openShopMenu() {
+      shopPanel.classList.remove('hidden');
+      shopBtn.setAttribute('aria-expanded', 'true');
+    }
+    shopBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (shopPanel.classList.contains('hidden')) openShopMenu(); else closeShopMenu();
+    });
+    document.addEventListener('click', function (e) {
+      if (!shopPanel.classList.contains('hidden') && !e.target.closest('.shopmenu')) closeShopMenu();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !shopPanel.classList.contains('hidden')) { closeShopMenu(); shopBtn.focus(); }
+    });
+
     tabBtns.forEach(function (btn) {
-      btn.addEventListener('click', function () { activateTab(btn.dataset.tab); });
+      btn.addEventListener('click', function () { activateTab(btn.dataset.tab); closeShopMenu(); });
     });
     ui.activeTab = 'match3';
 
@@ -51,7 +74,12 @@
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (e.key >= '1' && e.key <= String(tabBtns.length)) {
         var btn = tabBtns[+e.key - 1];
-        if (btn) { activateTab(btn.dataset.tab); btn.focus(); }
+        if (btn) {
+          activateTab(btn.dataset.tab); btn.focus();
+          // A menu tab jumped to by number needs its disclosure open so the
+          // now-focused/active button is actually visible, not hidden.
+          if (btn.closest('.shopmenu-panel')) openShopMenu(); else closeShopMenu();
+        }
         return;
       }
       if (document.activeElement && document.activeElement.getAttribute('role') === 'tab') {
@@ -60,6 +88,7 @@
         if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
           var next = tabBtns[(idx + (e.key === 'ArrowRight' ? 1 : tabBtns.length - 1)) % tabBtns.length];
           activateTab(next.dataset.tab); next.focus();
+          if (next.closest('.shopmenu-panel')) openShopMenu(); else closeShopMenu();
           e.preventDefault();
         }
       }

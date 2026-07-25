@@ -26,8 +26,16 @@
   <div class="cloud c3"></div>
 </div>
 
+<div id="fixedhead">
 <header id="topbar">
-  <h1 class="logo"><img class="logomark" src="assets/sprites/strawberry.png" alt="" width="44" height="44">Triple<span class="seven">7</span></h1>
+  <div class="headtop">
+    <h1 class="logo"><img class="logomark" src="assets/sprites/strawberry.png" alt="" width="44" height="44">Triple<span class="seven">7</span></h1>
+    <div class="headbtns">
+      <button id="btn-daily" class="iconbtn dailybtn hidden" title="Claim your Daily Squeeze — a small free gift, once per day, no streak to break"><img src="assets/sprites/droplet.png" alt="Claim Daily Squeeze"></button>
+      <button id="btn-passport" class="iconbtn" title="Passport — travel between unlocked destinations"><img src="assets/sprites/compass.png" alt="Passport"></button>
+      <button id="btn-settings" class="iconbtn" title="Settings, save &amp; about"><img src="assets/sprites/gear.png" alt="Settings"></button>
+    </div>
+  </div>
   <div id="hud">
     <div class="pill juice" id="pill-juice" title="Juice — squeeze it in the Grove match-3">
       <img class="cur-ic" src="assets/sprites/droplet.png" alt=""><b id="cur-juice">0</b><small id="rate-juice"></small>
@@ -39,19 +47,25 @@
       <img class="cur-ic" src="assets/sprites/gem.png" alt=""><b id="cur-stargem">0</b><small id="rate-stargem"></small>
     </div>
   </div>
-  <button id="btn-daily" class="iconbtn dailybtn hidden" title="Claim your Daily Squeeze — a small free gift, once per day, no streak to break"><img src="assets/sprites/droplet.png" alt="Claim Daily Squeeze"></button>
-  <button id="btn-passport" class="iconbtn" title="Passport — travel between unlocked destinations"><img src="assets/sprites/compass.png" alt="Passport"></button>
-  <button id="btn-settings" class="iconbtn" title="Settings, save &amp; about"><img src="assets/sprites/gear.png" alt="Settings"></button>
 </header>
 
 <nav id="tabs" role="tablist" aria-label="Games and panels">
   <button class="tab active" data-tab="match3" role="tab" id="tab-match3" aria-controls="panel-match3" aria-selected="true"><img class="tabicon" src="assets/sprites/cherry.png" alt=""> Match</button>
   <button class="tab" data-tab="slots" role="tab" id="tab-slots" aria-controls="panel-slots" aria-selected="false"><img class="tabicon" src="assets/sprites/sun.png" alt=""> Slots<span class="lock" id="lock-slots"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
   <button class="tab" data-tab="dozer" role="tab" id="tab-dozer" aria-controls="panel-dozer" aria-selected="false"><img class="tabicon" src="assets/sprites/star.png" alt=""> Dozer<span class="lock" id="lock-dozer"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
-  <button class="tab" data-tab="grove" role="tab" id="tab-grove" aria-controls="panel-grove" aria-selected="false"><img class="tabicon" src="assets/sprites/sprout.png" alt=""> Grove</button>
-  <button class="tab" data-tab="charms" role="tab" id="tab-charms" aria-controls="panel-charms" aria-selected="false"><img class="tabicon" src="assets/sprites/sparkle.png" alt=""> Charms</button>
-  <button class="tab" data-tab="shop" role="tab" id="tab-shop" aria-controls="panel-shop" aria-selected="false"><img class="tabicon" src="assets/sprites/arrowup.png" alt=""> Shop</button>
+
+  <div class="shopmenu">
+    <button id="btn-shopmenu" class="shopbtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="shopmenu-panel" title="Grove, Charms &amp; Shop">
+      <img class="tabicon" src="assets/sprites/arrowup.png" alt=""> <span class="hamlines" aria-hidden="true">☰</span>
+    </button>
+    <div id="shopmenu-panel" class="shopmenu-panel hidden">
+      <button class="tab" data-tab="grove" role="tab" id="tab-grove" aria-controls="panel-grove" aria-selected="false"><img class="tabicon" src="assets/sprites/sprout.png" alt=""> Grove</button>
+      <button class="tab" data-tab="charms" role="tab" id="tab-charms" aria-controls="panel-charms" aria-selected="false"><img class="tabicon" src="assets/sprites/sparkle.png" alt=""> Charms</button>
+      <button class="tab" data-tab="shop" role="tab" id="tab-shop" aria-controls="panel-shop" aria-selected="false"><img class="tabicon" src="assets/sprites/arrowup.png" alt=""> Shop</button>
+    </div>
+  </div>
 </nav>
+</div>
 
 <main>
   <section class="panel active" id="panel-match3" role="tabpanel" aria-labelledby="tab-match3" tabindex="0">

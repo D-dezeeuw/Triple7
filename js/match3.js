@@ -345,7 +345,7 @@
   };
 
   View.prototype.bindInput = function () {
-    var self = this, dragFrom = null;
+    var self = this, dragFrom = null, dragPointerId = null, dragX = 0, dragY = 0, swiped = false;
     function cellAt(ev) {
       var r = self.cv.getBoundingClientRect();
       var m = self.metrics();
@@ -353,20 +353,40 @@
       var y = Math.floor((ev.clientY - r.top - m.oy) / m.tile);
       return (x >= 0 && x < COLS && y >= 0 && y < ROWS) ? { x: x, y: y } : null;
     }
+    function neighbourOf(from, dx, dy) {
+      // Snap to the dominant axis neighbour — a diagonal flick still reads
+      // as one clean horizontal or vertical swipe, never a diagonal swap.
+      return Math.abs(dx) >= Math.abs(dy) ?
+        { x: from.x + Math.sign(dx), y: from.y } : { x: from.x, y: from.y + Math.sign(dy) };
+    }
     this.cv.addEventListener('pointerdown', function (ev) {
       if (self.busy) return;
       dragFrom = cellAt(ev);
+      if (!dragFrom) return;
+      dragPointerId = ev.pointerId; dragX = ev.clientX; dragY = ev.clientY; swiped = false;
+      self.cv.setPointerCapture(ev.pointerId);
+    });
+    // Swipe: fire the swap the instant the drag crosses a small directional
+    // threshold, rather than waiting for release — this is what makes a
+    // flick feel like a swipe instead of a tap-and-hold-then-release.
+    this.cv.addEventListener('pointermove', function (ev) {
+      if (!dragFrom || swiped || self.busy || ev.pointerId !== dragPointerId) return;
+      var m = self.metrics();
+      var dx = ev.clientX - dragX, dy = ev.clientY - dragY;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < m.tile * 0.34) return;
+      swiped = true;
+      self.trySwap(dragFrom, neighbourOf(dragFrom, dx, dy));
+      dragFrom = null;
     });
     this.cv.addEventListener('pointerup', function (ev) {
+      if (swiped) { swiped = false; dragFrom = null; return; }
       if (self.busy) { dragFrom = null; return; }
       var c = cellAt(ev);
       if (!c) { dragFrom = null; return; }
       if (dragFrom && (dragFrom.x !== c.x || dragFrom.y !== c.y)) {
-        // Drag: snap to the dominant axis neighbour.
-        var dx = c.x - dragFrom.x, dy = c.y - dragFrom.y;
-        var tx = dragFrom.x + (Math.abs(dx) >= Math.abs(dy) ? Math.sign(dx) : 0);
-        var ty = dragFrom.y + (Math.abs(dx) >= Math.abs(dy) ? 0 : Math.sign(dy));
-        self.trySwap(dragFrom, { x: tx, y: ty });
+        // A slow drag that never crossed the swipe threshold — still
+        // resolves as a swap on release, same as before this change.
+        self.trySwap(dragFrom, neighbourOf(dragFrom, c.x - dragFrom.x, c.y - dragFrom.y));
       } else if (self.sel && self.sel.x === c.x && self.sel.y === c.y) {
         // Tap a selected rainbow twice to detonate on itself? No — deselect.
         self.sel = null;
@@ -378,6 +398,7 @@
       }
       dragFrom = null;
     });
+    this.cv.addEventListener('pointercancel', function () { dragFrom = null; swiped = false; });
   };
 
   View.prototype.trySwap = function (a, b) {
@@ -436,10 +457,23 @@
         var share = Math.max(1, Math.round(pb.credited * st.juice / pb.totalJuice));
         this.spawnFloater(stepCentroid(st), '+' + U.fmtInt(share), st.chain);
         if (this.hooks.sfx) this.hooks.sfx(st.chain >= 3 ? 'cascade' : 'match');
-        // A Burst/Rainbow being born gets a sparkle burst; a Rainbow (the
-        // rarer 5-match) additionally earns a cozy-grade micro camera shake —
-        // a few pixels for a few frames, never anything sharp or violent.
+        // A colored particle burst per cleared tile — hued to what's actually
+        // leaving the board (each fruit's own color, gold for Burst, a
+        // cycling hue for Rainbow) so a clear reads by type at a glance
+        // rather than as one generic flash. st.pre is the snapshot from just
+        // before this step's clear, so it still holds each cell's fruit/sp.
         var self = this;
+        st.cleared.forEach(function (key) {
+          var p = key.split(','), gx = +p[0], gy = +p[1];
+          var prev = st.pre[gy][gx];
+          if (!prev) return;
+          var color = prev.sp === RAINBOW ? 'hsl(' + (Math.round(self.time * 140) % 360) + ',85%,60%)' :
+                      prev.sp === BURST ? '#ffcf4d' : D.MATCH3.FRUITS[prev.f].color;
+          self.spawnSparkles(gx, gy, color, 4);
+        });
+        // A Burst/Rainbow being born additionally gets its own warm sparkle
+        // burst; a Rainbow (the rarer 5-match) also earns a cozy-grade micro
+        // camera shake — a few pixels for a few frames, never anything sharp.
         (st.specials || []).forEach(function (sp) {
           self.spawnSparkles(sp.x, sp.y);
           if (sp.cell.sp === RAINBOW) self.triggerShake();
@@ -489,15 +523,22 @@
     });
   };
   var SPARKLE_T = 0.45;
+  var MAX_SPARKLES = 180;    // a big cascade clears many cells at once; cap
+                              // total particles so it can't runaway-allocate
   // Decorative-only burst: direction/speed use Math.random() (same precedent
   // as audio.js's noise texture) since this never touches gameplay fairness.
-  View.prototype.spawnSparkles = function (gx, gy) {
+  View.prototype.spawnSparkles = function (gx, gy, color, count) {
     var m = this.metrics();
     var cx = m.ox + (gx + 0.5) * m.tile, cy = m.oy + (gy + 0.5) * m.tile;
-    for (var i = 0; i < 7; i++) {
+    var n = count || 7;
+    for (var i = 0; i < n; i++) {
       var ang = Math.random() * Math.PI * 2;
       var spd = m.tile * (0.9 + Math.random() * 0.7);
-      this.sparkles.push({ x: cx, y: cy, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, t: 0 });
+      this.sparkles.push({ x: cx, y: cy, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, t: 0,
+                           color: color || '#fff8c4' });
+    }
+    if (this.sparkles.length > MAX_SPARKLES) {
+      this.sparkles.splice(0, this.sparkles.length - MAX_SPARKLES);   // oldest first — already faded most
     }
   };
   View.prototype.triggerShake = function () {
@@ -737,7 +778,7 @@
       var s = this.sparkles[i];
       var k = s.t / SPARKLE_T;
       ctx.globalAlpha = 1 - k;
-      ctx.fillStyle = '#fff8c4';
+      ctx.fillStyle = s.color;
       ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(0.5, 3.5 * (1 - k)), 0, 7); ctx.fill();
     }
     ctx.globalAlpha = 1;
