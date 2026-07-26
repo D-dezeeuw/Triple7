@@ -114,6 +114,7 @@
     var c = this.spawn('coin', cx + this.rng.range(-4, 4), this.pusherZ() + C.COIN_R + 2);
     c.vz = 30;
     c.dropped = true;
+    c.born = this.t;                 // view-only: drop-in fall animation
     if (boost > 1) c.boost = boost;
     var chance = C.SPECIAL_CHANCE_BASE + 0.01 * (this.params.magnetLvl || 0);
     if (this.coins.length < C.MAX_COINS && this.rng.chance(chance)) {
@@ -121,6 +122,7 @@
       var s = this.spawn(sp.id, C.TABLE_W / 2 + this.rng.range(-half * 0.7, half * 0.7),
                          this.pusherZ() + C.COIN_R * 2.6);
       s.special = sp;
+      s.born = this.t;
       this.events.push({ type: 'specialSpawn', coin: s });
     }
     return c;
@@ -399,11 +401,13 @@
   }
 
   // Screen mapping for the pachinko board (top ~third of the canvas; the
-  // table's perspective trapezoid owns the rest — see proj()).
+  // table's perspective trapezoid owns the rest — see proj()). The x-axis
+  // reuses the table's own back-edge projection so every pachinko column
+  // sits EXACTLY above where its coin will land: exit left → land left.
   View.prototype.pachProj = function (x, y) {
-    var W = this.cv.clientWidth, H = this.cv.clientHeight;
-    return { x: W * 0.10 + (x / C.PACHINKO.W) * W * 0.80,
-             y: 10 + (y / C.PACHINKO.H) * (H * 0.28) };
+    var H = this.cv.clientHeight;
+    var sx = this.proj(x * (C.TABLE_W / C.PACHINKO.W), 0).x;
+    return { x: sx, y: 10 + (y / C.PACHINKO.H) * (H * 0.28) };
   };
 
   View.prototype.syncParams = function () {
@@ -428,10 +432,11 @@
     var self = this;
     this.cv.addEventListener('pointerdown', function (ev) {
       var r = self.cv.getBoundingClientRect();
-      var relX = (ev.clientX - r.left) / r.width;        // 0..1 across the canvas
-      // The tap picks the RELEASE point at the top of the pachinko chute
-      // (0.10..0.90 of the width maps onto the board, matching pachProj).
-      self.tryDrop(U.clamp((relX - 0.10) / 0.80, 0, 1) * C.PACHINKO.W);
+      var sx = ev.clientX - r.left;                      // CSS px, same space as proj()
+      // The tap picks the RELEASE point at the top of the pachinko chute —
+      // invert the board's screen mapping so the ball starts under the finger.
+      var left = self.pachProj(0, 0).x, right = self.pachProj(C.PACHINKO.W, 0).x;
+      self.tryDrop(U.clamp((sx - left) / (right - left), 0, 1) * C.PACHINKO.W);
     });
   };
 
@@ -460,6 +465,7 @@
 
   // A finished ball lands its coin on the table and applies its slot's perk.
   View.prototype.settleBall = function (ball) {
+    this.slotFlash = { i: ball.slot, x: ball.exitX, t: 0 };
     var kind = C.PACHINKO.SLOTS[ball.slot];
     if (kind === 'x2') {
       this.world.drop(ball.exitX, 2);
@@ -487,6 +493,10 @@
   View.prototype.update = function (dt) {
     this.time += dt;
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt);
+    if (this.slotFlash) {
+      this.slotFlash.t += dt;
+      if (this.slotFlash.t > 0.7) this.slotFlash = null;
+    }
     // Pachinko balls plink at frame rate (they substep internally).
     for (var b = this.balls.length - 1; b >= 0; b--) {
       if (this.balls[b].step(dt)) {
@@ -772,19 +782,35 @@
       ctx.beginPath(); ctx.arc(pp.x, pp.y, pr, 0, 7); ctx.fill();
     }
 
-    // Slot bins along the bottom: color-coded perks.
+    // Slot bins along the bottom: color-coded perks; the bin a ball just
+    // exited through flashes bright, pointing straight down at the landing.
     var n = P.SLOTS.length, slotW = pw / n;
     for (var s = 0; s < n; s++) {
       var st = SLOT_STYLE[P.SLOTS[s]];
       var sx = px + s * slotW;
-      ctx.fillStyle = st.c + '44';
+      var hot = this.slotFlash && this.slotFlash.i === s;
+      var hotK = hot ? 1 - this.slotFlash.t / 0.7 : 0;
+      ctx.fillStyle = hot ? st.c : st.c + '44';
       ctx.fillRect(sx + 2, py + ph - 18, slotW - 4, 16);
-      ctx.strokeStyle = st.c;
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = hot ? '#fff' : st.c;
+      ctx.lineWidth = hot ? 2.5 : 1.5;
       ctx.strokeRect(sx + 2, py + ph - 18, slotW - 4, 16);
       ctx.fillStyle = '#fff';
       ctx.font = '800 10px "Trebuchet MS", sans-serif';
       ctx.fillText(st.glyph, sx + slotW / 2, py + ph - 6);
+      if (hot) {
+        // Guide beam from the exit point straight down at the landing column
+        // (the board and table share their x-projection, so this lines up).
+        var beamX = this.pachProj(this.slotFlash.x, 0).x;
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.5 * hotK).toFixed(3) + ')';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 5]);
+        ctx.beginPath();
+        ctx.moveTo(beamX, py + ph - 2);
+        ctx.lineTo(beamX, py + ph + 34);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     // Balls in flight — little golden coins.
@@ -805,6 +831,13 @@
     var p = this.proj(c.x, c.z);
     // Stacked coins ride one coin-thickness higher on screen.
     var raise = c.layer ? C.COIN_R * p.s * 0.68 : 0;
+    // Fresh drops visibly fall from the pachinko slots onto the table at
+    // their exit column — the hand-off between the two machines.
+    var born = c.born !== undefined ? this.world.t - c.born : 99;
+    if (born < 0.35) {
+      var bk = born / 0.35;
+      raise += (1 - bk) * (1 - bk) * 52;
+    }
     this.drawCoinShape(ctx, c.kind, p.x, p.y - raise, p.s, 1, c);
     // A ×2-boosted coin advertises itself with a pulsing gold ring.
     if (c.boost > 1) {
