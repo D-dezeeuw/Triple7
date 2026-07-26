@@ -696,15 +696,29 @@
     var rows = S.LINES[win.line];
     var color = LINE_COLORS[win.line % LINE_COLORS.length];
     ctx.save();
-    ctx.strokeStyle = color;
-    ctx.globalAlpha = 0.85;
-    ctx.lineWidth = 4;
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
+    // Spotlight: dim every cell that is NOT part of the paying run, so the
+    // combination is unmistakable — the path and rings never sweep through
+    // unrelated fruit (that read as "random fruit counted as a combo").
+    ctx.fillStyle = 'rgba(60, 30, 0, 0.38)';
     for (c = 0; c < COLS; c++) {
+      for (var rw = 0; rw < ROWS; rw++) {
+        var inRun = c >= win.start && c < win.start + win.n && rw === rows[c];
+        if (inRun) continue;
+        rr(ctx, L.winX + c * reelW + 2, L.winY + rw * symH + 2, reelW - 4, symH - 4, 8);
+        ctx.fill();
+      }
+    }
+    // Path drawn ONLY across the winning run.
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (c = win.start; c < win.start + win.n; c++) {
       cx = L.winX + c * reelW + reelW / 2;
       cy = L.winY + rows[c] * symH + symH / 2;
-      if (c === 0) ctx.moveTo(cx, cy); else ctx.lineTo(cx, cy);
+      if (c === win.start) ctx.moveTo(cx, cy); else ctx.lineTo(cx, cy);
     }
     ctx.stroke();
     // Ring + soft glow on the cells that actually pay.
@@ -721,6 +735,20 @@
       rr(ctx, L.winX + c * reelW + 4, L.winY + rows[c] * symH + 3, reelW - 8, symH - 6, 9);
       ctx.stroke();
     }
+    // Name the win right on the run: "3× melon".
+    var midC = win.start + (win.n - 1) / 2;
+    var labelX = L.winX + midC * reelW + reelW / 2;
+    var runTopRow = Math.min.apply(null, rows.slice(win.start, win.start + win.n));
+    var labelY = L.winY + runTopRow * symH - 7;
+    if (labelY < L.winY + 12) labelY = L.winY + Math.max.apply(null, rows.slice(win.start, win.start + win.n)) * symH + symH + 14;
+    ctx.globalAlpha = 1;
+    ctx.font = '800 13px "Trebuchet MS", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(80, 20, 0, 0.75)';
+    ctx.strokeText(win.n + '× ' + win.sym, labelX, labelY);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(win.n + '× ' + win.sym, labelX, labelY);
     ctx.restore();
   };
 
