@@ -111,6 +111,13 @@
       s.claims = s.claims || {};
       s.claims.daily = null;
     }
+    // Upgrade levels can never exceed their defined max — a rebalance that
+    // lowers a max (e.g. Fertilizer 20 → 10) must also tame saves that had
+    // already bought past the new ceiling, or the nerf never lands for them.
+    if (!s.upgrades || typeof s.upgrades !== 'object') s.upgrades = {};
+    D.UPGRADES.forEach(function (u) {
+      if (isFinite(s.upgrades[u.id]) && s.upgrades[u.id] > u.max) s.upgrades[u.id] = u.max;
+    });
     // Resort gift ledger: a whole number within the defined levels — a
     // corrupted value must never re-pay gifts or block future ones.
     if (!s.resort || typeof s.resort !== 'object') s.resort = { rewarded: 0 };
@@ -227,7 +234,7 @@
 
   // ── Grove (passive income) ────────────────────────────────────────────────
   Game.prototype.groveRate = function (cur) {
-    var rate = 0, fert = Math.pow(1.5, this.upLvl('fertilizer'));
+    var rate = 0, fert = Math.pow(1.25, this.upLvl('fertilizer'));
     for (var i = 0; i < D.BUILDINGS.length; i++) {
       var b = D.BUILDINGS[i];
       if (b.earns !== cur) continue;

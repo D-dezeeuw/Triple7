@@ -252,13 +252,20 @@
 
   // ── Grove buildings (passive income — the idle layer) ─────────────────────
   // cost(level) = base · growth^owned  (classic incremental curve)
+  // PACING CONTRACT (rebalanced after playtest feedback): the Grove is a
+  // supplement to active play, never a replacement. Active match-3 earns
+  // ≈2.5 J/s at a relaxed pace; a serious mid-game Juice grove should sit
+  // AROUND that figure before Fertilizer, not tens of times above it. The
+  // orchard/fountain print higher-tier currency directly — bypassing the
+  // whole 7:7:7 chain — so their rates are deliberately a trickle and their
+  // growth steep: a pleasant drip while away, never "free drops all day".
   var BUILDINGS = [
-    { id: 'sapling',  name: 'Cherry Sapling',    cur: 'juice',   base: 15,    growth: 1.15, rate: 0.2,   earns: 'juice' },
-    { id: 'lemontree',name: 'Lemon Tree',        cur: 'juice',   base: 120,   growth: 1.15, rate: 1.4,   earns: 'juice' },
-    { id: 'melonpatch',name:'Melon Patch',       cur: 'juice',   base: 1300,  growth: 1.15, rate: 9,     earns: 'juice' },
-    { id: 'berryhedge',name:'Berry Hedge',       cur: 'juice',   base: 14000, growth: 1.15, rate: 55,    earns: 'juice' },
-    { id: 'orchard',  name: 'Orchard of Suns',   cur: 'suncoin', base: 60,    growth: 1.22, rate: 0.03,  earns: 'suncoin' },
-    { id: 'fountain', name: 'Fountain of Stars', cur: 'stargem', base: 77,    growth: 1.28, rate: 0.005, earns: 'stargem' }
+    { id: 'sapling',  name: 'Cherry Sapling',    cur: 'juice',   base: 15,    growth: 1.18, rate: 0.07,  earns: 'juice' },
+    { id: 'lemontree',name: 'Lemon Tree',        cur: 'juice',   base: 120,   growth: 1.18, rate: 0.4,   earns: 'juice' },
+    { id: 'melonpatch',name:'Melon Patch',       cur: 'juice',   base: 1300,  growth: 1.18, rate: 2.2,   earns: 'juice' },
+    { id: 'berryhedge',name:'Berry Hedge',       cur: 'juice',   base: 14000, growth: 1.18, rate: 11,    earns: 'juice' },
+    { id: 'orchard',  name: 'Orchard of Suns',   cur: 'suncoin', base: 60,    growth: 1.34, rate: 0.006, earns: 'suncoin' },
+    { id: 'fountain', name: 'Fountain of Stars', cur: 'stargem', base: 77,    growth: 1.5,  rate: 0.001, earns: 'stargem' }
   ];
 
   // ── Upgrades (Stargem sinks) ──────────────────────────────────────────────
@@ -270,7 +277,10 @@
     { id: 'bumperrails',  name: 'Bumper Rails',   desc: 'Extends the side rails — fewer coins lost to the gutters', base: 10, growth: 2.0, max: 5, cur: 'stargem' },
     { id: 'widepusher',   name: 'Wide Pusher',    desc: 'Pusher face 6% wider per level',           base: 15, growth: 2.0,  max: 5,  cur: 'stargem' },
     { id: 'charmmagnet',  name: 'Charm Magnet',   desc: '+1% special item chance per level',        base: 20, growth: 2.0,  max: 7,  cur: 'stargem' },
-    { id: 'fertilizer',   name: 'Grove Fertilizer', desc: 'Grove production ×1.5 per level',        base: 7,  growth: 2.2,  max: 20, cur: 'stargem' },
+    // Fertilizer rebalance: the old ×1.5 over 20 levels compounded to 3325×,
+    // single-handedly detonating the Grove pacing contract above. ×1.25 over
+    // 10 levels caps at ≈9.3× — still transformative, never a printing press.
+    { id: 'fertilizer',   name: 'Grove Fertilizer', desc: 'Grove production ×1.25 per level',       base: 12, growth: 2.2,  max: 10, cur: 'stargem' },
     { id: 'battery',      name: 'Offline Battery', desc: '+4h offline cap, +10% offline rate per level', base: 25, growth: 2.4, max: 4, cur: 'stargem' },
     { id: 'autojuicer',   name: 'Auto-Juicer',    desc: 'Plays a Match-3 move automatically',       base: 77,  growth: 2.5, max: 8,  cur: 'stargem', auto: true },
     { id: 'autospinner',  name: 'Auto-Spinner',   desc: 'Spins the slots when Juice allows',        base: 111, growth: 2.5, max: 8,  cur: 'stargem', auto: true },
