@@ -56,12 +56,18 @@ stream always worked.
 
 ## Slots — "Sunshine Sevens" (5×4)
 
-A 5-reel, 4-row video slot with **9 fixed paylines**. Every one of the 20
+A 5-reel, 4-row video slot with **6 fixed paylines**. Every one of the 20
 window cells is an **independent draw** from the same 64-stop weighted
 distribution, decided the instant you press Spin — the spinning strips are
 pure theater staged around those 20 already-final symbols. (This is the same
 "outcome first" model the 3-reel machine always used, extended to a window;
 we state it plainly rather than pretending a mechanical reel exists.)
+
+The lines use **two rules, both printed on the machine** (faint guide lines
+trace every path while the reels rest): the **4 flat rows** pay a run of 3+
+matching symbols **anywhere along the row** — what the eye expects of "three
+in a row" — while the **V and Λ** lines pay only runs starting from reel 1,
+the classic anchored rule, which keeps them rarer and special.
 
 | Symbol | Weight (of 64) | P(one cell) |
 |---|---|---|
@@ -72,44 +78,53 @@ we state it plainly rather than pretending a mechanical reel exists.)
 | lemon  | 15 | 23.438% |
 | cherry | 17 | 26.563% |
 
-Spin costs 7 Juice. A payline pays its **leftmost run** of 3, 4 or 5
-identical symbols (per line, in Suncoins, before upgrades):
+Spin costs 7 Juice. Pays per run of 3, 4 or 5 identical symbols (per line,
+in Suncoins, before upgrades), with p = weight/64, q = 1−p:
 
-| Symbol | ×3 | ×4 | ×5 | P(3-run on a line) |
-|---|---|---|---|---|
-| seven  | 12 | 77 | **777** | p³(1−p), p = 2/64 |
-| star   | 3 | 8 | 35 | p = 8/64 |
-| berry  | 2 | 5 | 12 | p = 10/64 |
-| melon  | 2 | 4 | 8 | p = 12/64 |
-| lemon  | 2 | 3 | 7 | p = 15/64 |
-| cherry | 2 | 3 | 5 | p = 17/64 |
+| Symbol | ×3 | ×4 | ×5 |
+|---|---|---|---|
+| seven  | 12 | 77 | **777** |
+| star   | 3 | 5 | 20 |
+| berry  | 2 | 3 | 8 |
+| melon  | 2 | 2 | 5 |
+| lemon  | 2 | 2 | 4 |
+| cherry | 2 | 2 | 3 |
 
-Per-line EV is closed-form (Σ p³(1−p)·pay₃ + p⁴(1−p)·pay₄ + p⁵·pay₅) and the
-9-line total is exactly 9× that — expectation is linear even though lines
-share cells. Lines EV: **1.00536 S/spin**.
+Exact per-line probabilities (enumerable by hand over the 2⁵ same/other
+masks of a 5-cell line):
+
+- **Flat row** (run anywhere): P(run=3) = 3p³q² + 2p⁴q · P(run=4) = 2p⁴q ·
+  P(run=5) = p⁵
+- **Shaped V/Λ** (anchored at reel 1): P(3) = p³q · P(4) = p⁴q · P(5) = p⁵
+
+Line EV = Σ over symbols and run lengths of (4·P_flat + 2·P_shaped)·pay —
+expectation is linear even though lines share cells, so the total is exact:
+**1.13770 S/spin**, with **0.536 expected winning lines per spin**.
 
 **The Beach Bonus (skill-stop counter).** 3 or more Sevens **anywhere** in
 the window (scatter) trigger the bonus — an exact Binomial(20, 2/64) event,
 **P = 2.337% (1 in 43)**. The Beach Getaway top screen becomes a counter
-stepping up and down a published ladder (5→7→9→12→16→21→27→35→49 S). It is
+stepping up and down a published ladder (3→5→6→8→10→13→17→24→49 S). It is
 **genuinely timing-based**: whatever value is showing the instant you stop
 is exactly what is credited. The machine never nudges, re-rolls, or
 "forces" the result the way real pachislo skill-stop machines are permitted
 to — there is no hidden second decision at all, because there is no first
 one: the only input is your tap. Walk away (or let the Auto-Spinner play)
 and the counter stops itself after 3 full cycles; over time that pays the
-**blind-stop mean of 19.25 S** (the exact average over the 16-step cycle),
+**blind-stop mean of 13.625 S** (the exact average over the 16-step cycle),
 which is the figure the published EV prices the bonus at. Skilled timing
 can only lift your personal return *above* the published number, never
 drag it below the ladder minimum. Catching the very top rung also pays
 **7 Stargems** and counts as the TRIPLE SEVEN moment.
 
-Total exact base EV is **1.455259 Suncoins per 7-Juice spin — 145.5% RTP**
-(lines 1.00536 + bonus 0.44990), with a measured hit rate of **≈33.6%**
-(both deliberately a notch above the old machine's 1.18401 / 30.1%).
+Total exact base EV is **1.456130 Suncoins per 7-Juice spin — 145.6% RTP**
+(lines 1.13770 + bonus 0.31843), with a measured hit rate of **≈44.5%** —
+the anywhere-rule on rows nearly halves the dry spins compared to the
+leftmost-only rule at the same return, and both figures sit deliberately
+above the old 3-reel machine's 1.18401 / 30.1%.
 `npm run simulate` re-derives this analytically *and* by Monte Carlo over
 millions of spins (blind bonus stops), and asserts they agree;
-`tools/test.js` pins the exact figure (`1.455259`) as a regression test, so
+`tools/test.js` pins the exact figure (`1.45613`) as a regression test, so
 it cannot silently drift. Sun-Kissed Reels multiplies payouts and Lucky
 Sevens adds higher ladder rungs (63/77/98 S); the in-game Paytable dialog
 computes the *current*, upgrade-adjusted odds live from the same
@@ -117,7 +132,7 @@ computes the *current*, upgrade-adjusted odds live from the same
 the simulator, and this document.
 
 The smallest line pay (2 S) still exceeds the 1-Suncoin-equivalent stake,
-and the smallest ladder rung (5 S) exceeds it five-fold — no win in this
+and the smallest ladder rung (3 S) exceeds it three-fold — no win in this
 machine is a loss disguised as a win.
 
 **Anticipation is presentation-only.** When 2+ Sevens sit among the first

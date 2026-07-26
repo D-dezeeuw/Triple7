@@ -42,19 +42,33 @@
     return sum / cyc.length;
   }
 
+  function isFlatLine(rows) {
+    for (var i = 1; i < rows.length; i++) if (rows[i] !== rows[0]) return false;
+    return true;
+  }
+
   // Evaluate a landed grid (grid[col][row] = symbol id) over the paylines.
-  // Returns { lineWins: [{line, sym, n, pay}], scatters, sun, bonus } —
+  // Hybrid rules: a flat row line pays its best 3+ run ANYWHERE along the row
+  // (only one such run can exist in 5 cells); a shaped line (V/Λ) pays only a
+  // run anchored at reel 1, the classic rule. Returns
+  // { lineWins: [{line, sym, n, start, pay}], scatters, sun, bonus } —
   // sun is the pre-multiplier sum of line pays; bonus means 3+ scatter Sevens.
   function evaluate(grid) {
     var lineWins = [], sun = 0;
     for (var l = 0; l < S.LINES.length; l++) {
       var rows = S.LINES[l];
-      var sym = grid[0][rows[0]];
-      var n = 1;
-      while (n < COLS && grid[n][rows[n]] === sym) n++;
-      if (n >= 3) {
-        var pay = S.PAYS[sym][n - 3];
-        lineWins.push({ line: l, sym: sym, n: n, pay: pay });
+      var maxStart = isFlatLine(rows) ? COLS - 3 : 0;
+      var best = null;
+      for (var start = 0; start <= maxStart; start++) {
+        var sym = grid[start][rows[start]];
+        var n = 1;
+        while (start + n < COLS && grid[start + n][rows[start + n]] === sym) n++;
+        if (n >= 3 && (!best || n > best.n)) best = { sym: sym, n: n, start: start };
+        if (best && best.n >= 3) break;   // a second 3+ run can't fit in 5 cells
+      }
+      if (best) {
+        var pay = S.PAYS[best.sym][best.n - 3];
+        lineWins.push({ line: l, sym: best.sym, n: best.n, start: best.start, pay: pay });
         sun += pay;
       }
     }
@@ -88,27 +102,36 @@
     return v;
   }
 
-  // Exact analytic RTP — no sampling anywhere:
-  //   line EV: per line Σ_sym p³(1−p)·pay3 + p⁴(1−p)·pay4 + p⁵·pay5, ×9 lines
-  //            (expectation is linear even though lines share cells);
-  //   bonus:   P(scatter Sevens ≥ 3) is an exact Binomial(20, p7), priced at
-  //            the blind-stop ladder mean (skill can only raise a real player
-  //            above this baseline — see docs/fairness.md).
-  // Returns the full par sheet used by tests, the simulator and the paytable.
+  // Exact analytic RTP — no sampling anywhere. Hybrid line rules:
+  //   flat row lines (best 3+ run anywhere in the 5 cells):
+  //     P(run=3) = 3p³q² + 2p⁴q · P(run=4) = 2p⁴q · P(run=5) = p⁵
+  //     (enumerate the 2⁵ same/other masks by max-run to verify)
+  //   shaped lines (run anchored at reel 1):
+  //     P(3) = p³q · P(4) = p⁴q · P(5) = p⁵
+  //   bonus: P(scatter Sevens ≥ 3) is an exact Binomial(20, p7), priced at
+  //   the blind-stop ladder mean (skill can only raise a real player above
+  //   this baseline — see docs/fairness.md).
+  // Expectation is linear even though lines share cells, so the totals are
+  // exact. Returns the par sheet used by tests, the simulator, the paytable.
   function enumerateRTP(luckyLvl) {
     var weights = reelWeights();
     var total = 0;
     weights.forEach(function (w) { total += w.w; });
-    var lineEV = 0, lines = [], expLineWins = 0;
+    var nFlat = 0, nShaped = 0;
+    S.LINES.forEach(function (rows) { if (isFlatLine(rows)) nFlat++; else nShaped++; });
+    var linesEV = 0, lines = [], expLineWins = 0;
     weights.forEach(function (w) {
-      var p = w.w / total;
+      var p = w.w / total, q = 1 - p;
       for (var n = 3; n <= COLS; n++) {
-        var prob = Math.pow(p, n) * (n < COLS ? 1 - p : 1);
+        var pFlat = n === 3 ? 3 * Math.pow(p, 3) * q * q + 2 * Math.pow(p, 4) * q :
+                    n === 4 ? 2 * Math.pow(p, 4) * q : Math.pow(p, 5);
+        var pShaped = Math.pow(p, n) * (n < COLS ? q : 1);
         var pay = S.PAYS[w.id][n - 3];
-        lineEV += prob * pay;
-        expLineWins += prob;
-        lines.push({ label: n + '×' + w.id, p: prob, pay: pay,
-                     evPart: prob * pay * S.LINES.length });
+        var evPart = (nFlat * pFlat + nShaped * pShaped) * pay;
+        linesEV += evPart;
+        expLineWins += nFlat * pFlat + nShaped * pShaped;
+        lines.push({ label: n + '×' + w.id, pFlat: pFlat, pShaped: pShaped,
+                     pay: pay, evPart: evPart });
       }
     });
     lines.sort(function (a, b) { return b.evPart - a.evPart; });
@@ -119,12 +142,13 @@
       bonusP -= comb(CELLS, k) * Math.pow(p7, k) * Math.pow(1 - p7, CELLS - k);
     }
     var blind = ladderBlindMean(luckyLvl);
-    var ev = lineEV * S.LINES.length + bonusP * blind;
+    var ev = linesEV + bonusP * blind;
     return {
       ev: ev,
-      lineEV: lineEV,
-      linesEV: lineEV * S.LINES.length,
-      expLineWins: expLineWins * S.LINES.length,   // E[# winning lines]/spin
+      linesEV: linesEV,
+      nFlat: nFlat,
+      nShaped: nShaped,
+      expLineWins: expLineWins,        // E[# winning lines]/spin
       lines: lines,
       bonusP: bonusP,
       bonusBlind: blind,
@@ -422,7 +446,7 @@
     var reelW = L.winW / COLS, symH = L.winH / ROWS;
     // First winning line's cells carry the burst (enough to read, not a storm).
     var win = wins[0], rows = S.LINES[win.line];
-    for (var c = 0; c < win.n; c++) {
+    for (var c = win.start; c < win.start + win.n; c++) {
       var cx = L.winX + c * reelW + reelW / 2;
       var cy = L.winY + rows[c] * symH + symH / 2;
       for (var i = 0; i < 4; i++) {
@@ -600,6 +624,9 @@
       }
     }
 
+    // Faint payline guides while the machine rests — legibility for "where
+    // can I win", gone the moment anything is in motion.
+    if (!this.spinning && !this.bonus && this.flash <= 0) this.drawGuideLines(ctx, L);
     if (!this.spinning) this.drawWinLines(ctx, L);
 
     // Win banner
@@ -617,6 +644,31 @@
     }
 
     this.drawSparkles(ctx);
+  };
+
+  // Faint guide overlay: every payline's path at rest, each in its identity
+  // color, quiet enough to read as etched glass rather than UI chrome.
+  View.prototype.drawGuideLines = function (ctx, L) {
+    var reelW = L.winW / COLS, symH = L.winH / ROWS;
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    for (var l = 0; l < S.LINES.length; l++) {
+      var rows = S.LINES[l];
+      ctx.strokeStyle = LINE_COLORS[l % LINE_COLORS.length];
+      ctx.beginPath();
+      for (var c = 0; c < COLS; c++) {
+        var cx = L.winX + c * reelW + reelW / 2;
+        // Nudge flat lines a touch per-index so overlapping straights and
+        // shaped lines crossing them stay distinguishable.
+        var cy = L.winY + rows[c] * symH + symH / 2 + (l % 2 ? 3 : -3);
+        if (c === 0) ctx.moveTo(cx, cy); else ctx.lineTo(cx, cy);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
   };
 
   // Win presentation: cycle through the winning lines one at a time — the
@@ -656,7 +708,7 @@
     }
     ctx.stroke();
     // Ring + soft glow on the cells that actually pay.
-    for (c = 0; c < win.n; c++) {
+    for (c = win.start; c < win.start + win.n; c++) {
       cx = L.winX + c * reelW + reelW / 2;
       cy = L.winY + rows[c] * symH + symH / 2;
       var gg = ctx.createRadialGradient(cx, cy, 2, cx, cy, symH * 0.7);

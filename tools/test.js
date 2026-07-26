@@ -280,26 +280,38 @@ function slotGrid(fill) {
   }
   return g;
 }
-t('evaluate: paylines pay leftmost runs of 3/4/5', function () {
-  // Uniform grid: every one of the 9 lines is a 5-of-a-kind.
+t('evaluate: hybrid rules — rows pay runs anywhere, shaped lines from reel 1', function () {
+  // Uniform grid: every line is a 5-of-a-kind.
   var all = slots.evaluate(slotGrid('lemon'));
   eq(all.lineWins.length, D.SLOT.LINES.length);
   eq(all.sun, D.SLOT.LINES.length * D.SLOT.PAYS.lemon[2]);
-  // 3-kind on the top row only.
+  // 3-kind anchored at reel 1 on the top row.
   var g3 = slotGrid();
   g3[0][0] = g3[1][0] = g3[2][0] = 'cherry';
   var r3 = slots.evaluate(g3);
   eq(r3.lineWins.length, 1);
   eq(r3.lineWins[0].n, 3);
+  eq(r3.lineWins[0].start, 0);
   eq(r3.sun, D.SLOT.PAYS.cherry[0]);
-  // 4-kind pays the middle tier.
-  var g4 = slotGrid();
-  g4[0][0] = g4[1][0] = g4[2][0] = g4[3][0] = 'melon';
-  eq(slots.evaluate(g4).sun, D.SLOT.PAYS.melon[1]);
-  // Runs must start at reel 1 — a broken first cell pays nothing.
+  // MID-ROW triple (reels 2–4) pays too — the anywhere rule on flat rows.
+  var gm = slotGrid();
+  gm[1][2] = gm[2][2] = gm[3][2] = 'melon';
+  var rm = slots.evaluate(gm);
+  eq(rm.lineWins.length, 1, 'mid-row triple pays');
+  eq(rm.lineWins[0].start, 1);
+  eq(rm.lineWins[0].line, 2);
+  eq(rm.sun, D.SLOT.PAYS.melon[0]);
+  // A 4-run starting at reel 2 pays the 4-tier on its row.
   var gL = slotGrid();
   gL[1][0] = gL[2][0] = gL[3][0] = gL[4][0] = 'cherry';
-  eq(slots.evaluate(gL).sun, 0, 'leftmost rule');
+  var rL = slots.evaluate(gL);
+  eq(rL.sun, D.SLOT.PAYS.cherry[1], 'mid-row 4-run pays the ×4 tier');
+  eq(rL.lineWins[0].start, 1);
+  // Shaped lines (V/Λ) still require the reel-1 anchor: a 3-run along the V
+  // starting at reel 2 pays nothing.
+  var gv = slotGrid();
+  gv[1][1] = gv[2][2] = gv[3][1] = 'melon';   // V rows [0,1,2,1,0], positions 1-3
+  eq(slots.evaluate(gv).sun, 0, 'shaped line keeps the anchored rule');
   // 5 Sevens on a line: the 777 dream line, and 5 scatters → bonus too.
   var g7 = slotGrid();
   for (var c = 0; c < 5; c++) g7[c][0] = 'seven';
@@ -319,15 +331,16 @@ t('evaluate: 3 scattered Sevens trigger the bonus without a line win', function 
   g2[0][3] = 'seven'; g2[2][1] = 'seven';
   ok(!slots.evaluate(g2).bonus, 'two sevens must not trigger');
 });
-t('exact RTP matches the published par sheet (1.455259)', function () {
+t('exact RTP matches the published par sheet (1.45613)', function () {
   var r = slots.enumerateRTP(0);
-  near(r.ev, 1.455259, 0.00001);
-  near(r.linesEV, 1.005361, 0.00001);
+  near(r.ev, 1.456130, 0.00001);
+  near(r.linesEV, 1.137696, 0.00001);
   near(r.bonusP, 0.023371, 0.00001);
-  near(r.bonusBlind, 19.25, 1e-9, 'blind-stop mean of the base ladder');
+  near(r.bonusBlind, 13.625, 1e-9, 'blind-stop mean of the base ladder');
+  eq(r.nFlat, 4); eq(r.nShaped, 2);
   // Lucky Sevens extends the ladder, never the reels.
   var r3 = slots.enumerateRTP(3);
-  near(r3.ev, 1.786175, 0.00001);
+  near(r3.ev, 1.822900, 0.00001);
   eq(r3.ladder.length, D.SLOT.BONUS.LADDER.length + 3);
 });
 t('reel weights sum to 64 and ladder cycle is symmetric', function () {

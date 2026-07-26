@@ -38,12 +38,13 @@ hr('1. SLOT MACHINE — "Sunshine Sevens" (stake: 7 Juice ≡ 1.000 S)');
 
 var exact = slots.enumerateRTP(0);
 console.log('  Exact par sheet (5×4 window, 20 iid cells of 64 weighted stops,');
-console.log('  ' + D.SLOT.LINES.length + ' paylines — line EV closed-form, scatter exact binomial):\n');
-console.log('  run          P per line          pays     EV share (all lines)');
+console.log('  ' + exact.nFlat + ' flat rows paying runs ANYWHERE + ' + exact.nShaped +
+  ' shaped lines anchored at reel 1):\n');
+console.log('  run          P/row (anywhere)   P/shaped (anchored)   pays   EV share');
 exact.lines.forEach(function (l) {
-  console.log('  ' + l.label.padEnd(10) + (l.p.toFixed(9)).padStart(14) +
-    '  (1 in ' + String(Math.round(1 / l.p)).padStart(9) + ')' +
-    String(l.pay).padStart(6) + ' S   ' + l.evPart.toFixed(5) + ' S');
+  console.log('  ' + l.label.padEnd(10) + l.pFlat.toFixed(9).padStart(14) +
+    l.pShaped.toFixed(9).padStart(19) +
+    String(l.pay).padStart(9) + ' S   ' + l.evPart.toFixed(5) + ' S');
 });
 console.log('\n  Beach Bonus: P(3+ scatter Sevens) = ' + exact.bonusP.toFixed(6) +
   ' (1 in ' + Math.round(1 / exact.bonusP) + ') × blind-stop ladder mean ' +
@@ -82,9 +83,9 @@ console.log('  With Lucky Sevens maxed (3 extra ladder rungs, top ' +
   Math.max.apply(null, maxed.ladder) + ' S): EV = ' + maxed.ev.toFixed(5) +
   ' S/spin → RTP ' + pct(maxed.ev));
 
-var slotOK = Math.abs(exact.ev - 1.455259) < 0.0005 && exact.ev > 1.0 &&
+var slotOK = Math.abs(exact.ev - 1.456130) < 0.0005 && exact.ev > 1.0 &&
              Math.abs(mcPay / N_SPINS - exact.ev) < 0.01;
-console.log('\n  VERDICT: ' + (slotOK ? '✔ matches published 1.455259 S/spin; stage is EV-positive.'
+console.log('\n  VERDICT: ' + (slotOK ? '✔ matches published 1.45613 S/spin; stage is EV-positive.'
   : '✘ MISMATCH with published EV!'));
 
 // Inflation ceiling (§11.8): promo/upgrade EV must stay bounded — every
@@ -93,7 +94,7 @@ console.log('\n  VERDICT: ' + (slotOK ? '✔ matches published 1.455259 S/spin; 
 // each adding a higher bonus-ladder rung) and Sun-Kissed Reels (max 30,
 // +5%/lvl) are the two slot-side sinks; this asserts their fully-maxed
 // product never exceeds a 5.0x (500%) RTP ceiling. (Raised from 4.0 with the
-// 5×4 machine: base EV moved to 1.455 and maxed lands at ≈4.47 — still a
+// 5×4 machine: base EV moved to ≈1.456 and maxed lands at ≈4.56 — still a
 // hard, published bound.)
 var luckyU = D.UPGRADES.filter(function (u) { return u.id === 'luckysevens'; })[0];
 var reelsU = D.UPGRADES.filter(function (u) { return u.id === 'sunreels'; })[0];

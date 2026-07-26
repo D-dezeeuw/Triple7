@@ -14,15 +14,18 @@
  *   tier is reachable from tier 1 by finite conversions, so the player can never
  *   be locked out of progress regardless of slot/dozer variance.
  *
- * ── SLOT MATH (5×4 window, 20 iid cells from 64 weighted stops, 9 paylines) ─
- *   Per line: P(leftmost run of n of symbol k) = p^n·(1−p) (n=3,4), p^5 (n=5),
- *   p = w_k/64; total line EV = 9 × per-line EV (expectation is linear even
- *   though lines share cells). 3+ scatter Sevens (Binomial(20, 2/64), ≈2.34 %)
- *   trigger the skill-stop Beach Bonus; published EV prices it at the blind-
- *   stop ladder mean. Base EV = 1.45519 S per 7 J (≡ 1 S) stake → RTP ≈ 145 %,
- *   hit ≈ 35 %. Positive-EV on purpose: this is a free cozy idle, the "house
- *   edge" is inverted so grinding always progresses; the 5-Seven line (777 S)
- *   stays as the near-impossible dream.
+ * ── SLOT MATH (5×4 window, 20 iid cells from 64 weighted stops, 6 paylines) ─
+ *   Hybrid rules, p = w_k/64, q = 1−p:
+ *     4 flat row lines pay their best 3+ run ANYWHERE along the row:
+ *       P(run=3) = 3p³q² + 2p⁴q · P(run=4) = 2p⁴q · P(run=5) = p⁵
+ *     2 shaped lines (V/Λ) pay runs anchored at reel 1: p^n·q (n=3,4), p⁵.
+ *   Totals are exact (expectation is linear despite shared cells).
+ *   3+ scatter Sevens (Binomial(20, 2/64), ≈2.34 %) trigger the skill-stop
+ *   Beach Bonus; published EV prices it at the blind-stop ladder mean
+ *   (13.625 S). Base EV = 1.45613 S per 7 J (≡ 1 S) stake → RTP ≈ 145.6 %,
+ *   E[winning lines] = 0.536/spin. Positive-EV on purpose: this is a free
+ *   cozy idle, the "house edge" is inverted so grinding always progresses;
+ *   the 5-Seven line (777 S) stays as the near-impossible dream.
  *
  * ── DOZER MATH (conservation argument) ──────────────────────────────────────
  *   At steady state the table holds ~constant coins, so E[coins leaving] per
@@ -87,26 +90,27 @@
       { id: 'lemon',  w: 15 },
       { id: 'cherry', w: 17 }
     ],
-    // 9 paylines: one row index (0=top) per reel, left to right.
+    // 6 paylines: one row index (0=top) per reel, left to right.
+    // The 4 flat row lines pay a 3+ run ANYWHERE along the row (what the eye
+    // expects of "three in a row"); the shaped V/Λ lines pay leftmost-anchored
+    // runs only, the classic rule, so they stay special. evaluate() detects
+    // flatness — no per-line flag needed.
     LINES: [
       [0, 0, 0, 0, 0],
       [1, 1, 1, 1, 1],
       [2, 2, 2, 2, 2],
       [3, 3, 3, 3, 3],
       [0, 1, 2, 1, 0],   // V
-      [3, 2, 1, 2, 3],   // Λ
-      [1, 0, 1, 0, 1],   // high zigzag
-      [2, 3, 2, 3, 2],   // low zigzag
-      [1, 2, 3, 2, 1]    // deep mid-V
+      [3, 2, 1, 2, 3]    // Λ
     ],
-    // Pays in Suncoins for a leftmost run of 3 / 4 / 5 on a line
+    // Pays in Suncoins for a run of 3 / 4 / 5 on a line
     // (stake = 7 Juice ≡ 1 S; smallest pay is 2 S — never below the stake).
     PAYS: {
-      cherry: [2, 3, 5],
-      lemon:  [2, 3, 7],
-      melon:  [2, 4, 8],
-      berry:  [2, 5, 12],
-      star:   [3, 8, 35],
+      cherry: [2, 2, 3],
+      lemon:  [2, 2, 4],
+      melon:  [2, 2, 5],
+      berry:  [2, 3, 8],
+      star:   [3, 5, 20],
       seven:  [12, 77, 777]
     },
     // Beach Bonus: 3+ Sevens anywhere in the window (scatter) turn the top
@@ -117,16 +121,16 @@
     // topmost rung also pays PEAK_GEMS Stargems (the "TRIPLE SEVEN" moment).
     SCATTER_MIN: 3,
     BONUS: {
-      LADDER: [5, 7, 9, 12, 16, 21, 27, 35, 49],
+      LADDER: [3, 5, 6, 8, 10, 13, 17, 24, 49],
       LADDER_EXT: [63, 77, 98],   // Lucky Sevens adds one higher rung per level
       STEP_MS: 110,
       AUTO_CYCLES: 3,
       PEAK_GEMS: 7
     }
     /* Exact base EV (enumerated analytically in slots.enumerateRTP, verified by
-     * `npm run simulate`): 9 lines × per-line EV 0.111707 = 1.005362 S, plus
-     * P(3+ scatter Sevens) 0.023368 × blind-stop ladder mean 19.25 = 0.449833 S
-     * ── total 1.45519 S / spin (RTP 145.5 %, hit rate ≈ 35 % measured) ──
+     * `npm run simulate`): lines (4 flat anywhere-rule + 2 shaped) 1.137696 S,
+     * plus P(3+ scatter Sevens) 0.023371 × blind-stop ladder mean 13.625 =
+     * 0.318434 S ── total 1.45613 S / spin (RTP 145.6 %) ──
      * Richer than v1's 1.18401 on purpose: requested "win rate a bit higher". */
   };
 

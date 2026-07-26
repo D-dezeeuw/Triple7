@@ -201,20 +201,23 @@
       var rtp = T7.slots.enumerateRTP(game.upLvl('luckysevens'));
       var mult = game.sunMult();
       var order = ['seven', 'star', 'berry', 'melon', 'lemon', 'cherry'];
-      var html = '<p class="mini"><b>' + D.SLOT.LINES.length + ' paylines</b> across the 5×4 window ' +
-                 '(4 straights, V, Λ, 2 zigzags, mid-V). A line pays its leftmost run of 3, 4 or 5.</p>';
+      var html = '<p class="mini"><b>' + D.SLOT.LINES.length + ' paylines</b> across the 5×4 window: ' +
+                 'the <b>4 rows</b> pay any run of 3+ matching symbols <b>anywhere along the row</b>, ' +
+                 'and the <b>V and Λ</b> lines pay runs starting from reel 1. ' +
+                 'Faint guide lines on the machine trace every path.</p>';
       html += '<table><tr><td><b>Symbol</b></td><td><b>×3</b></td><td><b>×4</b></td><td><b>×5</b></td>' +
-              '<td><b>3-run odds/line</b></td></tr>';
+              '<td><b>3-run odds/row</b></td></tr>';
       order.forEach(function (sym) {
         var pays = D.SLOT.PAYS[sym];
         var w = 0;
         D.SLOT.REEL.forEach(function (r) { if (r.id === sym) w = r.w; });
-        var p3 = Math.pow(w / 64, 3);
+        var p = w / 64, q = 1 - p;
+        var p3row = 3 * p * p * p * q * q + 2 * p * p * p * p * q;   // run of exactly 3, anywhere in the row
         html += '<tr><td>' + sym + '</td>' +
                 '<td>' + U.fmt(pays[0] * mult) + '</td>' +
                 '<td>' + U.fmt(pays[1] * mult) + '</td>' +
                 '<td>' + U.fmt(pays[2] * mult) + ' S</td>' +
-                '<td>1 in ' + U.fmt(Math.round(1 / p3)) + '</td></tr>';
+                '<td>1 in ' + U.fmt(Math.round(1 / p3row)) + '</td></tr>';
       });
       html += '</table>';
       html += '<p class="mini"><b>Beach Bonus:</b> 3+ Sevens anywhere (odds 1 in ' +
