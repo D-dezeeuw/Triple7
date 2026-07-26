@@ -34,12 +34,13 @@
  *   a side gutter (lost). Each drop also has specialChance to spawn a bonus
  *   item (avg value ≈ 4.7 G) that follows the same exit distribution.
  *   Every drop first rides the pachinko chute (live seeded physics) and its
- *   exit slot grants a perk: ×2 coin (~26 %), double-pay next coin exit
- *   (~18 %), gutter barrier next 2 drops (~24 %), or a quake (~33 %). Perks
- *   are count-scoped, so their strength is cadence-independent and bounded.
- *   Measured (tools/simulate.js): ≈ 2.05 G per 7 S stake → RTP ≈ 205 % base,
- *   ~240 % with maxed rails/magnet. Run `npm run simulate` for the current
- *   measured figures.
+ *   exit slot grants a perk: ×2 coin (~27 %), double-pay next coin exit
+ *   (~23 %), gutter barrier next 2 drops (~18 %), or a quake (~32 %). Three
+ *   seeded bonus pins per ball pay 1–3 S on strike (≈0.17 G-equiv/drop).
+ *   Perks are count-scoped, so their strength is cadence-independent and
+ *   bounded. Measured (tools/simulate.js): ≈ 2.04 G per 7 S stake → RTP
+ *   ≈ 204 % base, ~247 % with maxed rails/magnet. Run `npm run simulate`
+ *   for the current measured figures.
  *
  * ── MATCH-3 ─────────────────────────────────────────────────────────────────
  *   Each cleared tile = 1 J × cascade multiplier ×(1 + 0.5·(chain−1)).
@@ -190,6 +191,13 @@
       W: 320, H: 190,                 // board units (x is shared with TABLE_W)
       BALL_R: 9, PEG_R: 5,
       ROWS: 4, ROW0_Y: 40, ROW_DY: 38, PEG_DX: 40,
+      // No peg lives within WALL_CLEAR of a wall: the ball (⌀18) must always
+      // have a passable corridor — a peg 20u from the wall left a 15u pocket
+      // that could wedge the ball until the failsafe timer bailed it out.
+      WALL_CLEAR: 30,
+      // Bonus pins: every ball, BONUS_PEGS pegs are picked (seeded) and lit
+      // gold; striking one pays 1..BONUS_SUN_MAX Suncoins on the spot.
+      BONUS_PEGS: 3, BONUS_SUN_MAX: 3,
       GRAVITY: 640, RESTITUTION: 0.55, JITTER: 26,
       // Perks, left to right. quake: a nudge that stirs the pile (fun, small
       // EV). x2: the dropped coin's face value doubles. barrier: side gutters

@@ -456,6 +456,45 @@ t('barrier perk seals the side gutters; expiry reopens them', function () {
   }
   ok(sideSeen, 'open gutter must eat the coin again');
 });
+t('pachinko: no peg sits in a wall pocket the ball cannot pass', function () {
+  var P = D.DOZER.PACHINKO;
+  dozer.Pachinko.pegs.forEach(function (peg) {
+    ok(peg.x >= P.WALL_CLEAR && peg.x <= P.W - P.WALL_CLEAR,
+       'peg at ' + peg.x + ' is inside the wall clearance');
+  });
+  // Edge releases must resolve well before the failsafe timer (the old
+  // top-corner pocket wedged the ball until t>6 bailed it out).
+  for (var s = 0; s < 40; s++) {
+    var p = new dozer.Pachinko(new rngMod.Rng(7000 + s), s % 2 ? 5 : 315);
+    var guard = 0;
+    while (!p.step(1 / 60) && guard++ < 2000);
+    ok(p.t < 5, 'edge release resolved in ' + p.t.toFixed(2) + 's (seed ' + s + ')');
+  }
+});
+t('pachinko bonus pins: 3 distinct lit pegs, strikes pay 1..3 S once each', function () {
+  var P = D.DOZER.PACHINKO;
+  var paid = 0;
+  for (var s = 0; s < 60; s++) {
+    var p = new dozer.Pachinko(new rngMod.Rng(5000 + s), 30 + (s * 11) % 260);
+    eq(p.bonusIdx.length, P.BONUS_PEGS);
+    var seen = {};
+    p.bonusIdx.forEach(function (i) {
+      ok(i >= 0 && i < dozer.Pachinko.pegs.length && !seen[i], 'distinct valid peg');
+      seen[i] = true;
+    });
+    var guard = 0;
+    while (!p.step(1 / 60) && guard++ < 2000);
+    ok(p.hits.length <= P.BONUS_PEGS, 'a pin pays at most once');
+    var sum = 0;
+    p.hits.forEach(function (h) {
+      ok(h.sun >= 1 && h.sun <= P.BONUS_SUN_MAX, 'strike pays 1..' + P.BONUS_SUN_MAX);
+      sum += h.sun;
+    });
+    eq(sum, p.sun, 'hits ledger matches the total');
+    paid += sum;
+  }
+  ok(paid > 0, 'across 60 balls at least one bonus pin must be struck');
+});
 t('serialize round-trips coin layer and pachinko boost', function () {
   var w = new dozer.World(new rngMod.Rng(9), {}, { noStock: true });
   var c = w.spawn('coin', 100, 200);

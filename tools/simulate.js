@@ -154,7 +154,7 @@ function runDozer(params, drops, seed, label) {
   var drng = new rngMod.Rng(seed);
   var world = new dozer.World(drng, params);
   var front = 0, frontGems = 0, side = 0, specialFront = { gems: 0, sun: 0, juice: 0, charm: 0 };
-  var slotHits = {};
+  var slotHits = {}, pachSun = 0, pinHits = 0;
   var dropInterval = 1.15, tNext = 3, done = 0, warmFront = 0, warmup = Math.floor(drops * 0.15);
   var step = 1 / 60;
   // Run until we've dropped `drops` coins and let the table settle after.
@@ -168,6 +168,7 @@ function runDozer(params, drops, seed, label) {
       while (!pach.step(1 / 120) && guard++ < 3000);
       var kind = D.DOZER.PACHINKO.SLOTS[pach.slot];
       slotHits[kind] = (slotHits[kind] || 0) + 1;
+      if (done >= warmup) { pachSun += pach.sun; pinHits += pach.hits.length; }
       if (kind === 'x2') world.drop(pach.exitX, 2);
       else { world.drop(pach.exitX); world.applyPerk(kind); }
       tNext += dropInterval; done++;
@@ -189,12 +190,15 @@ function runDozer(params, drops, seed, label) {
   console.log('  pachinko slots hit: ' + Object.keys(slotHits).map(function (k) {
     return k + ' ' + pct(slotHits[k] / drops);
   }).join(' · '));
+  var gemsFromPins = (pachSun / 7) / counted;   // bonus-pin Suncoins in G-equivalents
+  console.log('  bonus pins: ' + pinHits + ' strikes, ' + pachSun + ' S paid → ' +
+    gemsFromPins.toFixed(3) + ' G-equiv/drop');
   var gemsFromCoins = frontGems / counted;   // tier-weighted (COIN_TIERS)
   var gemsFromSpecials = (specialFront.gems * D.DOZER.SPECIALS[0].gems +
                           specialFront.charm * 5 +                    // charm ≈ 5 G value
                           specialFront.juice * 1 +                    // ≈ 1 G of juice-time
                           specialFront.sun * (21 / 7)) / counted;
-  var evG = gemsFromCoins + gemsFromSpecials;
+  var evG = gemsFromCoins + gemsFromSpecials + gemsFromPins;
   var exits = front + side;
   console.log('  ' + label + ' (' + drops + ' drops, seed ' + seed + '):');
   console.log('    exits after warmup: front ' + front + ' / side ' + side +

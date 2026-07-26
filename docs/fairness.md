@@ -187,10 +187,13 @@ front pays ×2), **barrier** (side gutters sealed for your next 2 drops), or
 shifts the distribution; the pegs funnel most runs toward the center slots.
 Barrier and double-pay are **count-scoped, not time-scoped**, so their
 worth is identical at any drop cadence — rapid-fire automation cannot
-stack them into permanent uptime. Nothing about the chute is staged: like
-the table, the board you watch is the computation, and the simulator runs
-the same code to measure slot rates (≈26% ×2, ≈18% double, ≈24% barrier,
-≈33% quake with a centered aim spread).
+stack them into permanent uptime. Each ball also lights **three bonus
+pins** (a seeded pick, different every ball): striking one pays 1–3
+Suncoins on the spot — same live-physics honesty, measured at ≈0.17
+G-equivalents per drop. Nothing about the chute is staged: like the
+table, the board you watch is the computation, and the simulator runs
+the same code to measure slot rates (≈27% ×2, ≈23% double, ≈18% barrier,
+≈32% quake with a centered aim spread).
 
 Physics then decides, honestly, which coins reach the front edge (paid) and
 which fall into a side gutter (lost — this is the "house edge",
@@ -200,7 +203,7 @@ pile and ride on top — a second layer, purely mechanical. `npm run
 simulate` runs the *actual* physics — the same `js/dozer.js` the browser
 runs, pachinko included — for thousands of simulated drops and measures
 steady-state E[Stargems per drop] directly; it currently measures
-**≈205% RTP at base geometry, ≈240% fully upgraded** (the pachinko perks
+**≈204% RTP at base geometry, ≈247% fully upgraded** (the pachinko perks
 are most of the raise over the old ≈130%/166%). There is no hidden
 "decide payout, then animate a fake table" step: the table you watch is the
 computation.

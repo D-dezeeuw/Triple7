@@ -323,13 +323,31 @@
     this.slot = -1;
     this.exitX = this.x;
     this.t = 0;
+    // Bonus pins (seeded, fresh every ball): striking a lit peg pays a small
+    // instant Suncoin prize. Partial Fisher-Yates keeps the draw count fixed.
+    this.bonusIdx = [];
+    this.hitSet = {};
+    this.hits = [];               // {peg, sun} — drained by the view for credit
+    this.sun = 0;
+    var pool = [];
+    for (var i = 0; i < Pachinko.pegs.length; i++) pool.push(i);
+    for (var k = 0; k < P.BONUS_PEGS && k < pool.length; k++) {
+      var pick = k + Math.floor(rng.float() * (pool.length - k));
+      var tmp = pool[k]; pool[k] = pool[pick]; pool[pick] = tmp;
+      this.bonusIdx.push(pool[k]);
+    }
   }
   Pachinko.pegs = (function () {
     var P = C.PACHINKO, pegs = [];
     for (var row = 0; row < P.ROWS; row++) {
       var y = P.ROW0_Y + row * P.ROW_DY;
       var x0 = row % 2 ? P.PEG_DX : P.PEG_DX / 2;
-      for (var x = x0; x < P.W; x += P.PEG_DX) pegs.push({ x: x, y: y });
+      for (var x = x0; x < P.W; x += P.PEG_DX) {
+        // Never place a peg the ball can't pass: pockets narrower than the
+        // ball wedge it against the wall (the top-corner stuck-ball bug).
+        if (x < P.WALL_CLEAR || x > P.W - P.WALL_CLEAR) continue;
+        pegs.push({ x: x, y: y });
+      }
     }
     return pegs;
   })();
@@ -362,6 +380,13 @@
           // The seeded plink: a sideways kick per bounce is what makes the
           // chute a genuine (measured) randomizer rather than a funnel.
           this.vx += this.rng.range(-P.JITTER, P.JITTER);
+          // Bonus pin strike: once per lit peg per ball, 1..BONUS_SUN_MAX S.
+          if (this.bonusIdx.indexOf(i) >= 0 && !this.hitSet[i]) {
+            this.hitSet[i] = true;
+            var amt = 1 + Math.floor(this.rng.float() * P.BONUS_SUN_MAX);
+            this.sun += amt;
+            this.hits.push({ peg: i, sun: amt });
+          }
         }
       }
       if (this.y > P.H || this.t > 6) {
@@ -463,6 +488,20 @@
     return true;
   };
 
+  // Bonus pin strikes pay the moment they happen — same multiplied Suncoin
+  // path as the sunpouch special (never counted into the personal-RTP
+  // Stargem stat, which stays a strict per-stake measure).
+  View.prototype.drainBallBonus = function (ball) {
+    while (ball.hits.length) {
+      var h = ball.hits.shift();
+      var got = this.g.gain('suncoin', h.sun);
+      var peg = Pachinko.pegs[h.peg];
+      var pp = this.pachProj(peg.x, peg.y);
+      this.floaters.push({ x: pp.x, y: pp.y, text: '+' + U.fmt(got) + ' S', t: 0, big: false });
+      if (this.hooks.sfx) this.hooks.sfx('sparkle');
+    }
+  };
+
   // A finished ball lands its coin on the table and applies its slot's perk.
   View.prototype.settleBall = function (ball) {
     this.slotFlash = { i: ball.slot, x: ball.exitX, t: 0 };
@@ -482,6 +521,7 @@
     for (var i = 0; i < this.balls.length; i++) {
       var guard = 0;
       while (!this.balls[i].step(1 / 30) && guard++ < 2000);
+      this.drainBallBonus(this.balls[i]);
       this.settleBall(this.balls[i]);
     }
     this.balls = [];
@@ -497,9 +537,12 @@
       this.slotFlash.t += dt;
       if (this.slotFlash.t > 0.7) this.slotFlash = null;
     }
-    // Pachinko balls plink at frame rate (they substep internally).
+    // Pachinko balls plink at frame rate (they substep internally); bonus
+    // pin strikes credit the instant they happen.
     for (var b = this.balls.length - 1; b >= 0; b--) {
-      if (this.balls[b].step(dt)) {
+      var done = this.balls[b].step(dt);
+      this.drainBallBonus(this.balls[b]);
+      if (done) {
         this.settleBall(this.balls[b]);
         this.balls.splice(b, 1);
       }
@@ -771,15 +814,35 @@
     ctx.textAlign = 'center';
     ctx.fillText('▼ tap to release ▼', px + pw / 2, py + 11);
 
-    // Pegs — little glass studs.
+    // Pegs — glass studs; a ball's bonus pins glow gold until struck.
+    var bonusMap = {};
+    for (var bm = 0; bm < this.balls.length; bm++) {
+      var bb = this.balls[bm];
+      for (var q = 0; q < bb.bonusIdx.length; q++) {
+        var bi = bb.bonusIdx[q];
+        bonusMap[bi] = bb.hitSet[bi] ? 'hit' : (bonusMap[bi] || 'live');
+      }
+    }
     var pegs = Pachinko.pegs;
     for (var i = 0; i < pegs.length; i++) {
       var pp = this.pachProj(pegs[i].x, pegs[i].y);
       var pr = Math.max(2.5, this.cv.clientWidth * 0.008);
+      var state = bonusMap[i];
       var g = ctx.createRadialGradient(pp.x - pr * 0.3, pp.y - pr * 0.3, pr * 0.1, pp.x, pp.y, pr);
-      g.addColorStop(0, '#eaf7ff'); g.addColorStop(1, '#7fb8d8');
+      if (state === 'live') {
+        g.addColorStop(0, '#fff3c0'); g.addColorStop(1, '#e8a20c');
+      } else if (state === 'hit') {
+        g.addColorStop(0, '#fffbe8'); g.addColorStop(1, '#c8b06a');
+      } else {
+        g.addColorStop(0, '#eaf7ff'); g.addColorStop(1, '#7fb8d8');
+      }
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(pp.x, pp.y, pr, 0, 7); ctx.fill();
+      if (state === 'live') {
+        ctx.strokeStyle = 'rgba(255, 201, 60, ' + (0.5 + 0.4 * Math.sin(this.time * 6 + i)) + ')';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(pp.x, pp.y, pr * 1.9, 0, 7); ctx.stroke();
+      }
     }
 
     // Slot bins along the bottom: color-coded perks; the bin a ball just
