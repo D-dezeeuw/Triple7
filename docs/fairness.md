@@ -177,13 +177,31 @@ Stargems, 44/100), charm chest (a random collectible, 18/100), juice bottle
 (300 seconds of your current Juice income, floor 77 J, 22/100), sun pouch
 (21 Suncoins, 16/100).
 
+**The pachinko chute.** Every drop now releases its coin at the top of a
+peg board first. The plink path is live seeded physics on the same stream
+as the table — at each peg bounce the ball takes a small seeded sideways
+kick — and the slot it exits through grants that drop's perk: **×2 coin**
+(this coin's face value doubles), **double pay** (the next coin off the
+front pays ×2), **barrier** (side gutters sealed for your next 2 drops), or
+**quake** (a seeded stir of the pile). Aiming the release point genuinely
+shifts the distribution; the pegs funnel most runs toward the center slots.
+Barrier and double-pay are **count-scoped, not time-scoped**, so their
+worth is identical at any drop cadence — rapid-fire automation cannot
+stack them into permanent uptime. Nothing about the chute is staged: like
+the table, the board you watch is the computation, and the simulator runs
+the same code to measure slot rates (≈26% ×2, ≈18% double, ≈24% barrier,
+≈33% quake with a centered aim spread).
+
 Physics then decides, honestly, which coins reach the front edge (paid) and
-which fall into a side gutter (lost — this is the entire "house edge",
-measured at roughly 6–8% of exits at base geometry, lower with the Bumper
-Rails upgrade). `npm run simulate` runs the *actual* physics — the same
-`js/dozer.js` the browser runs — for thousands of simulated drops and
-measures steady-state E[Stargems per drop] directly; it currently measures
-**≈130% RTP at base geometry, ≈166% fully upgraded**. There is no hidden
+which fall into a side gutter (lost — this is the "house edge",
+measured at roughly 6–8% of exits at base geometry when no barrier is up,
+lower with the Bumper Rails upgrade). Coins can also climb onto a jammed
+pile and ride on top — a second layer, purely mechanical. `npm run
+simulate` runs the *actual* physics — the same `js/dozer.js` the browser
+runs, pachinko included — for thousands of simulated drops and measures
+steady-state E[Stargems per drop] directly; it currently measures
+**≈205% RTP at base geometry, ≈240% fully upgraded** (the pachinko perks
+are most of the raise over the old ≈130%/166%). There is no hidden
 "decide payout, then animate a fake table" step: the table you watch is the
 computation.
 

@@ -27,16 +27,19 @@
  *   cozy idle, the "house edge" is inverted so grinding always progresses;
  *   the 5-Seven line (777 S) stays as the near-impossible dream.
  *
- * ── DOZER MATH (conservation argument) ──────────────────────────────────────
+ * ── DOZER MATH (conservation argument + pachinko perks) ─────────────────────
  *   At steady state the table holds ~constant coins, so E[coins leaving] per
  *   coin dropped = 1. A leaving coin exits front (paid its denomination,
  *   E[tier] = 1.10 G — see COIN_TIERS) with probability (1 − sideLoss) or into
  *   a side gutter (lost). Each drop also has specialChance to spawn a bonus
  *   item (avg value ≈ 4.7 G) that follows the same exit distribution.
- *     E[G per drop] = (1−s)·E[tier] + specialChance·(1−s)·E[specialValue]
- *   Measured (tools/simulate.js): s ≈ 0.07 base → ≈ 0.93·1.10 + 0.28 ≈ 1.31 G
- *   per 7 S stake → RTP ≈ 130 % base, ~165 % with maxed rails/magnet. Run
- *   `npm run simulate` for the current measured figures.
+ *   Every drop first rides the pachinko chute (live seeded physics) and its
+ *   exit slot grants a perk: ×2 coin (~26 %), double-pay next coin exit
+ *   (~18 %), gutter barrier next 2 drops (~24 %), or a quake (~33 %). Perks
+ *   are count-scoped, so their strength is cadence-independent and bounded.
+ *   Measured (tools/simulate.js): ≈ 2.05 G per 7 S stake → RTP ≈ 205 % base,
+ *   ~240 % with maxed rails/magnet. Run `npm run simulate` for the current
+ *   measured figures.
  *
  * ── MATCH-3 ─────────────────────────────────────────────────────────────────
  *   Each cleared tile = 1 J × cascade multiplier ×(1 + 0.5·(chain−1)).
@@ -175,6 +178,31 @@
     ]
     // E[special] ≈ 0.44·7 + 0.18·~5 + 0.22·~1 + 0.16·3 ≈ 4.68 G (charm valued at
     // its 77 G ÷ ~15 duplicates-adjusted shop price; bottle ≈ 1 G of juice-time).
+    ,
+    // ── Pachinko drop chute (the dozer's second act) ─────────────────────────
+    // Every drop now releases its coin at the top of a peg board. The path is
+    // live seeded physics on the dozer stream — mechanical randomness like the
+    // table itself, measured by tools/simulate.js, never a staged animation.
+    // The exit slot grants that drop's perk. Slots are symmetric and the pegs
+    // funnel most runs toward the center, so the strong edge perks stay rare
+    // and aiming at a wall is a real (risky) strategy.
+    PACHINKO: {
+      W: 320, H: 190,                 // board units (x is shared with TABLE_W)
+      BALL_R: 9, PEG_R: 5,
+      ROWS: 4, ROW0_Y: 40, ROW_DY: 38, PEG_DX: 40,
+      GRAVITY: 640, RESTITUTION: 0.55, JITTER: 26,
+      // Perks, left to right. quake: a nudge that stirs the pile (fun, small
+      // EV). x2: the dropped coin's face value doubles. barrier: side gutters
+      // seal for the next BARRIER_DROPS drops. double: the next DOUBLE_EXITS
+      // coins off the front pay ×2. Barrier/double are COUNT-scoped, not
+      // time-scoped, so their strength is identical at any drop cadence —
+      // rapid-fire automation can't stack them into permanent uptime.
+      SLOTS: ['double', 'barrier', 'x2', 'quake', 'quake', 'x2', 'barrier', 'double'],
+      BARRIER_DROPS: 2,
+      DOUBLE_EXITS: 1,
+      DOUBLE_EXITS_CAP: 4,
+      QUAKE_IMPULSE: 46
+    }
   };
 
   // ── Collectibles: 28 Glass Charms, 4 sets of 7 ────────────────────────────

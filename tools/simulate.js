@@ -154,13 +154,22 @@ function runDozer(params, drops, seed, label) {
   var drng = new rngMod.Rng(seed);
   var world = new dozer.World(drng, params);
   var front = 0, frontGems = 0, side = 0, specialFront = { gems: 0, sun: 0, juice: 0, charm: 0 };
+  var slotHits = {};
   var dropInterval = 1.15, tNext = 3, done = 0, warmFront = 0, warmup = Math.floor(drops * 0.15);
   var step = 1 / 60;
   // Run until we've dropped `drops` coins and let the table settle after.
   var tEnd = 3 + drops * dropInterval + 40;
   for (var t = 0; t < tEnd; t += step) {
     if (t >= tNext && done < drops) {
-      world.drop(D.DOZER.TABLE_W / 2 + (drng.float() - 0.5) * 160);
+      // Every drop rides the pachinko chute first (aim spread like a player's),
+      // then lands on the table with its slot's perk — the real game flow.
+      var pach = new dozer.Pachinko(drng, D.DOZER.PACHINKO.W / 2 + (drng.float() - 0.5) * 200);
+      var guard = 0;
+      while (!pach.step(1 / 120) && guard++ < 3000);
+      var kind = D.DOZER.PACHINKO.SLOTS[pach.slot];
+      slotHits[kind] = (slotHits[kind] || 0) + 1;
+      if (kind === 'x2') world.drop(pach.exitX, 2);
+      else { world.drop(pach.exitX); world.applyPerk(kind); }
       tNext += dropInterval; done++;
     }
     var evs = world.step(step);
@@ -168,12 +177,18 @@ function runDozer(params, drops, seed, label) {
       var ev = evs[e];
       if (ev.type === 'front') {
         if (done <= warmup) { warmFront++; continue; }
-        if (ev.coin.kind === 'coin') { front++; frontGems += ev.coin.tier ? ev.coin.tier.gems : 1; }
-        else specialFront[ev.coin.special.kind]++;
+        if (ev.coin.kind === 'coin') {
+          front++;
+          frontGems += (ev.coin.tier ? ev.coin.tier.gems : 1) *
+                       (ev.coin.boost || 1) * (ev.doubled ? 2 : 1);
+        } else specialFront[ev.coin.special.kind]++;
       } else if (ev.type === 'side' && done > warmup) side++;
     }
   }
   var counted = drops - warmup;
+  console.log('  pachinko slots hit: ' + Object.keys(slotHits).map(function (k) {
+    return k + ' ' + pct(slotHits[k] / drops);
+  }).join(' · '));
   var gemsFromCoins = frontGems / counted;   // tier-weighted (COIN_TIERS)
   var gemsFromSpecials = (specialFront.gems * D.DOZER.SPECIALS[0].gems +
                           specialFront.charm * 5 +                    // charm ≈ 5 G value

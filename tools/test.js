@@ -423,6 +423,47 @@ t('deserialize does not consume the live rng stream for tier/kind lookup', funct
   dozer.World.deserialize(probe, {}, rec);
   eq(probe.getState(), before, 'deserialize must not roll the rng it is given');
 });
+t('pachinko: runs finish in a valid slot and are seed-deterministic', function () {
+  for (var s = 0; s < 50; s++) {
+    var p = new dozer.Pachinko(new rngMod.Rng(9000 + s), 40 + s * 5);
+    var guard = 0;
+    while (!p.step(1 / 60) && guard++ < 2000);
+    ok(p.done, 'run must finish');
+    ok(p.slot >= 0 && p.slot < D.DOZER.PACHINKO.SLOTS.length, 'valid slot');
+  }
+  var a = new dozer.Pachinko(new rngMod.Rng(77), 160);
+  var b = new dozer.Pachinko(new rngMod.Rng(77), 160);
+  while (!a.step(1 / 60));
+  while (!b.step(1 / 60));
+  eq(a.slot, b.slot, 'same seed+aim must land the same slot');
+  eq(a.exitX, b.exitX, 'same seed+aim must exit at the same x');
+});
+t('barrier perk seals the side gutters; expiry reopens them', function () {
+  var w = new dozer.World(new rngMod.Rng(8), {}, { noStock: true });
+  w.applyPerk('barrier');
+  ok(w.barrierDrops > 0, 'barrier must arm');
+  var c = w.spawn('coin', -10, w.railEnd() + 15);
+  c.vx = -20;
+  for (var i = 0; i < 30; i++) w.step(1 / 60);
+  eq(w.coins.length, 1, 'sealed gutter must keep the coin');
+  ok(w.coins[0].x >= w.coins[0].r - 1, 'coin pushed back inside the rail');
+  w.barrierDrops = 0;
+  w.coins[0].x = -10; w.coins[0].vx = -20;
+  var sideSeen = false;
+  for (var j = 0; j < 30; j++) {
+    var evs = w.step(1 / 60);
+    for (var e = 0; e < evs.length; e++) if (evs[e].type === 'side') sideSeen = true;
+  }
+  ok(sideSeen, 'open gutter must eat the coin again');
+});
+t('serialize round-trips coin layer and pachinko boost', function () {
+  var w = new dozer.World(new rngMod.Rng(9), {}, { noStock: true });
+  var c = w.spawn('coin', 100, 200);
+  c.layer = 1; c.boost = 2;
+  var w2 = dozer.World.deserialize(new rngMod.Rng(10), {}, w.serialize());
+  eq(w2.coins[0].layer, 1, 'layer survives the save');
+  eq(w2.coins[0].boost, 2, 'boost survives the save');
+});
 
 console.log('personal rtp');
 t('personal slot/dozer RTP withholds a ratio until the minimum sample size, then computes it', function () {
