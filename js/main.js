@@ -243,6 +243,20 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('sw.js').catch(function () { /* offline caching is a bonus, never a requirement */ });
+      // When a NEW sw.js version takes control (CACHE_NAME bump → install →
+      // skipWaiting → claim), reload once so the running page picks up the
+      // freshly-precached build immediately instead of playing old JS until
+      // the player happens to refresh. First-ever install (page previously
+      // uncontrolled) must NOT reload — that would bounce every new visitor.
+      var hadController = !!navigator.serviceWorker.controller;
+      var reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!hadController) { hadController = true; return; }
+        if (reloaded) return;
+        reloaded = true;
+        persist();
+        location.reload();
+      });
     });
   }
 

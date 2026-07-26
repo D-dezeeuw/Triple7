@@ -7,10 +7,17 @@
  *
  * Bump CACHE_NAME whenever a shipped file changes meaningfully; activate()
  * deletes every other cache version so old bytes never linger.
+ *
+ * RELEASE CHECKLIST (this bump is the deploy mechanism — skipping it ships
+ * nothing): any commit that touches index.html, css/ or js/ MUST bump the
+ * version below. install() then precaches the whole shell atomically, so
+ * players can never end up on a mixed old/new build (a mixed data.js +
+ * dozer.js pair, for example, crashes at module load). main.js reloads the
+ * page once when a new version takes control, so updates land right away.
  */
 'use strict';
 
-var CACHE_NAME = 'triple7-v1';
+var CACHE_NAME = 'triple7-v2';
 
 // The minimum set of files the game needs to boot and be playable offline.
 // Sprites aren't listed here on purpose: js/sprites.js eagerly preloads every
