@@ -37,48 +37,69 @@ function pct(x) { return (x * 100).toFixed(2) + '%'; }
 hr('1. SLOT MACHINE — "Sunshine Sevens" (stake: 7 Juice ≡ 1.000 S)');
 
 var exact = slots.enumerateRTP(0);
-console.log('  Exact par sheet (3 reels × 64 weighted stops, enumerated):\n');
-console.log('  line              probability        pays     EV share');
+console.log('  Exact par sheet (5×4 window, 20 iid cells of 64 weighted stops,');
+console.log('  ' + D.SLOT.LINES.length + ' paylines — line EV closed-form, scatter exact binomial):\n');
+console.log('  run          P per line          pays     EV share (all lines)');
 exact.lines.forEach(function (l) {
-  console.log('  ' + l.label.padEnd(14) + (l.p.toFixed(7)).padStart(12) +
-    '  (1 in ' + String(Math.round(1 / l.p)).padStart(6) + ')' +
+  console.log('  ' + l.label.padEnd(10) + (l.p.toFixed(9)).padStart(14) +
+    '  (1 in ' + String(Math.round(1 / l.p)).padStart(9) + ')' +
     String(l.pay).padStart(6) + ' S   ' + l.evPart.toFixed(5) + ' S');
 });
-console.log('\n  EXACT EV       = ' + exact.ev.toFixed(5) + ' S/spin  → RTP ' + pct(exact.ev));
-console.log('  EXACT hit rate = ' + pct(exact.hitRate));
+console.log('\n  Beach Bonus: P(3+ scatter Sevens) = ' + exact.bonusP.toFixed(6) +
+  ' (1 in ' + Math.round(1 / exact.bonusP) + ') × blind-stop ladder mean ' +
+  exact.bonusBlind.toFixed(4) + ' S = ' + (exact.bonusP * exact.bonusBlind).toFixed(5) + ' S/spin');
+console.log('  (Skill can only lift a real player above the blind mean — the counter');
+console.log('   pays exactly what it shows when stopped; ladder max ' +
+  Math.max.apply(null, exact.ladder) + ' S + ' + D.SLOT.BONUS.PEAK_GEMS + ' G on the peak.)');
+console.log('\n  EXACT EV = ' + exact.ev.toFixed(5) + ' S/spin  → RTP ' + pct(exact.ev) +
+  '  (lines ' + exact.linesEV.toFixed(5) + ' + bonus ' + (exact.ev - exact.linesEV).toFixed(5) + ')');
 
+// Monte Carlo: full spins; a triggered bonus is settled with a blind stop
+// (uniform over the ladder cycle) — exactly what the published EV prices.
 var rng = new rngMod.Rng(777001);
-var mcPay = 0, mcHits = 0, mcJack = 0, mcGems = 0;
+var cycle = slots.ladderCycle(0);
+var mcPay = 0, mcHits = 0, mcBonuses = 0, mcLineWins = 0;
 for (var s = 0; s < N_SPINS; s++) {
   var res = slots.resolveSpin(rng, 0);
-  mcPay += res.sun; mcGems += res.gems;
-  if (res.sun > 0) mcHits++;
-  if (res.kind === 'jackpot') mcJack++;
+  var pay = res.sun;
+  mcLineWins += res.lineWins.length;
+  if (res.bonus) {
+    mcBonuses++;
+    pay += cycle[Math.floor(rng.float() * cycle.length)];
+  }
+  mcPay += pay;
+  if (pay > 0) mcHits++;
 }
-console.log('\n  Monte Carlo (' + N_SPINS.toLocaleString() + ' spins, seed 777001):');
+console.log('\n  Monte Carlo (' + N_SPINS.toLocaleString() + ' spins, seed 777001, blind bonus stops):');
 console.log('    EV       = ' + (mcPay / N_SPINS).toFixed(5) + ' S/spin  (Δ vs exact: ' +
   Math.abs(mcPay / N_SPINS - exact.ev).toFixed(5) + ')');
-console.log('    hit rate = ' + pct(mcHits / N_SPINS) +
-  ' · jackpots: ' + mcJack + ' (expect ~' + Math.round(N_SPINS * Math.pow(2 / 64, 3)) + ')' +
-  ' · bonus gems EV = ' + (mcGems / N_SPINS).toFixed(5) + ' G/spin');
+console.log('    hit rate = ' + pct(mcHits / N_SPINS) + ' (incl. bonus triggers)' +
+  ' · winning lines/spin = ' + (mcLineWins / N_SPINS).toFixed(4) +
+  ' (exact ' + exact.expLineWins.toFixed(4) + ')' +
+  ' · bonuses: ' + mcBonuses + ' (expect ~' + Math.round(N_SPINS * exact.bonusP) + ')');
 var maxed = slots.enumerateRTP(3);
-console.log('  With Lucky Sevens maxed (+3 weight): EV = ' + maxed.ev.toFixed(5) +
+console.log('  With Lucky Sevens maxed (3 extra ladder rungs, top ' +
+  Math.max.apply(null, maxed.ladder) + ' S): EV = ' + maxed.ev.toFixed(5) +
   ' S/spin → RTP ' + pct(maxed.ev));
 
-var slotOK = Math.abs(exact.ev - 1.18401) < 0.0005 && exact.ev > 1.0;
-console.log('\n  VERDICT: ' + (slotOK ? '✔ matches published 1.18401 S/spin; stage is EV-positive.'
+var slotOK = Math.abs(exact.ev - 1.455259) < 0.0005 && exact.ev > 1.0 &&
+             Math.abs(mcPay / N_SPINS - exact.ev) < 0.01;
+console.log('\n  VERDICT: ' + (slotOK ? '✔ matches published 1.455259 S/spin; stage is EV-positive.'
   : '✘ MISMATCH with published EV!'));
 
 // Inflation ceiling (§11.8): promo/upgrade EV must stay bounded — every
 // multiplier source has a max level, but a change to one of them (or a new
-// stacking source) could silently blow past a sane RTP. Lucky Sevens (max 3)
-// and Sun-Kissed Reels (max 30, +5%/lvl) are the two slot-side sinks; this
-// asserts their fully-maxed product never exceeds a 4.0x (400%) RTP ceiling.
+// stacking source) could silently blow past a sane RTP. Lucky Sevens (max 3,
+// each adding a higher bonus-ladder rung) and Sun-Kissed Reels (max 30,
+// +5%/lvl) are the two slot-side sinks; this asserts their fully-maxed
+// product never exceeds a 5.0x (500%) RTP ceiling. (Raised from 4.0 with the
+// 5×4 machine: base EV moved to 1.455 and maxed lands at ≈4.47 — still a
+// hard, published bound.)
 var luckyU = D.UPGRADES.filter(function (u) { return u.id === 'luckysevens'; })[0];
 var reelsU = D.UPGRADES.filter(function (u) { return u.id === 'sunreels'; })[0];
 var maxSunMult = 1 + 0.05 * reelsU.max;
 var maxedSlotEv = slots.enumerateRTP(luckyU.max).ev * maxSunMult;
-var RTP_CEILING = 4.0;
+var RTP_CEILING = 5.0;
 console.log('\n  Inflation ceiling check (§11.8): Lucky Sevens maxed (+' + luckyU.max +
   ') × Sun-Kissed Reels maxed (+' + Math.round((maxSunMult - 1) * 100) + '%) → ' +
   maxedSlotEv.toFixed(3) + ' S/spin (RTP ' + pct(maxedSlotEv) + '), ceiling ' + RTP_CEILING.toFixed(1) + 'x');
@@ -87,14 +108,15 @@ console.log('  VERDICT: ' + (inflationOK
   ? '✔ fully-maxed slot RTP stays under the ' + pct(RTP_CEILING) + ' ceiling.'
   : '✘ INFLATION CEILING BREACHED — maxed slot RTP exceeds ' + pct(RTP_CEILING) + '!'));
 
-// Jackpot drought odds (§10.3): published so players can trust the number
+// Bonus drought odds (§10.3): published so players can trust the number
 // rather than guess it — a rare event should still be an honestly-stated one.
-var pJackpot = Math.pow(2 / 64, 3);
-console.log('\n  Jackpot drought odds (published — honesty over hype):');
-[1000, 10000, 32768].forEach(function (n) {
-  console.log('    P(no Triple Seven in ' + n.toLocaleString() + ' spins) = ' +
-    pct(Math.pow(1 - pJackpot, n)));
+console.log('\n  Beach Bonus drought odds (published — honesty over hype):');
+[10, 43, 100, 300].forEach(function (n) {
+  console.log('    P(no bonus in ' + n.toLocaleString() + ' spins) = ' +
+    pct(Math.pow(1 - exact.bonusP, n)));
 });
+console.log('    (The 5-Seven dream line: p = ' +
+  (D.SLOT.LINES.length * Math.pow(2 / 64, 5)).toExponential(2) + ' per spin — 777 S if it ever lands.)');
 
 // ── 2. MATCH-3 ──────────────────────────────────────────────────────────────
 hr('2. MATCH-3 — "Juicy Grove" (stake: one free move)');

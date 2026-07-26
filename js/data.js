@@ -14,12 +14,15 @@
  *   tier is reachable from tier 1 by finite conversions, so the player can never
  *   be locked out of progress regardless of slot/dozer variance.
  *
- * ── SLOT MATH (3 reels × 64 virtual stops, per-reel weights below) ──────────
- *   P(three of symbol k) = (w_k/64)^3 ; pairs computed with exact binomials.
- *   Base paytable EV = 1.18401 S per spin against a 7 J (≡ 1 S) stake
- *   → RTP ≈ 118.4 %, hit frequency ≈ 30.1 %. Positive-EV on purpose: this is a
- *   free cozy idle, the "house edge" is inverted so grinding always progresses,
- *   while variance (jackpot p = (2/64)^3 ≈ 1/32768 paying 777) keeps spins spicy.
+ * ── SLOT MATH (5×4 window, 20 iid cells from 64 weighted stops, 9 paylines) ─
+ *   Per line: P(leftmost run of n of symbol k) = p^n·(1−p) (n=3,4), p^5 (n=5),
+ *   p = w_k/64; total line EV = 9 × per-line EV (expectation is linear even
+ *   though lines share cells). 3+ scatter Sevens (Binomial(20, 2/64), ≈2.34 %)
+ *   trigger the skill-stop Beach Bonus; published EV prices it at the blind-
+ *   stop ladder mean. Base EV = 1.45519 S per 7 J (≡ 1 S) stake → RTP ≈ 145 %,
+ *   hit ≈ 35 %. Positive-EV on purpose: this is a free cozy idle, the "house
+ *   edge" is inverted so grinding always progresses; the 5-Seven line (777 S)
+ *   stays as the near-impossible dream.
  *
  * ── DOZER MATH (conservation argument) ──────────────────────────────────────
  *   At steady state the table holds ~constant coins, so E[coins leaving] per
@@ -70,28 +73,61 @@
   };
 
   // ── Slot machine ───────────────────────────────────────────────────────────
-  // Virtual reel: 64 weighted stops per reel, identical reels.
+  // Sunshine Sevens 2.0: a 5×4 video slot. Every one of the 20 window cells is
+  // an independent draw from the same 64-stop weighted distribution (the
+  // spinning strips remain pure theater — outcome first, always), evaluated
+  // over 9 fixed paylines plus a scatter-triggered skill-stop bonus.
   var SLOT = {
+    GRID: { COLS: 5, ROWS: 4 },
     REEL: [
       { id: 'seven',  w: 2  },
-      { id: 'star',   w: 5  },
-      { id: 'berry',  w: 8  },
-      { id: 'melon',  w: 10 },
-      { id: 'lemon',  w: 17 },
-      { id: 'cherry', w: 22 }
+      { id: 'star',   w: 8  },
+      { id: 'berry',  w: 10 },
+      { id: 'melon',  w: 12 },
+      { id: 'lemon',  w: 15 },
+      { id: 'cherry', w: 17 }
     ],
-    // Triple payouts in Suncoins (stake = 7 Juice ≡ 1 S):
-    PAYS: { seven: 777, star: 77, berry: 30, melon: 20, lemon: 12, cherry: 7 },
-    PAIR_SEVEN_PAYS: 5,
-    PAIR_CHERRY_PAYS: 2,
-    JACKPOT_GEM_BONUS: 7        // 3×seven additionally pays 7 Stargems
-    /* Exact base EV (enumerated in slots.enumerateRTP, verified by `npm run simulate`):
-     *  3×cherry (22/64)³·7  ≈ 0.28436      3×lemon (17/64)³·12 ≈ 0.22490
-     *  3×melon  (10/64)³·20 ≈ 0.07629      3×berry  (8/64)³·30 ≈ 0.05859
-     *  3×star    (5/64)³·77 ≈ 0.03672      3×seven  (2/64)³·777≈ 0.02371
-     *  pair7 (exactly two sevens) ·5       ≈ 0.01419
-     *  pair🍒 (exactly two cherries) ·2    ≈ 0.46524
-     *  ── total 1.18401 S / spin  (RTP 118.40 %, hit rate 30.11 %) ── */
+    // 9 paylines: one row index (0=top) per reel, left to right.
+    LINES: [
+      [0, 0, 0, 0, 0],
+      [1, 1, 1, 1, 1],
+      [2, 2, 2, 2, 2],
+      [3, 3, 3, 3, 3],
+      [0, 1, 2, 1, 0],   // V
+      [3, 2, 1, 2, 3],   // Λ
+      [1, 0, 1, 0, 1],   // high zigzag
+      [2, 3, 2, 3, 2],   // low zigzag
+      [1, 2, 3, 2, 1]    // deep mid-V
+    ],
+    // Pays in Suncoins for a leftmost run of 3 / 4 / 5 on a line
+    // (stake = 7 Juice ≡ 1 S; smallest pay is 2 S — never below the stake).
+    PAYS: {
+      cherry: [2, 3, 5],
+      lemon:  [2, 3, 7],
+      melon:  [2, 4, 8],
+      berry:  [2, 5, 12],
+      star:   [3, 8, 35],
+      seven:  [12, 77, 777]
+    },
+    // Beach Bonus: 3+ Sevens anywhere in the window (scatter) turn the top
+    // screen into a skill-stop counter. The ladder steps up then back down;
+    // whatever you STOP on is credited — genuinely timing-based, see
+    // docs/fairness.md. Idle/auto play auto-stops after AUTO_CYCLES full
+    // cycles (≈ the blind baseline the published EV assumes). Catching the
+    // topmost rung also pays PEAK_GEMS Stargems (the "TRIPLE SEVEN" moment).
+    SCATTER_MIN: 3,
+    BONUS: {
+      LADDER: [5, 7, 9, 12, 16, 21, 27, 35, 49],
+      LADDER_EXT: [63, 77, 98],   // Lucky Sevens adds one higher rung per level
+      STEP_MS: 110,
+      AUTO_CYCLES: 3,
+      PEAK_GEMS: 7
+    }
+    /* Exact base EV (enumerated analytically in slots.enumerateRTP, verified by
+     * `npm run simulate`): 9 lines × per-line EV 0.111707 = 1.005362 S, plus
+     * P(3+ scatter Sevens) 0.023368 × blind-stop ladder mean 19.25 = 0.449833 S
+     * ── total 1.45519 S / spin (RTP 145.5 %, hit rate ≈ 35 % measured) ──
+     * Richer than v1's 1.18401 on purpose: requested "win rate a bit higher". */
   };
 
   // ── Beach Getaway (slots top screen) ──────────────────────────────────────
@@ -198,7 +234,7 @@
     { id: 'juicerblades', name: 'Juicer Blades',  desc: '+25% Juice from matches per level',        base: 5,  growth: 1.7,  max: 50, cur: 'stargem' },
     { id: 'combokettle',  name: 'Combo Kettle',   desc: '+10% cascade bonus per level',             base: 12, growth: 1.8,  max: 20, cur: 'stargem' },
     { id: 'sunreels',     name: 'Sun-Kissed Reels', desc: '+5% slot payouts per level',             base: 8,  growth: 1.75, max: 30, cur: 'stargem' },
-    { id: 'luckysevens',  name: 'Lucky Sevens',   desc: '+1 Seven on every reel per level',         base: 77, growth: 2.6,  max: 3,  cur: 'stargem' },
+    { id: 'luckysevens',  name: 'Lucky Sevens',   desc: 'Adds a higher Beach Bonus rung per level', base: 77, growth: 2.6,  max: 3,  cur: 'stargem' },
     { id: 'bumperrails',  name: 'Bumper Rails',   desc: 'Extends the side rails — fewer coins lost to the gutters', base: 10, growth: 2.0, max: 5, cur: 'stargem' },
     { id: 'widepusher',   name: 'Wide Pusher',    desc: 'Pusher face 6% wider per level',           base: 15, growth: 2.0,  max: 5,  cur: 'stargem' },
     { id: 'charmmagnet',  name: 'Charm Magnet',   desc: '+1% special item chance per level',        base: 20, growth: 2.0,  max: 7,  cur: 'stargem' },

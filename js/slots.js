@@ -1,7 +1,9 @@
-/* Triple7 — slots.js  ("Sunshine Sevens")
- * Weighted virtual-reel slot machine (the par-sheet model real slots use):
- * outcome is decided the instant you spin; the reels are pure theater.
- * Pure resolve + exact RTP enumeration are UMD-exported for the Node verifier.
+/* Triple7 — slots.js  ("Sunshine Sevens 2.0")
+ * 5×4 video slot, 9 fixed paylines, scatter-triggered skill-stop bonus.
+ * Every window cell is an independent draw from one 64-stop weighted
+ * distribution — outcome is decided the instant you spin; the reels are pure
+ * theater. Pure resolve + exact analytic RTP are UMD-exported for the Node
+ * verifier (line EV is closed-form, scatter is an exact binomial).
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
@@ -14,66 +16,120 @@
   'use strict';
 
   var S = D.SLOT;
+  var COLS = S.GRID.COLS, ROWS = S.GRID.ROWS, CELLS = COLS * ROWS;
 
-  function reelWeights(luckyLvl) {
-    // Lucky Sevens upgrade adds +1 seven stop per reel per level (max 3).
-    return S.REEL.map(function (r) {
-      return { id: r.id, w: r.id === 'seven' ? r.w + (luckyLvl || 0) : r.w };
-    });
+  // Weights are fixed for all upgrade levels now — Lucky Sevens extends the
+  // bonus ladder instead of touching the reels (see ladderFor), keeping the
+  // scatter frequency, and with it the inflation ceiling, bounded.
+  function reelWeights() {
+    return S.REEL.map(function (r) { return { id: r.id, w: r.w }; });
   }
 
-  function evaluate(symbols) {
-    var counts = {};
-    symbols.forEach(function (s) { counts[s] = (counts[s] || 0) + 1; });
-    if (counts[symbols[0]] === 3) {
-      var sym = symbols[0];
-      return {
-        kind: sym === 'seven' ? 'jackpot' : 'triple',
-        sym: sym,
-        sun: S.PAYS[sym],
-        gems: sym === 'seven' ? S.JACKPOT_GEM_BONUS : 0
-      };
+  // The effective bonus ladder at a Lucky Sevens level, and its full up-then-
+  // down step cycle (the thing the counter actually walks, and the thing the
+  // blind-stop mean is averaged over).
+  function ladderFor(luckyLvl) {
+    return S.BONUS.LADDER.concat(S.BONUS.LADDER_EXT.slice(0, luckyLvl || 0));
+  }
+  function ladderCycle(luckyLvl) {
+    var lad = ladderFor(luckyLvl);
+    return lad.concat(lad.slice(1, lad.length - 1).reverse());
+  }
+  function ladderBlindMean(luckyLvl) {
+    var cyc = ladderCycle(luckyLvl);
+    var sum = 0;
+    for (var i = 0; i < cyc.length; i++) sum += cyc[i];
+    return sum / cyc.length;
+  }
+
+  // Evaluate a landed grid (grid[col][row] = symbol id) over the paylines.
+  // Returns { lineWins: [{line, sym, n, pay}], scatters, sun, bonus } —
+  // sun is the pre-multiplier sum of line pays; bonus means 3+ scatter Sevens.
+  function evaluate(grid) {
+    var lineWins = [], sun = 0;
+    for (var l = 0; l < S.LINES.length; l++) {
+      var rows = S.LINES[l];
+      var sym = grid[0][rows[0]];
+      var n = 1;
+      while (n < COLS && grid[n][rows[n]] === sym) n++;
+      if (n >= 3) {
+        var pay = S.PAYS[sym][n - 3];
+        lineWins.push({ line: l, sym: sym, n: n, pay: pay });
+        sun += pay;
+      }
     }
-    if ((counts.seven || 0) === 2) return { kind: 'pair7', sun: S.PAIR_SEVEN_PAYS, gems: 0 };
-    if ((counts.cherry || 0) === 2) return { kind: 'pair-cherry', sun: S.PAIR_CHERRY_PAYS, gems: 0 };
-    return { kind: 'none', sun: 0, gems: 0 };
+    var scatters = 0;
+    for (var c = 0; c < COLS; c++) {
+      for (var r = 0; r < ROWS; r++) if (grid[c][r] === 'seven') scatters++;
+    }
+    return { lineWins: lineWins, scatters: scatters, sun: sun,
+             bonus: scatters >= S.SCATTER_MIN };
   }
 
-  // One spin: returns { symbols, sun, gems, kind } — sun is pre-multiplier.
+  // One spin: draws the 20 cells column-major (col 0 top→bottom, then col 1…)
+  // so the rng stream stays reproducible, then evaluates. Returns
+  // { grid, lineWins, scatters, sun, bonus } — sun is pre-multiplier.
   function resolveSpin(rng, luckyLvl) {
-    var weights = reelWeights(luckyLvl);
-    var symbols = [rng.weighted(weights).id, rng.weighted(weights).id, rng.weighted(weights).id];
-    var ev = evaluate(symbols);
-    ev.symbols = symbols;
+    var weights = reelWeights();
+    var grid = [];
+    for (var c = 0; c < COLS; c++) {
+      grid.push([]);
+      for (var r = 0; r < ROWS; r++) grid[c].push(rng.weighted(weights).id);
+    }
+    var ev = evaluate(grid);
+    ev.grid = grid;
+    void luckyLvl;   // kept in the signature for call-site compatibility
     return ev;
   }
 
-  // Exact RTP: enumerate all 6^3 symbol combos with exact probabilities.
-  // Returns { ev, hitRate, lines: [{label, p, pay, evPart}] } — the par sheet.
+  function comb(n, k) {
+    var v = 1;
+    for (var i = 0; i < k; i++) v = v * (n - i) / (i + 1);
+    return v;
+  }
+
+  // Exact analytic RTP — no sampling anywhere:
+  //   line EV: per line Σ_sym p³(1−p)·pay3 + p⁴(1−p)·pay4 + p⁵·pay5, ×9 lines
+  //            (expectation is linear even though lines share cells);
+  //   bonus:   P(scatter Sevens ≥ 3) is an exact Binomial(20, p7), priced at
+  //            the blind-stop ladder mean (skill can only raise a real player
+  //            above this baseline — see docs/fairness.md).
+  // Returns the full par sheet used by tests, the simulator and the paytable.
   function enumerateRTP(luckyLvl) {
-    var weights = reelWeights(luckyLvl);
+    var weights = reelWeights();
     var total = 0;
     weights.forEach(function (w) { total += w.w; });
-    var ev = 0, hit = 0, byKind = {};
-    for (var a = 0; a < weights.length; a++) {
-      for (var b = 0; b < weights.length; b++) {
-        for (var c = 0; c < weights.length; c++) {
-          var p = (weights[a].w / total) * (weights[b].w / total) * (weights[c].w / total);
-          var res = evaluate([weights[a].id, weights[b].id, weights[c].id]);
-          ev += p * res.sun;
-          if (res.sun > 0) hit += p;
-          var key = res.kind === 'triple' || res.kind === 'jackpot' ? '3×' + res.sym : res.kind;
-          if (res.sun > 0) {
-            byKind[key] = byKind[key] || { label: key, p: 0, pay: res.sun, evPart: 0 };
-            byKind[key].p += p;
-            byKind[key].evPart += p * res.sun;
-          }
-        }
+    var lineEV = 0, lines = [], expLineWins = 0;
+    weights.forEach(function (w) {
+      var p = w.w / total;
+      for (var n = 3; n <= COLS; n++) {
+        var prob = Math.pow(p, n) * (n < COLS ? 1 - p : 1);
+        var pay = S.PAYS[w.id][n - 3];
+        lineEV += prob * pay;
+        expLineWins += prob;
+        lines.push({ label: n + '×' + w.id, p: prob, pay: pay,
+                     evPart: prob * pay * S.LINES.length });
       }
+    });
+    lines.sort(function (a, b) { return b.evPart - a.evPart; });
+    var p7 = 2 / total;
+    weights.forEach(function (w) { if (w.id === 'seven') p7 = w.w / total; });
+    var bonusP = 1;
+    for (var k = 0; k < S.SCATTER_MIN; k++) {
+      bonusP -= comb(CELLS, k) * Math.pow(p7, k) * Math.pow(1 - p7, CELLS - k);
     }
-    var lines = Object.keys(byKind).map(function (k) { return byKind[k]; });
-    lines.sort(function (x, y) { return y.evPart - x.evPart; });
-    return { ev: ev, hitRate: hit, lines: lines };
+    var blind = ladderBlindMean(luckyLvl);
+    var ev = lineEV * S.LINES.length + bonusP * blind;
+    return {
+      ev: ev,
+      lineEV: lineEV,
+      linesEV: lineEV * S.LINES.length,
+      expLineWins: expLineWins * S.LINES.length,   // E[# winning lines]/spin
+      lines: lines,
+      bonusP: bonusP,
+      bonusBlind: blind,
+      ladder: ladderFor(luckyLvl)
+    };
   }
 
   // Resort level (1-based) for a lifetime spin count — drives the Beach
@@ -86,7 +142,9 @@
   }
 
   var core = { resolveSpin: resolveSpin, evaluate: evaluate, enumerateRTP: enumerateRTP,
-               reelWeights: reelWeights, resortLevel: resortLevel };
+               reelWeights: reelWeights, resortLevel: resortLevel,
+               ladderFor: ladderFor, ladderCycle: ladderCycle,
+               ladderBlindMean: ladderBlindMean };
 
   if (typeof document === 'undefined') return core;
 
@@ -99,8 +157,11 @@
     lemon:  { c: '#ffd23f', hi: '#fff3a6' },
     cherry: { c: '#e8283c', hi: '#ff7d8a' }
   };
-  var STOP_BASE = [1.0, 1.6, 2.2];        // seconds until each reel locks
-  var ANTICIPATION_MULT = 2.5;            // reel 3 delay when two sevens showing
+  var STOP_BASE = [0.9, 1.3, 1.7, 2.1, 2.5]; // seconds until each reel locks
+  var ANTICIPATION_MULT = 1.8;            // reels 4–5 delay when scatter is brewing
+  // Payline identity colors for the win presentation (index = line number).
+  var LINE_COLORS = ['#ff5a4e', '#ffc93c', '#3ec6ff', '#37c05e', '#b06ce8',
+                     '#ff8c1a', '#ff6bb3', '#7dffb0', '#ffffff'];
   // Beach Getaway weather: purely cosmetic looks for the top screen, drifting
   // every 20–40 spins. Selection uses decorative Math.random (same precedent
   // as match3's sweep timing) — it never reads the seeded gameplay stream.
@@ -118,31 +179,43 @@
     this.ctx = canvas.getContext('2d');
     this.time = 0;
     // Visual strips: the 64 weighted stops, shuffled once — matches true odds
-    // so what scrolls past honestly represents the distribution.
+    // so what scrolls past honestly represents the distribution. Each spin
+    // splices its drawn column in at the landing window (see spin()), which
+    // keeps the strip converging to the same weighted mix over time.
     this.strips = [];
-    for (var r = 0; r < 3; r++) {
+    for (var r = 0; r < COLS; r++) {
       var strip = [];
       S.REEL.forEach(function (s) { for (var i = 0; i < s.w; i++) strip.push(s.id); });
       rng.shuffle(strip);
       this.strips.push(strip);
     }
-    this.pos = [0, 0, 0];                 // strip position (symbol units)
-    this.reel = [null, null, null];       // per-reel anim state
+    this.pos = [0, 0, 0, 0, 0];           // strip position of the window's top row
+    this.reel = [null, null, null, null, null];
     this.spinning = false;
     this.result = null;
     this.flash = 0;                        // win flash timer
     this.lastWin = null;
     this.anticipating = false;
+    this.bonus = null;                     // skill-stop bonus state machine
     this.weather = 'sunny';
     this.weatherAt = game.s.stats.spins + 20 + Math.floor(Math.random() * 21);
     this.sparkles = [];                   // decorative win droplets (cosmetic only)
+    // Tap anywhere on the machine to stop the bonus counter.
+    var self = this;
+    canvas.addEventListener('pointerdown', function () {
+      if (self.bonus && self.bonus.phase === 'count') self.stopBonus();
+    });
   }
 
   View.prototype.canSpin = function () {
-    return !this.spinning && this.g.canAfford('juice', D.CONVERSION.SPIN_COST_J);
+    return !this.spinning && !this.bonus &&
+           this.g.canAfford('juice', D.CONVERSION.SPIN_COST_J);
   };
 
   View.prototype.spin = function () {
+    // During the bonus, the SPIN button (and the Auto-Spinner, which calls
+    // this same method) becomes the STOP button.
+    if (this.bonus) return this.stopBonus();
     if (!this.canSpin()) {
       // Mirrors dozer.js's tryDrop: only the "can't afford it" case earns a
       // 'bad' cue — already-spinning is just a no-op, not a failed purchase.
@@ -156,21 +229,25 @@
     this.spinning = true;
     this.lastWin = null;
     this.flash = 0;
-    this.anticipating = res.symbols[0] === 'seven' && res.symbols[1] === 'seven';
+    // Scatter anticipation, decided from the already-final grid: 2+ Sevens
+    // among the first three reels → the last two spin longer with a glow.
+    // Presentation only; the outcome was fixed the moment the stake was paid.
+    var early = 0;
+    for (var c = 0; c < 3; c++) {
+      for (var rw0 = 0; rw0 < ROWS; rw0++) if (res.grid[c][rw0] === 'seven') early++;
+    }
+    this.anticipating = early >= 2;
 
-    for (var r = 0; r < 3; r++) {
+    for (var r = 0; r < COLS; r++) {
       var stopAt = STOP_BASE[r];
-      if (r === 2 && this.anticipating) stopAt *= ANTICIPATION_MULT;
-      // Land the target symbol on the payline: find an occurrence ahead,
-      // then travel a whole number of symbols (≥3 loops) to stop exactly on it.
+      if (this.anticipating && r >= 3) stopAt *= ANTICIPATION_MULT;
+      // Splice the drawn column into the strip at a landing window ahead, then
+      // travel a whole number of symbols (≥3 loops) to arrive exactly on it.
       var strip = this.strips[r];
-      var current = Math.round(this.pos[r]) % strip.length;
-      var targetIdx = current;
-      for (var look = 1; look <= strip.length; look++) {
-        if (strip[(current + look) % strip.length] === res.symbols[r]) { targetIdx = current + look; break; }
-      }
-      // The payline displays strip[pos+1] (see draw()), so stop at targetIdx-1.
-      var distance = as_int(this.pos[r], targetIdx - 1, strip.length);
+      var current = ((Math.round(this.pos[r]) % strip.length) + strip.length) % strip.length;
+      var land = (current + 8 + Math.floor(Math.random() * (strip.length - 12))) % strip.length;
+      for (var rw = 0; rw < ROWS; rw++) strip[(land + rw) % strip.length] = res.grid[r][rw];
+      var distance = as_int(this.pos[r], land, strip.length);
       this.reel[r] = { t: 0, dur: stopAt, from: this.pos[r], dist: distance, done: false };
     }
     if (this.hooks.sfx) this.hooks.sfx('spin');
@@ -201,10 +278,11 @@
       s.x += s.vx * dt; s.y += s.vy * dt;
       if (s.t > s.life) this.sparkles.splice(i, 1);
     }
+    if (this.bonus) this.updateBonus(dt);
     if (!this.spinning) return;
 
     var allDone = true;
-    for (var r = 0; r < 3; r++) {
+    for (var r = 0; r < COLS; r++) {
       var st = this.reel[r];
       if (!st) continue;
       if (!st.done) {
@@ -230,26 +308,91 @@
 
   View.prototype.settle = function () {
     var g = this.g, res = this.result;
-    var creditedSun = 0, creditedGems = 0;
+    var creditedSun = 0;
     if (res.sun > 0) creditedSun = g.gain('suncoin', res.sun);
-    if (res.gems > 0) creditedGems = g.gain('stargem', res.gems);
     g.s.stats.slotSunWon += creditedSun;   // Phase 28.7: personal RTP tracking
-    if (res.kind === 'jackpot') {
-      g.s.stats.jackpots++;
-      this.flash = 3.5;
-      if (this.hooks.sfx) this.hooks.sfx('jackpot');
-      if (this.hooks.onJackpot) this.hooks.onJackpot(creditedSun, creditedGems);
-    } else if (res.sun > 0) {
-      this.flash = 1.2;
+    if (res.sun > 0) {
+      this.flash = res.sun >= 35 ? 2.5 : 1.2;
       if (this.hooks.sfx) this.hooks.sfx('win');
-    } else if (this.hooks.sfx) {
+      this.spawnWinSparkles();
+    } else if (!res.bonus && this.hooks.sfx) {
       this.hooks.sfx('nowin');
     }
-    this.lastWin = { sun: creditedSun, gems: creditedGems, kind: res.kind };
-    if (res.sun > 0) this.spawnWinSparkles(res.kind === 'jackpot' ? 8 : 4);
+    this.lastWin = { sun: creditedSun, gems: 0, lines: res.lineWins.length,
+                     kind: res.bonus ? 'bonus' : (res.sun > 0 ? 'lines' : 'none') };
     this.checkResort();
+    if (res.bonus) this.startBonus(res.scatters);
     if (this.hooks.onSettle) this.hooks.onSettle(this.lastWin);
     g.checkAchievements();
+  };
+
+  // ── Beach Bonus: the skill-stop counter ───────────────────────────────────
+  // 3+ scatter Sevens turn the top screen into a rapidly stepping coin ladder.
+  // Honestly skill-based: whatever value is showing when the player stops is
+  // exactly what's credited — the machine never nudges or re-decides it (the
+  // inverse of real pachislo "skill stop" cheats; see docs/fairness.md). Idle
+  // players and the Auto-Spinner get an automatic stop after AUTO_CYCLES full
+  // cycles, which over time pays the published blind-stop mean.
+  View.prototype.startBonus = function (scatters) {
+    var cyc = ladderCycle(this.g.upLvl('luckysevens'));
+    this.bonus = { phase: 'banner', t: 0, idx: 0, stepT: 0, cycles: 0,
+                   cycle: cyc, peak: Math.max.apply(null, cyc),
+                   scatters: scatters, value: cyc[0], award: 0, gems: 0 };
+    if (this.hooks.sfx) this.hooks.sfx('sparkle');
+  };
+
+  View.prototype.updateBonus = function (dt) {
+    var b = this.bonus;
+    b.t += dt;
+    if (b.phase === 'banner') {
+      if (b.t > 1.0) { b.phase = 'count'; b.t = 0; }
+    } else if (b.phase === 'count') {
+      b.stepT += dt;
+      var step = S.BONUS.STEP_MS / 1000;
+      while (b.stepT >= step && b.phase === 'count') {
+        b.stepT -= step;
+        b.idx = (b.idx + 1) % b.cycle.length;
+        b.value = b.cycle[b.idx];
+        if (b.idx === 0) {
+          b.cycles++;
+          if (b.cycles >= S.BONUS.AUTO_CYCLES) this.stopBonus();   // blind auto-stop
+        }
+      }
+    } else if (b.phase === 'stopped') {
+      if (b.t > 1.6) this.bonus = null;
+    }
+  };
+
+  View.prototype.stopBonus = function () {
+    var b = this.bonus, g = this.g;
+    if (!b || b.phase !== 'count') return false;   // banner not armed yet; stopped is final
+    b.award = g.gain('suncoin', b.value);
+    g.s.stats.slotSunWon += b.award;               // bonus is part of the spin's return
+    if (b.value === b.peak) {
+      // The skill jackpot: catching the top rung. Pays Stargems on top and
+      // counts as the "TRIPLE SEVEN" moment (stats + achievement + fanfare).
+      b.gems = g.gain('stargem', S.BONUS.PEAK_GEMS);
+      g.s.stats.jackpots++;
+      this.flash = 3.0;
+      if (this.hooks.sfx) this.hooks.sfx('jackpot');
+      if (this.hooks.onJackpot) this.hooks.onJackpot(b.award, b.gems);
+    } else {
+      this.flash = 1.2;
+      if (this.hooks.sfx) this.hooks.sfx('win');
+    }
+    b.phase = 'stopped'; b.t = 0;
+    g.checkAchievements();
+    return true;
+  };
+
+  // Immediate resolution for lifecycle edges (tab hidden, page closing): a
+  // running counter stops right where it is so the credit lands before any
+  // persist — a bonus can never be silently lost.
+  View.prototype.forceStopBonus = function () {
+    if (!this.bonus) return;
+    if (this.bonus.phase === 'banner') { this.bonus.phase = 'count'; this.bonus.t = 0; }
+    if (this.bonus.phase === 'count') this.stopBonus();
+    this.bonus = null;
   };
 
   // Resort level-ups pay their one-time gift here, on settle (not at boot):
@@ -269,20 +412,24 @@
     }
   };
 
-  // Decorative glassy droplets rising off the winning payline — the same
+  // Decorative glassy droplets rising off the winning cells — the same
   // bubble language as match-3's clear particles. Capped so back-to-back
   // wins can't accumulate unbounded.
-  View.prototype.spawnWinSparkles = function (perReel) {
+  View.prototype.spawnWinSparkles = function () {
+    var wins = this.result && this.result.lineWins;
+    if (!wins || !wins.length) return;
     var L = this.layout();
-    var reelW = L.winW / 3, symH = L.winH / 3;
-    var lineY = L.winY + L.winH / 2;
-    for (var r = 0; r < 3; r++) {
-      var cx = L.winX + r * reelW + reelW / 2;
-      for (var i = 0; i < perReel; i++) {
+    var reelW = L.winW / COLS, symH = L.winH / ROWS;
+    // First winning line's cells carry the burst (enough to read, not a storm).
+    var win = wins[0], rows = S.LINES[win.line];
+    for (var c = 0; c < win.n; c++) {
+      var cx = L.winX + c * reelW + reelW / 2;
+      var cy = L.winY + rows[c] * symH + symH / 2;
+      for (var i = 0; i < 4; i++) {
         var ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
         var spd = symH * (0.9 + Math.random() * 1.3);
         this.sparkles.push({
-          x: cx + (Math.random() - 0.5) * reelW * 0.5, y: lineY,
+          x: cx + (Math.random() - 0.5) * reelW * 0.4, y: cy,
           vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
           gravity: symH * 2.6, r: 2 + Math.random() * 3,
           t: 0, life: 0.55 + Math.random() * 0.35
@@ -390,6 +537,7 @@
     ctx.clearRect(0, 0, W, H);
 
     this.drawTopScreen(ctx, L);
+    if (this.bonus) this.drawBonusOverlay(ctx, L);
 
     var frameW = L.frameW, frameH = L.frameH;
     var fx = L.fx, fy = L.fy;
@@ -402,15 +550,15 @@
     ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2;
     rr(ctx, fx + 3, fy + 3, frameW - 6, frameH - 6, 21); ctx.stroke();
 
-    // Window
+    // Window: 5 reels × 4 visible rows.
     var winX = L.winX, winY = L.winY, winW = L.winW, winH = L.winH;
-    var reelW = winW / 3;
-    var symH = winH / 3;
+    var reelW = winW / COLS;
+    var symH = winH / ROWS;
 
-    for (var r = 0; r < 3; r++) {
+    for (var r = 0; r < COLS; r++) {
       var rx = winX + r * reelW;
       ctx.save();
-      rr(ctx, rx + 3, winY, reelW - 6, winH, 10);
+      rr(ctx, rx + 2, winY, reelW - 4, winH, 10);
       ctx.clip();
       // Reel background
       ctx.fillStyle = '#fdf6ec';
@@ -420,83 +568,160 @@
       var p = this.pos[r];
       var base = Math.floor(p);
       var frac = p - base;
-      for (var row = -1; row <= 3; row++) {
+      for (var row = -1; row <= ROWS; row++) {
         var idx = ((base + row) % strip.length + strip.length) % strip.length;
         var cy = winY + (row - frac) * symH + symH / 2;
         // Cylinder curvature: shrink and dim toward window edges (pseudo-3D).
         var rel = (cy - (winY + winH / 2)) / (winH / 2);
         if (rel < -1.3 || rel > 1.3) continue;
-        var squash = Math.cos(U.clamp(rel, -1, 1) * 1.1);
+        var squash = Math.cos(U.clamp(rel, -1, 1) * 0.55);
         ctx.save();
         ctx.translate(rx + reelW / 2, cy);
         ctx.scale(1, Math.max(0.25, squash));
-        drawSymbol(ctx, strip[idx], 0, 0, Math.min(reelW, symH) * 0.32, this.time);
+        drawSymbol(ctx, strip[idx], 0, 0, Math.min(reelW, symH) * 0.36, this.time);
         ctx.restore();
       }
       // Cylinder shading overlay
       var shade1 = ctx.createLinearGradient(0, winY, 0, winY + winH);
-      shade1.addColorStop(0, 'rgba(60,30,0,0.45)');
-      shade1.addColorStop(0.2, 'rgba(60,30,0,0.08)');
+      shade1.addColorStop(0, 'rgba(60,30,0,0.35)');
+      shade1.addColorStop(0.15, 'rgba(60,30,0,0.06)');
       shade1.addColorStop(0.5, 'rgba(255,255,255,0.0)');
-      shade1.addColorStop(0.8, 'rgba(60,30,0,0.08)');
-      shade1.addColorStop(1, 'rgba(60,30,0,0.45)');
+      shade1.addColorStop(0.85, 'rgba(60,30,0,0.06)');
+      shade1.addColorStop(1, 'rgba(60,30,0,0.35)');
       ctx.fillStyle = shade1;
       ctx.fillRect(rx, winY, reelW, winH);
       ctx.restore();
 
-      // Anticipation glow on final reel
-      if (this.spinning && this.anticipating && r === 2 && this.reel[2] && !this.reel[2].done) {
+      // Scatter anticipation glow on the two reels still to land.
+      if (this.spinning && this.anticipating && r >= 3 && this.reel[r] && !this.reel[r].done) {
         ctx.strokeStyle = 'rgba(255, 60, 90, ' + (0.5 + 0.4 * Math.sin(this.time * 10)) + ')';
         ctx.lineWidth = 4;
-        rr(ctx, rx + 3, winY, reelW - 6, winH, 10); ctx.stroke();
+        rr(ctx, rx + 2, winY, reelW - 4, winH, 10); ctx.stroke();
       }
     }
 
-    // Soft glow haloing the winning payline symbols while the win flash runs
-    // (a "soft glow on winning symbols" — drawn over the glass, so it reads
-    // as light blooming off the symbol rather than a repaint).
-    if (this.flash > 0 && this.lastWin && this.lastWin.sun > 0) {
-      var glowA = Math.min(1, this.flash) * (0.30 + 0.14 * Math.sin(this.time * 8));
-      var glowY = winY + winH / 2;
-      for (var gr2 = 0; gr2 < 3; gr2++) {
-        var gcx = winX + gr2 * reelW + reelW / 2;
-        var gg = ctx.createRadialGradient(gcx, glowY, 2, gcx, glowY, symH * 0.78);
-        gg.addColorStop(0, 'rgba(255, 240, 170, ' + glowA.toFixed(3) + ')');
-        gg.addColorStop(1, 'rgba(255, 240, 170, 0)');
-        ctx.fillStyle = gg;
-        ctx.beginPath(); ctx.arc(gcx, glowY, symH * 0.78, 0, 7); ctx.fill();
-      }
-    }
-
-    // Payline
-    var lineY = winY + winH / 2;
-    ctx.strokeStyle = this.flash > 0
-      ? 'rgba(255, 90, 60, ' + (0.6 + 0.4 * Math.sin(this.time * 12)) + ')'
-      : 'rgba(200, 60, 30, 0.55)';
-    ctx.lineWidth = this.flash > 0 ? 4 : 2;
-    ctx.beginPath();
-    ctx.moveTo(winX - 8, lineY); ctx.lineTo(winX + winW + 8, lineY);
-    ctx.stroke();
-    // Payline arrows
-    ctx.fillStyle = '#c43a1a';
-    tri(ctx, winX - 14, lineY, 10, 1); tri(ctx, winX + winW + 14, lineY, 10, -1);
+    if (!this.spinning) this.drawWinLines(ctx, L);
 
     // Win banner
-    if (this.lastWin && this.lastWin.sun > 0 && this.flash > 0) {
-      ctx.font = '800 26px "Trebuchet MS", sans-serif';
+    if (this.lastWin && this.lastWin.sun > 0 && this.flash > 0 && !this.bonus) {
+      ctx.font = '800 24px "Trebuchet MS", sans-serif';
       ctx.textAlign = 'center';
-      var msg = this.lastWin.kind === 'jackpot'
-        ? 'TRIPLE SEVEN! +' + U.fmt(this.lastWin.sun) + ' S  +' + U.fmt(this.lastWin.gems) + ' G'
-        : '+' + U.fmt(this.lastWin.sun) + ' Suncoins!';
+      var msg = '+' + U.fmt(this.lastWin.sun) + ' Suncoins!' +
+                (this.lastWin.lines > 1 ? ' (' + this.lastWin.lines + ' lines)' : '');
       ctx.fillStyle = 'rgba(80,20,0,0.65)';
       ctx.strokeStyle = 'rgba(80,20,0,0.65)';
       ctx.lineWidth = 6;
-      ctx.strokeText(msg, W / 2, fy + frameH - 18);
-      ctx.fillStyle = this.lastWin.kind === 'jackpot' ? '#ffe066' : '#fff';
-      ctx.fillText(msg, W / 2, fy + frameH - 18);
+      ctx.strokeText(msg, W / 2, fy + frameH - 16);
+      ctx.fillStyle = this.lastWin.sun >= 35 ? '#ffe066' : '#fff';
+      ctx.fillText(msg, W / 2, fy + frameH - 16);
     }
 
     this.drawSparkles(ctx);
+  };
+
+  // Win presentation: cycle through the winning lines one at a time — the
+  // line's colored path traces across the grid and the paying cells get a
+  // glowing ring. Scatter Sevens pulse gold whenever the spin earned a bonus.
+  View.prototype.drawWinLines = function (ctx, L) {
+    var res = this.result;
+    if (!res) return;
+    var reelW = L.winW / COLS, symH = L.winH / ROWS;
+    var c, cx, cy;
+    if (res.bonus && (this.bonus || this.flash > 0)) {
+      var pulse = 0.45 + 0.35 * Math.sin(this.time * 6);
+      for (c = 0; c < COLS; c++) {
+        for (var rw = 0; rw < ROWS; rw++) {
+          if (res.grid[c][rw] !== 'seven') continue;
+          ctx.strokeStyle = 'rgba(255, 201, 60, ' + pulse.toFixed(3) + ')';
+          ctx.lineWidth = 3.5;
+          rr(ctx, L.winX + c * reelW + 4, L.winY + rw * symH + 3, reelW - 8, symH - 6, 9);
+          ctx.stroke();
+        }
+      }
+    }
+    if (!res.lineWins.length || this.flash <= 0) return;
+    var win = res.lineWins[Math.floor(this.time / 0.7) % res.lineWins.length];
+    var rows = S.LINES[win.line];
+    var color = LINE_COLORS[win.line % LINE_COLORS.length];
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (c = 0; c < COLS; c++) {
+      cx = L.winX + c * reelW + reelW / 2;
+      cy = L.winY + rows[c] * symH + symH / 2;
+      if (c === 0) ctx.moveTo(cx, cy); else ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+    // Ring + soft glow on the cells that actually pay.
+    for (c = 0; c < win.n; c++) {
+      cx = L.winX + c * reelW + reelW / 2;
+      cy = L.winY + rows[c] * symH + symH / 2;
+      var gg = ctx.createRadialGradient(cx, cy, 2, cx, cy, symH * 0.7);
+      gg.addColorStop(0, 'rgba(255, 240, 170, 0.35)');
+      gg.addColorStop(1, 'rgba(255, 240, 170, 0)');
+      ctx.fillStyle = gg;
+      ctx.beginPath(); ctx.arc(cx, cy, symH * 0.7, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      rr(ctx, L.winX + c * reelW + 4, L.winY + rows[c] * symH + 3, reelW - 8, symH - 6, 9);
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  // The top screen mid-bonus: the beach dims and the skill-stop counter takes
+  // over — a big stepping value, a rung bar showing where you are on the
+  // ladder, and the STOP prompt. Pure presentation of bonus state.
+  View.prototype.drawBonusOverlay = function (ctx, L) {
+    var b = this.bonus;
+    var x = L.topX, y = L.topY, w = L.topW, h = L.topH;
+    ctx.save();
+    rr(ctx, x, y, w, h, 18);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(7, 40, 66, 0.72)';
+    ctx.fillRect(x, y, w, h);
+    ctx.textAlign = 'center';
+    if (b.phase === 'banner') {
+      var bk = Math.min(1, b.t / 0.25);
+      ctx.globalAlpha = bk;
+      ctx.font = '900 24px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = '#ffe066';
+      ctx.fillText('BEACH BONUS!', x + w / 2, y + h / 2 - 8);
+      ctx.font = '700 13px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(b.scatters + ' Sevens — get ready to STOP the counter…', x + w / 2, y + h / 2 + 14);
+    } else {
+      var heat = (b.value - b.cycle[0]) / (b.peak - b.cycle[0]);   // 0..1 up the ladder
+      var vs = b.phase === 'stopped' ? U.fmt(b.award) : U.fmt(b.value);
+      ctx.font = '900 ' + Math.round(30 + heat * 10) + 'px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = b.phase === 'stopped'
+        ? (b.gems > 0 ? '#ffe066' : '#fff')
+        : 'hsl(' + Math.round(48 - heat * 10) + ',100%,' + Math.round(88 - heat * 22) + '%)';
+      ctx.fillText((b.phase === 'stopped' ? '+' : '') + vs + ' S', x + w / 2, y + h * 0.42);
+      // Rung bar: one notch per ladder value, lit up to the current rung.
+      var lad = b.cycle.slice(0, (b.cycle.length + 2) / 2);
+      var bw = Math.min(w - 60, lad.length * 26), bx = x + (w - bw) / 2, by = y + h * 0.58;
+      for (var i = 0; i < lad.length; i++) {
+        var lx = bx + (i + 0.5) * (bw / lad.length);
+        var onRung = lad[i] === b.value && b.phase === 'count';
+        var barH = 6 + i * 2.2;
+        ctx.fillStyle = onRung ? '#ffe066' : (lad[i] <= b.value && b.phase === 'count' ? 'rgba(255,224,102,0.45)' : 'rgba(255,255,255,0.22)');
+        rr(ctx, lx - 7, by + 14 - barH, 14, barH, 3);
+        ctx.fill();
+      }
+      ctx.font = '700 12px "Trebuchet MS", sans-serif';
+      ctx.fillStyle = '#fff';
+      if (b.phase === 'count') {
+        ctx.globalAlpha = 0.75 + 0.25 * Math.sin(this.time * 7);
+        ctx.fillText('TAP or hit STOP to lock it in!', x + w / 2, y + h - 12);
+      } else if (b.gems > 0) {
+        ctx.fillText('PEAK CATCH — TRIPLE SEVEN! +' + U.fmt(b.gems) + ' Stargems!', x + w / 2, y + h - 12);
+      }
+    }
+    ctx.restore();
   };
 
   // Win droplets as tiny glass bubbles — bright core, gold body, pinpoint
@@ -752,11 +977,6 @@
     ctx.arcTo(x, y + h, x, y, r);
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
-  }
-  function tri(ctx, x, y, s, dir) {
-    ctx.beginPath();
-    ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); ctx.lineTo(x + s * dir, y);
-    ctx.closePath(); ctx.fill();
   }
 
   core.View = View;

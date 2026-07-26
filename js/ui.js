@@ -196,19 +196,37 @@
       ui.toast('Fresh start. The grove awaits.');
     });
 
-    // Paytable dialog — the public par sheet.
+    // Paytable dialog — the public par sheet (5×4, 9 lines, Beach Bonus).
     $('btn-paytable').addEventListener('click', function () {
       var rtp = T7.slots.enumerateRTP(game.upLvl('luckysevens'));
       var mult = game.sunMult();
-      var html = '<table><tr><td><b>Line</b></td><td><b>Odds</b></td><td><b>Pays</b></td></tr>';
-      rtp.lines.forEach(function (l) {
-        html += '<tr><td>' + l.label + '</td><td>1 in ' + U.fmt(Math.round(1 / l.p)) +
-                '</td><td>' + U.fmt(l.pay * mult) + ' S</td></tr>';
+      var order = ['seven', 'star', 'berry', 'melon', 'lemon', 'cherry'];
+      var html = '<p class="mini"><b>' + D.SLOT.LINES.length + ' paylines</b> across the 5×4 window ' +
+                 '(4 straights, V, Λ, 2 zigzags, mid-V). A line pays its leftmost run of 3, 4 or 5.</p>';
+      html += '<table><tr><td><b>Symbol</b></td><td><b>×3</b></td><td><b>×4</b></td><td><b>×5</b></td>' +
+              '<td><b>3-run odds/line</b></td></tr>';
+      order.forEach(function (sym) {
+        var pays = D.SLOT.PAYS[sym];
+        var w = 0;
+        D.SLOT.REEL.forEach(function (r) { if (r.id === sym) w = r.w; });
+        var p3 = Math.pow(w / 64, 3);
+        html += '<tr><td>' + sym + '</td>' +
+                '<td>' + U.fmt(pays[0] * mult) + '</td>' +
+                '<td>' + U.fmt(pays[1] * mult) + '</td>' +
+                '<td>' + U.fmt(pays[2] * mult) + ' S</td>' +
+                '<td>1 in ' + U.fmt(Math.round(1 / p3)) + '</td></tr>';
       });
-      html += '</table><p class="mini">Spin cost: 7 Juice. Any win chance: ' +
-              (rtp.hitRate * 100).toFixed(1) + '%. Average return: ' +
-              (rtp.ev * mult * 100).toFixed(1) + '% of a Suncoin per spin — yes, the odds are in your favour. ' +
-              'Triple Seven also pays +7 Stargems.</p>';
+      html += '</table>';
+      html += '<p class="mini"><b>Beach Bonus:</b> 3+ Sevens anywhere (odds 1 in ' +
+              U.fmt(Math.round(1 / rtp.bonusP)) + ') turn the top screen into a stop-the-counter game. ' +
+              'The ladder (' + rtp.ladder.join(' → ') + ' S) steps up and down; whatever you STOP on is yours — ' +
+              'genuinely timing-based, never nudged. Walk away and it auto-stops after 3 cycles ' +
+              '(long-run average of a blind stop: ' + rtp.bonusBlind.toFixed(2) + ' S). ' +
+              'Catch the very top rung for +' + D.SLOT.BONUS.PEAK_GEMS + ' Stargems — the TRIPLE SEVEN.</p>';
+      html += '<p class="mini">Spin cost: 7 Juice. Expected winning lines per spin: ' +
+              rtp.expLineWins.toFixed(2) + '. Average return (assuming blind bonus stops): ' +
+              (rtp.ev * mult * 100).toFixed(1) + '% of a Suncoin per spin — yes, the odds are in your favour, ' +
+              'and good STOP timing only raises them.</p>';
       $('paytable-body').innerHTML = html;
       $('dlg-paytable').showModal();
     });
@@ -611,7 +629,16 @@
         $('veiltext-dozer').textContent = U.fmt(game.s.lifetime.suncoin) + ' / ' +
           D.CONVERSION.DROP_COST_S + ' Suncoins won';
       }
-      $('btn-spin').disabled = !views.slots.canSpin();
+      // During the Beach Bonus the SPIN button becomes the STOP button —
+      // same element, same click handler (views.slots.spin() routes to
+      // stopBonus while a bonus is live).
+      var stopMode = !!(views.slots.bonus && views.slots.bonus.phase === 'count');
+      if (stopMode !== ui._stopMode) {
+        ui._stopMode = stopMode;
+        if (!ui._spinHTML) ui._spinHTML = $('btn-spin').innerHTML;
+        $('btn-spin').innerHTML = stopMode ? 'STOP!' : ui._spinHTML;
+      }
+      $('btn-spin').disabled = stopMode ? false : !views.slots.canSpin();
       $('btn-drop').disabled = !views.dozer.canDrop();
     }
     if (listTimer >= 0.5) {

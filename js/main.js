@@ -212,6 +212,9 @@
   // ── Lifecycle: save when leaving, offline-credit when returning ──────────
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
+      // A running Beach Bonus counter resolves right where it is, so its
+      // credit is in the save before we persist — never silently lost.
+      if (views.slots && views.slots.bonus) views.slots.forceStopBonus();
       persist();
     } else {
       lastFrame = performance.now();     // don't count hidden time as a frame
@@ -221,7 +224,10 @@
       }
     }
   });
-  window.addEventListener('beforeunload', function () { persist(); });
+  window.addEventListener('beforeunload', function () {
+    if (views.slots && views.slots.bonus) views.slots.forceStopBonus();
+    persist();
+  });
   window.addEventListener('pointerdown', function once() {
     T7.audio.unlock();
     window.removeEventListener('pointerdown', once);

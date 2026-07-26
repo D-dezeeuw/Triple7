@@ -270,32 +270,85 @@ t('reshuffle produces a valid board', function () {
 });
 
 console.log('slots');
-t('evaluate: all paying lines', function () {
-  eq(slots.evaluate(['seven', 'seven', 'seven']).sun, 777);
-  eq(slots.evaluate(['seven', 'seven', 'seven']).gems, D.SLOT.JACKPOT_GEM_BONUS);
-  eq(slots.evaluate(['star', 'star', 'star']).sun, 77);
-  eq(slots.evaluate(['cherry', 'cherry', 'cherry']).sun, 7);
-  eq(slots.evaluate(['seven', 'lemon', 'seven']).sun, 5, 'pair of sevens');
-  eq(slots.evaluate(['cherry', 'melon', 'cherry']).sun, 2, 'pair of cherries');
-  eq(slots.evaluate(['cherry', 'seven', 'cherry']).sun, 2, 'cherries beat lone seven');
-  eq(slots.evaluate(['lemon', 'melon', 'berry']).sun, 0);
+// 5×4 grid helper: fill every cell, or a checkerboard-by-column that can
+// never produce a 3-run on any line (columns strictly alternate symbols).
+function slotGrid(fill) {
+  var g = [];
+  for (var c = 0; c < 5; c++) {
+    g.push([]);
+    for (var r = 0; r < 4; r++) g[c].push(fill || (c % 2 ? 'berry' : 'star'));
+  }
+  return g;
+}
+t('evaluate: paylines pay leftmost runs of 3/4/5', function () {
+  // Uniform grid: every one of the 9 lines is a 5-of-a-kind.
+  var all = slots.evaluate(slotGrid('lemon'));
+  eq(all.lineWins.length, D.SLOT.LINES.length);
+  eq(all.sun, D.SLOT.LINES.length * D.SLOT.PAYS.lemon[2]);
+  // 3-kind on the top row only.
+  var g3 = slotGrid();
+  g3[0][0] = g3[1][0] = g3[2][0] = 'cherry';
+  var r3 = slots.evaluate(g3);
+  eq(r3.lineWins.length, 1);
+  eq(r3.lineWins[0].n, 3);
+  eq(r3.sun, D.SLOT.PAYS.cherry[0]);
+  // 4-kind pays the middle tier.
+  var g4 = slotGrid();
+  g4[0][0] = g4[1][0] = g4[2][0] = g4[3][0] = 'melon';
+  eq(slots.evaluate(g4).sun, D.SLOT.PAYS.melon[1]);
+  // Runs must start at reel 1 — a broken first cell pays nothing.
+  var gL = slotGrid();
+  gL[1][0] = gL[2][0] = gL[3][0] = gL[4][0] = 'cherry';
+  eq(slots.evaluate(gL).sun, 0, 'leftmost rule');
+  // 5 Sevens on a line: the 777 dream line, and 5 scatters → bonus too.
+  var g7 = slotGrid();
+  for (var c = 0; c < 5; c++) g7[c][0] = 'seven';
+  var r7 = slots.evaluate(g7);
+  eq(r7.sun, 777);
+  eq(r7.scatters, 5);
+  ok(r7.bonus, '5 sevens must also trigger the bonus');
 });
-t('exact RTP matches the published par sheet (1.18401)', function () {
+t('evaluate: 3 scattered Sevens trigger the bonus without a line win', function () {
+  var g = slotGrid();
+  g[0][3] = 'seven'; g[2][1] = 'seven'; g[4][2] = 'seven';
+  var r = slots.evaluate(g);
+  eq(r.scatters, 3);
+  ok(r.bonus, 'scatter bonus');
+  eq(r.sun, 0, 'no line win from isolated sevens');
+  var g2 = slotGrid();
+  g2[0][3] = 'seven'; g2[2][1] = 'seven';
+  ok(!slots.evaluate(g2).bonus, 'two sevens must not trigger');
+});
+t('exact RTP matches the published par sheet (1.455259)', function () {
   var r = slots.enumerateRTP(0);
-  near(r.ev, 1.18401, 0.00001);
-  near(r.hitRate, 0.30111, 0.0005);
+  near(r.ev, 1.455259, 0.00001);
+  near(r.linesEV, 1.005361, 0.00001);
+  near(r.bonusP, 0.023371, 0.00001);
+  near(r.bonusBlind, 19.25, 1e-9, 'blind-stop mean of the base ladder');
+  // Lucky Sevens extends the ladder, never the reels.
+  var r3 = slots.enumerateRTP(3);
+  near(r3.ev, 1.786175, 0.00001);
+  eq(r3.ladder.length, D.SLOT.BONUS.LADDER.length + 3);
 });
-t('reel weights sum to 64 (+lucky levels)', function () {
-  var sum0 = slots.reelWeights(0).reduce(function (a, r) { return a + r.w; }, 0);
-  var sum3 = slots.reelWeights(3).reduce(function (a, r) { return a + r.w; }, 0);
-  eq(sum0, 64); eq(sum3, 67);
+t('reel weights sum to 64 and ladder cycle is symmetric', function () {
+  var sum = slots.reelWeights().reduce(function (a, r) { return a + r.w; }, 0);
+  eq(sum, 64);
+  var cyc = slots.ladderCycle(0);
+  eq(cyc.length, (D.SLOT.BONUS.LADDER.length - 1) * 2);
+  eq(cyc[0], D.SLOT.BONUS.LADDER[0]);
+  eq(Math.max.apply(null, cyc), D.SLOT.BONUS.LADDER[D.SLOT.BONUS.LADDER.length - 1]);
 });
-t('resolveSpin only returns known symbols', function () {
+t('resolveSpin returns a well-formed 5×4 grid of known symbols', function () {
   var rng = new rngMod.Rng(4);
   var ids = D.SLOT.REEL.map(function (r) { return r.id; });
-  for (var i = 0; i < 1000; i++) {
+  for (var i = 0; i < 500; i++) {
     var res = slots.resolveSpin(rng, 0);
-    res.symbols.forEach(function (s) { ok(ids.indexOf(s) >= 0, 'unknown symbol ' + s); });
+    eq(res.grid.length, 5);
+    for (var c = 0; c < 5; c++) {
+      eq(res.grid[c].length, 4);
+      for (var r = 0; r < 4; r++) ok(ids.indexOf(res.grid[c][r]) >= 0, 'unknown symbol');
+    }
+    eq(res.sun, slots.evaluate(res.grid).sun, 'resolve/evaluate agree');
   }
 });
 
