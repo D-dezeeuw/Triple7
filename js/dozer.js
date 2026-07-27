@@ -40,6 +40,7 @@
     this.events = [];
     this.barrierDrops = 0;        // pachinko perk: gutters sealed for this many drops
     this.doubleExits = 0;         // pachinko perk: this many coin exits pay ×2
+    this.surgeDrops = 0;          // Tide Surge (35.3): its own seal counter, same effect
     if (opts && opts.noStock) return;
     // Pre-stock near saturation so the pile behaves like a broken-in arcade
     // table from the first drop (steady state ⇒ coins in ≈ coins out).
@@ -107,8 +108,55 @@
   // Player drop: coin lands just in front of the pusher face at chosen x.
   // boost (pachinko ×2 perk) multiplies this coin's face value on exit.
   // Each drop may also spawn a special item at the back. Returns the coin.
+  // The active Harbor Current's specials pool (Plan II 35.2): same items,
+  // reweighted. Falls back to the classic SPECIALS table. Pools are built
+  // once per current and cached on the data object.
+  World.prototype.specialPool = function () {
+    var cur = this.params.current && C.CURRENTS && C.CURRENTS[this.params.current];
+    if (!cur) return C.SPECIALS;
+    if (!cur._pool) {
+      cur._pool = C.SPECIALS.map(function (s) {
+        var copy = {};
+        for (var k in s) copy[k] = s[k];
+        copy.w = cur.weights[s.id];
+        return copy;
+      });
+    }
+    return cur._pool;
+  };
+
+  // Spawn one weighted special near the pusher (the pelican's delivery and
+  // the per-drop roll share this path — identical draw order to v1's drop()).
+  World.prototype.spawnRandomSpecial = function () {
+    if (this.coins.length >= C.MAX_COINS) return null;
+    var half = this.pusherHalfW();
+    var sp = this.rng.weighted(this.specialPool());
+    var s = this.spawn(sp.id, C.TABLE_W / 2 + this.rng.range(-half * 0.7, half * 0.7),
+                       this.pusherZ() + C.COIN_R * 2.6);
+    s.special = sp;
+    s.born = this.t;
+    this.events.push({ type: 'specialSpawn', coin: s });
+    return s;
+  };
+
+  // Gem Storm (Plan II 35.3): rain up to n bonus coins across the mid-table.
+  // Free coins, no stake — pure earned celebration, counted by the simulator.
+  World.prototype.rainCoins = function (n) {
+    var spawned = 0;
+    while (spawned < n && this.coins.length < C.MAX_COINS) {
+      var c = this.spawn('coin',
+        C.COIN_R * 2 + this.rng.float() * (C.TABLE_W - 4 * C.COIN_R),
+        120 + this.rng.float() * (C.TABLE_D * 0.45));
+      c.born = this.t;
+      spawned++;
+    }
+    if (spawned) this.events.push({ type: 'storm', count: spawned });
+    return spawned;
+  };
+
   World.prototype.drop = function (x, boost) {
     if (this.barrierDrops > 0) this.barrierDrops--;
+    if (this.surgeDrops > 0) this.surgeDrops--;
     var half = this.pusherHalfW();
     var cx = U.clamp(x, C.TABLE_W / 2 - half + C.COIN_R, C.TABLE_W / 2 + half - C.COIN_R);
     var c = this.spawn('coin', cx + this.rng.range(-4, 4), this.pusherZ() + C.COIN_R + 2);
@@ -118,12 +166,7 @@
     if (boost > 1) c.boost = boost;
     var chance = C.SPECIAL_CHANCE_BASE + 0.01 * (this.params.magnetLvl || 0);
     if (this.coins.length < C.MAX_COINS && this.rng.chance(chance)) {
-      var sp = this.rng.weighted(C.SPECIALS);
-      var s = this.spawn(sp.id, C.TABLE_W / 2 + this.rng.range(-half * 0.7, half * 0.7),
-                         this.pusherZ() + C.COIN_R * 2.6);
-      s.special = sp;
-      s.born = this.t;
-      this.events.push({ type: 'specialSpawn', coin: s });
+      this.spawnRandomSpecial();
     }
     return c;
   };
@@ -191,7 +234,7 @@
     var railEnd = this.railEnd();
     var half = this.pusherHalfW();
     var lo = C.TABLE_W / 2 - half, hi = C.TABLE_W / 2 + half;
-    var barrier = this.barrierDrops > 0;
+    var barrier = this.barrierDrops > 0 || this.surgeDrops > 0;
 
     for (i = 0; i < this.coins.length; i++) {
       c = this.coins[i];
@@ -439,7 +482,8 @@
     this.world.params = {
       railLvl: this.g.upLvl('bumperrails'),
       pusherLvl: this.g.upLvl('widepusher'),
-      magnetLvl: this.g.upLvl('charmmagnet')
+      magnetLvl: this.g.upLvl('charmmagnet'),
+      current: this.g.s.harborCurrent
     };
   };
 
@@ -483,6 +527,21 @@
     this.balls.push(new Pachinko(this.rng,
       x === undefined ? C.PACHINKO.W / 2 + this.rng.range(-80, 80) : x));
     this.g.s.stats.drops++;
+    // Earned events (Plan II 35.3): counters, never clocks — and they fire
+    // for the Auto-Dropper too (celebration floors for everyone).
+    var E = C.EVENTS;
+    if (this.g.s.stats.drops % E.SURGE_EVERY_DROPS === 0) {
+      // +1: the drop this ball lands will decrement on arrival, netting the
+      // published SURGE_SEAL_DROPS drops of sealed gutters after it.
+      this.world.surgeDrops = Math.max(this.world.surgeDrops, E.SURGE_SEAL_DROPS + 1);
+      this.g.s.stats.surges++;
+      this.world.events.push({ type: 'surge' });
+    }
+    if (this.rng.chance(E.PELICAN_CHANCE) && this.world.coins.length < C.MAX_COINS) {
+      this.g.s.stats.pelicans++;
+      this.world.spawnRandomSpecial();
+      this.world.events.push({ type: 'pelican' });
+    }
     if (this.hooks.sfx) this.hooks.sfx('drop');
     this.g.checkAchievements();
     return true;
@@ -592,6 +651,12 @@
         var got = g.gain('stargem', face);
         g.s.stats.coinsFallen++;
         g.s.stats.dozerGemsWon += got;
+        // Gem Storm (Plan II 35.3): every 77th coin off the edge rains 7
+        // bonus coins across the table — earned by falls, never by clocks.
+        if (g.s.stats.coinsFallen % C.EVENTS.STORM_EVERY_FALLEN === 0) {
+          g.s.stats.storms++;
+          this.world.rainCoins(C.EVENTS.STORM_COINS);
+        }
         label = '+' + U.fmt(got) + ' G' + (ev.doubled ? ' ×2' : '');
         if (this.hooks.sfx) this.hooks.sfx(face > 1 ? 'special' : 'coinfall');
       } else {
@@ -629,6 +694,19 @@
       if (this.hooks.sfx) this.hooks.sfx('gutter');
     } else if (ev.type === 'specialSpawn') {
       if (this.hooks.sfx) this.hooks.sfx('sparkle');
+    } else if (ev.type === 'storm') {
+      var Ws = this.cv.clientWidth, Hs = this.cv.clientHeight;
+      this.floaters.push({ x: Ws / 2, y: Hs * 0.3, text: 'GEM STORM! +' + ev.count + ' coins', t: 0, big: true });
+      this.shake = 0.35;
+      if (this.hooks.sfx) this.hooks.sfx('jackpot');
+    } else if (ev.type === 'surge') {
+      var Wu = this.cv.clientWidth, Hu = this.cv.clientHeight;
+      this.floaters.push({ x: Wu / 2, y: Hu * 0.34, text: 'TIDE SURGE — gutters sealed ×' + C.EVENTS.SURGE_SEAL_DROPS, t: 0, big: true });
+      if (this.hooks.sfx) this.hooks.sfx('sparkle');
+    } else if (ev.type === 'pelican') {
+      var Wp = this.cv.clientWidth, Hp = this.cv.clientHeight;
+      this.floaters.push({ x: Wp / 2, y: Hp * 0.38, text: 'A pelican visits!', t: 0, big: true });
+      if (this.hooks.sfx) this.hooks.sfx('special');
     }
   };
 

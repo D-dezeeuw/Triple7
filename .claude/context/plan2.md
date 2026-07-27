@@ -82,7 +82,7 @@ lands on `main`; audit code before trusting a checkbox.
 |---|---|---|
 | 33 Grove of Decisions | 🟡 | 33.1 orders + 33.2 goldens + 33.5 squeeze SHIPPED (sims, tests, fairness chapter, doc-gates); 33.3 Press, 33.4 layouts, 33.6 reads/sandbox unbuilt; 33.7 gate partially (no Playwright journey/fixture corpus file) |
 | 34 Choose Your Sunshine | 🟡 | 34.1 Weather Dial (3 enumerated par sheets) + 34.2 Sun Meter SHIPPED (sims, tests, fairness tables, doc-gates); 34.3 Sungrowth, 34.4 Bonus II, 34.5 held reels, 34.6 amenities unbuilt; 34.7 gate partial |
-| 35 Star Harbor Mastery | 🔭 | Landing columns, pachinko chute + bonus pins shipped; no timing surface, stock or geometry choices |
+| 35 Star Harbor Mastery | 🟡 | 35.3 earned events (storms/surges/pelicans) + 35.2 Harbor Currents SHIPPED; 35.1 resolved as a measured NEGATIVE result (timing is physics-neutral — published in fairness.md, no fake dial built); 35.4-35.7 chute builds/geometry/runs/full gate unbuilt |
 | 36 Chain Reforged | 🔭 | Chain exists only as 7:1 checkout; zero cross-machine mechanics |
 | 37 Builds & Loadouts | 🔭 | 28 charms / 12 upgrades all passively additive; no loadout, spec or branch anywhere |
 | 38 The Long Game | 🔭 | A sliver of 28.7 (personal RTP stat) shipped in Plan I; the other 9½ features of Phase 28 are unbuilt |
@@ -409,6 +409,21 @@ simulated, and the ledger tells the truth.
 - [x] §11.8 ceiling sweep re-run (unchanged at 456%/500% — Phase 33 spends J-faucet budget, not RTP ceiling headroom; recorded here)
 - [ ] Playwright journey: unlock a layout, complete an order, birth a Press, fill the combo meter — committed as a repeatable script
 - [x] Status Ledger II updated with an audit-trail paragraph (see ledger table + the audit note below)
+
+**Phase 35 audit trail (2026-07-27, verified against code):** 35.3 shipped whole — Gem Storm
+(7 bonus coins per 77 fallen), Tide Surge (gutters sealed 7-of-49 drops via its own seal counter),
+pelican deliveries (1/77/drop from the active pool); all counter-triggered, auto-inclusive,
+replicated exactly in the simulator (measured dozer RTP moved ≈204%→≈234% base, ≈247%→≈267%
+maxed; every published figure updated in README/data.js/fairness.md). 35.2 shipped **in variant
+form**: the drafted coin-stock presets carried real undersaturation risk (§12.2) for marginal
+value, so the same choice-shape shipped as **Harbor Currents** — four specials-mix presets
+(Balanced/Gemgrass/Charm Waters/Juice Current), same specialChance and coin tiers, per-mix values
+published and band-asserted (swing ≈0.11 G/drop, no dominant current). 35.1 resolved as an
+honest **negative result**: one-drop-per-cycle probes at six pusher phases showed E[G/drop]
+differences within seed noise — no timing envelope exists, fairness.md now says so, and no fake
+dial was built (the story "when you drop matters" is false by measurement; recorded rather than
+faked — invariant 9's spirit). Not built: 35.4 chute builds, 35.5 geometry workshop, 35.6 Harbor
+Runs, 35.7's full matrix gate. `npm test` 65/65, simulate verified incl. events + currents.
 
 **Phase 34 audit trail (2026-07-27, verified against code):** 34.1 + 34.2 shipped whole: the
 Weather Dial's three exactly-enumerated par sheets (144.7/145.6/147.3% RTP, sevens fixed at 2/64

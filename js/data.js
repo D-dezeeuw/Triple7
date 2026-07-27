@@ -38,9 +38,12 @@
  *   (~23 %), gutter barrier next 2 drops (~18 %), or a quake (~32 %). Three
  *   seeded bonus pins per ball pay 1–3 S on strike (≈0.17 G-equiv/drop).
  *   Perks are count-scoped, so their strength is cadence-independent and
- *   bounded. Measured (tools/simulate.js): ≈ 2.04 G per 7 S stake → RTP
- *   ≈ 204 % base, ~247 % with maxed rails/magnet. Run `npm run simulate`
- *   for the current measured figures.
+ *   bounded. Earned table events (Plan II 35.3 — gem storms every 77 coins
+ *   fallen, tide surges sealing gutters 7-of-every-49 drops, pelican
+ *   deliveries at 1/77 a drop) ride the same conservation math: counters,
+ *   never clocks. Measured (tools/simulate.js): ≈ 2.34 G per 7 S stake →
+ *   RTP ≈ 234 % base, ~267 % with maxed rails/magnet. Run `npm run
+ *   simulate` for the current measured figures.
  *
  * ── MATCH-3 ─────────────────────────────────────────────────────────────────
  *   Each cleared tile = 1 J × cascade multiplier ×(1 + 0.5·(chain−1)); a
@@ -283,6 +286,34 @@
     // E[special] ≈ 0.44·7 + 0.18·~5 + 0.22·~1 + 0.16·3 ≈ 4.68 G (charm valued at
     // its 77 G ÷ ~15 duplicates-adjusted shop price; bottle ≈ 1 G of juice-time).
     ,
+    // ── Earned table events (Plan II Feature 35.3) ───────────────────────────
+    // Deterministic from PLAY COUNTERS, never wall-clock time (the no-FOMO
+    // law made structural): a Gem Storm rains bonus coins every 77 coins
+    // pushed off, a Tide Surge seals the gutters for 7 drops every 49 drops,
+    // and a pelican delivers a bonus special on published per-drop odds.
+    // They fire for auto-drops too — celebration floors, not skill bonuses.
+    EVENTS: {
+      STORM_EVERY_FALLEN: 77, STORM_COINS: 7,
+      SURGE_EVERY_DROPS: 49, SURGE_SEAL_DROPS: 7,
+      PELICAN_CHANCE: 1 / 77
+    },
+    // ── Harbor Currents (Plan II Feature 35.2, stock strategy) ───────────────
+    // Choose what the tide brings: each current reweights the SPECIALS pool
+    // (same specialChance, same coin tiers — the core coin economy never
+    // moves). A mode choice (§II.2 shape a): switch free, every mix's value
+    // published, all pre-simmed EV-positive. Balanced = the classic table.
+    // Weights sum to 100 per current; nominal per-special values as above
+    // (gemfruit 7 · charm ≈5 · bottle ≈1 · sunpouch 3 G).
+    CURRENTS: {
+      balanced:    { name: 'Balanced Tide',  blurb: 'The classic mix of everything.',
+                     weights: { gemfruit: 44, charm: 18, bottle: 22, sunpouch: 16 } },
+      gemgrass:    { name: 'Gemgrass Drift', blurb: 'Richer gemfruit, fewer trinkets.',
+                     weights: { gemfruit: 62, charm: 8, bottle: 14, sunpouch: 16 } },
+      charmwaters: { name: 'Charm Waters',   blurb: 'The tide brings collectibles.',
+                     weights: { gemfruit: 26, charm: 40, bottle: 18, sunpouch: 16 } },
+      juicecurrent:{ name: 'Juice Current',  blurb: 'Bottles wash in for the grove.',
+                     weights: { gemfruit: 30, charm: 12, bottle: 42, sunpouch: 16 } }
+    },
     // ── Pachinko drop chute (the dozer's second act) ─────────────────────────
     // Every drop now releases its coin at the top of a peg board. The path is
     // live seeded physics on the dozer stream — mechanical randomness like the
@@ -451,7 +482,10 @@
     { id: 'order7',        name: 'Regular Customer', stat: 'ordersDone', at: 7,     gems: 3 },
     { id: 'squeeze7',      name: 'Fresh Squeezed',  stat: 'squeezes',   at: 7,      gems: 3 },
     // Plan II Phase 34 — Choose Your Sunshine
-    { id: 'pity1',         name: 'Saved by the Sun', stat: 'pityBonuses', at: 1,    gems: 3 }
+    { id: 'pity1',         name: 'Saved by the Sun', stat: 'pityBonuses', at: 1,    gems: 3 },
+    // Plan II Phase 35 — Star Harbor Mastery
+    { id: 'storm1',        name: 'First Gem Storm', stat: 'storms',     at: 1,      gems: 3 },
+    { id: 'pelican1',      name: 'A Pelican Visits', stat: 'pelicans',  at: 1,      gems: 2 }
   ];
   var ACH_GLOBAL_BONUS = 0.01;
 

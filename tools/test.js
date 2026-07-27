@@ -791,6 +791,69 @@ t('pachinko bonus pins: 3 distinct lit pegs, strikes pay 1..3 S once each', func
   }
   ok(paid > 0, 'across 60 balls at least one bonus pin must be struck');
 });
+t('tide surge seals the gutters exactly like a barrier (Plan II 35.3)', function () {
+  // A coin past the rail end, drifting into the gutter: without a surge it
+  // side-exits; with surgeDrops armed it bounces off the sealed rail.
+  function gutterProbe(surged) {
+    var w = new dozer.World(new rngMod.Rng(3501), {}, { noStock: true });
+    if (surged) w.surgeDrops = 3;
+    var c = w.spawn('coin', D.DOZER.COIN_R * 0.4, w.railEnd() + 30);
+    c.vx = -420;
+    var sideExit = false;
+    for (var i = 0; i < 60; i++) {
+      w.step(1 / 60).forEach(function (ev) { if (ev.type === 'side') sideExit = true; });
+    }
+    return sideExit;
+  }
+  eq(gutterProbe(false), true, 'unsealed gutter must swallow the drifting coin');
+  eq(gutterProbe(true), false, 'a tide surge must seal the same gutter');
+});
+t('gem storm rains coins, caps at MAX_COINS, and announces itself', function () {
+  var w = new dozer.World(new rngMod.Rng(3502), {}, { noStock: true });
+  var got = w.rainCoins(D.DOZER.EVENTS.STORM_COINS);
+  eq(got, D.DOZER.EVENTS.STORM_COINS, 'storm rains the published coin count');
+  var evs = w.step(1 / 60);
+  ok(evs.some(function (e) { return e.type === 'storm'; }), 'storm event emitted');
+  // Fill to the cap: a storm may never overflow the table.
+  while (w.coins.length < D.DOZER.MAX_COINS) w.spawn('coin', 100, 200);
+  eq(w.rainCoins(7), 0, 'a full table rains nothing');
+});
+t('harbor currents reweight the specials pool (statistically) and never change coin tiers', function () {
+  Object.keys(D.DOZER.CURRENTS).forEach(function (id) {
+    var wsum = 0;
+    Object.keys(D.DOZER.CURRENTS[id].weights).forEach(function (k) {
+      wsum += D.DOZER.CURRENTS[id].weights[k];
+    });
+    eq(wsum, 100, id + ' weights must sum to 100');
+  });
+  var w = new dozer.World(new rngMod.Rng(3503), { current: 'gemgrass' }, { noStock: true });
+  var pool = w.specialPool();
+  var gemW = 0, total = 0;
+  pool.forEach(function (s) { total += s.w; if (s.id === 'gemfruit') gemW = s.w; });
+  eq(gemW, D.DOZER.CURRENTS.gemgrass.weights.gemfruit, 'pool carries the current\'s weights');
+  eq(total, 100);
+  // Statistical: draws follow the reweighted pool.
+  var hits = 0, N = 4000;
+  for (var i = 0; i < N; i++) {
+    var s = w.spawnRandomSpecial();
+    ok(s, 'spawn under cap succeeds');
+    if (s.special.id === 'gemfruit') hits++;
+    w.coins.length = 0;              // keep under MAX_COINS for the next draw
+  }
+  ok(hits / N > 0.56 && hits / N < 0.68, 'gemgrass gemfruit share ' + (hits / N).toFixed(3) + ', expected ~0.62');
+});
+t('harbor current sanitizes to balanced on unknown ids', function () {
+  var g = new st.Game();
+  g.s.harborCurrent = 'riptide';
+  var g2 = new st.Game();
+  g2.importSave(g.exportSave());
+  eq(g2.s.harborCurrent, 'balanced');
+  var g3 = new st.Game();
+  g3.s.harborCurrent = 'charmwaters';
+  var g4 = new st.Game();
+  g4.importSave(g3.exportSave());
+  eq(g4.s.harborCurrent, 'charmwaters', 'a valid current survives the round-trip');
+});
 t('serialize round-trips coin layer and pachinko boost', function () {
   var w = new dozer.World(new rngMod.Rng(9), {}, { noStock: true });
   var c = w.spawn('coin', 100, 200);

@@ -306,6 +306,29 @@
     });
     ui.syncModeDial();
 
+    // Harbor Current picker (Plan II 35.2): one button per published mix.
+    var cDial = $('current-dial');
+    Object.keys(D.DOZER.CURRENTS).forEach(function (id) {
+      var cur = D.DOZER.CURRENTS[id];
+      var btn = document.createElement('button');
+      btn.className = 'minibtn modebtn';
+      btn.dataset.current = id;
+      btn.textContent = cur.name;
+      btn.title = cur.blurb + ' Mix: ' + Object.keys(cur.weights).map(function (k) {
+        return k + ' ' + cur.weights[k] + '%';
+      }).join(', ') + '.';
+      btn.addEventListener('click', function () {
+        if (game.s.harborCurrent === id) return;
+        game.s.harborCurrent = id;
+        if (views.dozer) views.dozer.syncParams();
+        ui.syncCurrentDial();
+        ui.sfx('select');
+        ui.toast(cur.name + ' — ' + cur.blurb, 'gold', 'star');
+      });
+      cDial.appendChild(btn);
+    });
+    ui.syncCurrentDial();
+
     // Juice-Stand orders + Squeeze Combo (Plan II Phase 33)
     T7.orders.ensure(game);
     game.on('orderDone', function (o) {
@@ -456,7 +479,8 @@
       charms: 'unique charms', sets: 'complete charm sets', buildings: 'grove plants',
       prestiges: 'Preserves made', playSec: 'seconds played',
       goldens: 'Sun-Ripened fruit cleared', ordersDone: 'Juice-Stand orders filled',
-      squeezes: 'Fresh Squeezes', pityBonuses: 'Sun Meter rescues'
+      squeezes: 'Fresh Squeezes', pityBonuses: 'Sun Meter rescues',
+      storms: 'Gem Storms', pelicans: 'pelican visits'
     }[a.stat] || a.stat;
     return 'Reach ' + U.fmt(a.at) + ' ' + what + (a.gems ? ' · +' + a.gems + ' G' : '');
   }
@@ -558,6 +582,11 @@
       b.classList.toggle('done', b.dataset.mode === game.s.slotMode);
     });
   };
+  ui.syncCurrentDial = function () {
+    document.querySelectorAll('#current-dial .modebtn').forEach(function (b) {
+      b.classList.toggle('done', b.dataset.current === game.s.harborCurrent);
+    });
+  };
 
   // ── Juice-Stand orders (Plan II 33.1) ─────────────────────────────────────
   ui.renderOrders = function () {
@@ -600,6 +629,8 @@
       ['Triple Sevens', U.fmtInt(s.jackpots)],
       ['Coins dropped', U.fmtInt(s.drops)],
       ['Coins pushed off', U.fmtInt(s.coinsFallen)],
+      ['Harbor Current', D.DOZER.CURRENTS[game.s.harborCurrent || 'balanced'].name],
+      ['Gem Storms · Surges · Pelicans', U.fmtInt(s.storms) + ' · ' + U.fmtInt(s.surges) + ' · ' + U.fmtInt(s.pelicans)],
       ['Lifetime Juice', U.fmt(game.s.lifetime.juice)],
       ['Lifetime Suncoins', U.fmt(game.s.lifetime.suncoin)],
       ['Lifetime Stargems', U.fmt(game.s.lifetime.stargem)],

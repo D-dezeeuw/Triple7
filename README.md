@@ -33,10 +33,11 @@ enumerable **145.6 % RTP** — 1.45613 Suncoins per 7-Juice spin across
 **6 paylines**, every one of its 20 window cells an independent draw from 64
 weighted virtual stops, the same par-sheet model real slots use — with a
 **44.5 %** hit rate and a skill-stop Beach Bonus on 3+ scattered Sevens
-(1 in 43). The dozer returns ~**204 %** per drop at steady state (~247 % fully
+(1 in 43). The dozer returns ~**234 %** per drop at steady state (~267 % fully
 upgraded): conservation says coins in ≈ coins out, minus the side gutters
 (≈6.6 % of exits at bare geometry), plus rare higher-value denominations, the
-pachinko chute's perks and its bonus pins. Match-3 is free to play (≈7.5 Juice
+pachinko chute's perks and bonus pins, and earned table events (gem storms,
+tide surges, pelican visits — triggered by play counters, never by clocks). Match-3 is free to play (≈7.5 Juice
 per move — including the rare ×7 **Sun-Ripened** golden fruit, ×14 when a
 cascade clears it — so a spin roughly every move) and the grove drips Juice
 passively, so the chain can never dead-end. Exponential upgrade costs are the sink that keeps
