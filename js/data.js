@@ -65,7 +65,11 @@
   var CURRENCIES = {
     juice:   { id: 'juice',   name: 'Juice',    short: 'J', color: '#ff5a4e', icon: 'juice' },
     suncoin: { id: 'suncoin', name: 'Suncoins', short: 'S', color: '#ffc93c', icon: 'sun' },
-    stargem: { id: 'stargem', name: 'Stargems', short: 'G', color: '#3ec6ff', icon: 'star' }
+    stargem: { id: 'stargem', name: 'Stargems', short: 'G', color: '#3ec6ff', icon: 'star' },
+    // The night's currency (Plan II Phase 39): earned only at the Tidepool,
+    // spent only at the Tidepool — structurally terminal (invariant 3
+    // extended). Nominal 1 P ≡ 7 G ≡ 49 S ≡ 343 J: the chain, cubed.
+    pearl:   { id: 'pearl',   name: 'Pearls',   short: 'P', color: '#e8ddff', icon: 'sparkle' }
   };
 
   var CONVERSION = { SPIN_COST_J: 7, DROP_COST_S: 7, JUICE_PER_SUN: 7, SUN_PER_GEM: 7 };
@@ -525,9 +529,86 @@
     { id: 'pelican1',      name: 'A Pelican Visits', stat: 'pelicans',  at: 1,      gems: 2 },
     // Plan II Phase 36 — The Chain Reforged
     { id: 'resonance1',    name: 'The Chain Sings', stat: 'resonances', at: 1,      gems: 3 },
-    { id: 'freespin7',     name: 'Bottled Sunshine', stat: 'freeSpinsEarned', at: 7, gems: 7 }
+    { id: 'freespin7',     name: 'Bottled Sunshine', stat: 'freeSpinsEarned', at: 7, gems: 7 },
+    // Plan II Phase 39 — The Moonlit Tidepool
+    { id: 'cast1',         name: 'First Cast',      stat: 'casts',      at: 1,      gems: 0 },
+    { id: 'aquarium7',     name: 'Seven Souls',     stat: 'creaturesFound', at: 7,  gems: 7 },
+    { id: 'aquarium28',    name: 'The Full Glass',  stat: 'creaturesFound', at: 28, gems: 77 }
   ];
   var ACH_GLOBAL_BONUS = 0.01;
+
+  // ── The Moonlit Tidepool (Plan II Phase 39): the fourth machine ───────────
+  // Plan I Feature 30.10's question, answered: a post-prestige, night-side,
+  // HANDS-ONLY fishing pool. 7 Stargems casts a glass lure into a chosen
+  // zone; one creature always bites (drawn from the zone's published
+  // weighted table — decided at cast commit, §11.2) and pays Pearls by its
+  // rarity. Every zone pays the same expected Pearls — the zone chooses
+  // WHICH souls bite, never how much the night owes you (a pure collection
+  // choice, zero EV trap). The Tidepool has NO automation, ever: it is the
+  // game's hand-made corner. Pearls are terminal (no P→G path exists) and
+  // spend only on Aquarium habitats. E[P/cast] = 55/35 ≈ 1.571 P per 7 G
+  // stake (≈157% RTP, matching the day's generosity) — enumerated exactly
+  // by npm run simulate.
+  var TIDEPOOL = {
+    CAST_COST_G: 7,
+    UNLOCK_PRESTIGES: 1,
+    PEARLS_BY_RARITY: { 1: 1, 2: 2, 3: 4, 4: 7 },
+    MAXED_DUPE_PEARLS: 3,
+    // 28 glass sea-creatures: 4 sets × 7, the charm pattern's night mirror
+    // (rarity run [1,1,1,2,2,3,4] per set, weights via RARITY_WEIGHT).
+    SETS: {
+      shorewalkers: { name: 'Shorewalkers', blesses: 'juice',   blessing: 0.02 },
+      reeflights:   { name: 'Reeflights',   blesses: 'suncoin', blessing: 0.02 },
+      deepglass:    { name: 'Deepglass',    blesses: 'stargem', blessing: 0.02 },
+      moonkin:      { name: 'Moonkin',      blesses: 'all',     blessing: 0.02 }
+    },
+    FULL_AQUARIUM_ALL: 0.07,   // all 28 collected: +7% to everything, forever
+    CREATURES: [
+      { set: 'shorewalkers', id: 'periwinkle',  name: 'Glass Periwinkle',  rarity: 1 },
+      { set: 'shorewalkers', id: 'sanddollar',  name: 'Sand Dollar',       rarity: 1 },
+      { set: 'shorewalkers', id: 'limpet',      name: 'Moon Limpet',       rarity: 1 },
+      { set: 'shorewalkers', id: 'hermit',      name: 'Hermit Crab',       rarity: 2 },
+      { set: 'shorewalkers', id: 'ghostcrab',   name: 'Ghost Crab',        rarity: 2 },
+      { set: 'shorewalkers', id: 'brittlestar', name: 'Brittle Star',      rarity: 3 },
+      { set: 'shorewalkers', id: 'pearlcrab',   name: 'Pearl Crab',        rarity: 4 },
+      { set: 'reeflights',   id: 'minnow',      name: 'Lantern Minnow',    rarity: 1 },
+      { set: 'reeflights',   id: 'guppy',       name: 'Glow Guppy',        rarity: 1 },
+      { set: 'reeflights',   id: 'tetra',       name: 'Tide Tetra',        rarity: 1 },
+      { set: 'reeflights',   id: 'seahorse',    name: 'Glass Seahorse',    rarity: 2 },
+      { set: 'reeflights',   id: 'pipefish',    name: 'Ribbon Pipefish',   rarity: 2 },
+      { set: 'reeflights',   id: 'lionfin',     name: 'Lion Fin',          rarity: 3 },
+      { set: 'reeflights',   id: 'sunwrasse',   name: 'Sunset Wrasse',     rarity: 4 },
+      { set: 'deepglass',    id: 'moonjelly',   name: 'Moon Jelly',        rarity: 1 },
+      { set: 'deepglass',    id: 'combjelly',   name: 'Comb Jelly',        rarity: 1 },
+      { set: 'deepglass',    id: 'glassquid',   name: 'Glass Squid',       rarity: 1 },
+      { set: 'deepglass',    id: 'nautilus',    name: 'Paper Nautilus',    rarity: 2 },
+      { set: 'deepglass',    id: 'cuttle',      name: 'Dream Cuttle',      rarity: 2 },
+      { set: 'deepglass',    id: 'anglerlite',  name: 'Lantern Angler',    rarity: 3 },
+      { set: 'deepglass',    id: 'stargazerfish', name: 'Stargazer',       rarity: 4 },
+      { set: 'moonkin',      id: 'tidesprite',  name: 'Tide Sprite',       rarity: 1 },
+      { set: 'moonkin',      id: 'foamkit',     name: 'Foam Kit',          rarity: 1 },
+      { set: 'moonkin',      id: 'dewdrake',    name: 'Dew Drake',         rarity: 1 },
+      { set: 'moonkin',      id: 'mistmare',    name: 'Mist Mare',         rarity: 2 },
+      { set: 'moonkin',      id: 'starcalf',    name: 'Star Calf',         rarity: 2 },
+      { set: 'moonkin',      id: 'auroraeel',   name: 'Aurora Eel',        rarity: 3 },
+      { set: 'moonkin',      id: 'moonwhale',   name: 'Moon Whale',        rarity: 4 }
+    ],
+    // Three zones; each hosts two sets. Same E[P] everywhere — published.
+    ZONES: {
+      shallows:  { name: 'The Shallows', blurb: 'Busy little bites near the lanterns.',
+                   sets: ['shorewalkers', 'reeflights'] },
+      reeds:     { name: 'The Reed Bed', blurb: 'Quiet water between the stems.',
+                   sets: ['reeflights', 'deepglass'] },
+      deepglass: { name: 'Deep Glass',   blurb: 'Where the moon touches the bottom.',
+                   sets: ['deepglass', 'moonkin'] }
+    },
+    // The only Pearl sinks: cosmetic aquarium habitats, terminal by design.
+    HABITATS: [
+      { id: 'kelp',   name: 'Kelp Garden',  cost: 77 },
+      { id: 'coral',  name: 'Moon Coral',   cost: 210 },
+      { id: 'aurora', name: 'Aurora Reef',  cost: 777 }
+    ]
+  };
 
   // ── Destinations (Phase 32 MVP): cosmetic-only sky/sun palette swaps ─────
   // "Fares" are a one-time Stargem spend (a real sink, per §9d) that unlocks
@@ -552,7 +633,7 @@
     CHARM_CHEST_COST_G: CHARM_CHEST_COST_G, CHARM_MAXED_DUPE_GEMS: CHARM_MAXED_DUPE_GEMS,
     BRACELET_SLOTS: BRACELET_SLOTS,
     GROVE: GROVE, BUILDINGS: BUILDINGS, UPGRADES: UPGRADES, AUTO: AUTO, OFFLINE: OFFLINE,
-    PRESTIGE: PRESTIGE, JARS: JARS,
+    PRESTIGE: PRESTIGE, JARS: JARS, TIDEPOOL: TIDEPOOL,
     ACHIEVEMENTS: ACHIEVEMENTS, ACH_GLOBAL_BONUS: ACH_GLOBAL_BONUS,
     DESTINATIONS: DESTINATIONS
   };

@@ -354,6 +354,39 @@ and bounds them on every run:
   over a session (measured); robots earn exactly +0% of it. That asymmetry
   is deliberate and permanent: *hands beat robots, gently.*
 
+## The Moonlit Tidepool (Plan II Phase 39) — the night, as published as the day
+
+Triple7's fourth machine opens after your first Preserve (777 lifetime
+Stargems — the third seven unlocks the night). By day the game is still
+three machines; the Tidepool is the day's reflection, and it plays by every
+rule in this contract:
+
+- **The cast.** 7 Stargems sinks a glass lure into your chosen zone. One
+  creature **always bites** — drawn from the zone's published weighted table
+  (the charm rarity weights, 8/4/2/1) at the moment you cast, before any
+  reveal (§11.2). Pearls pay by rarity: **1 / 2 / 4 / 7** for common /
+  uncommon / rare / legendary. Exact expectation: **E[P/cast] = 110/70
+  ≈ 1.571 Pearls** per 1-Pearl-equivalent stake (≈157% RTP — the night is
+  as generous as the day), *identical in every zone*: the zone chooses
+  **which souls bite**, never how much the night owes you. Once souls max
+  out (level 7), dupes refine into **+3 bonus Pearls** — the long-run rate
+  only ever rises. `npm run simulate` enumerates all of it exactly.
+- **Pearls are terminal.** Earned only here, spent only here (three
+  cosmetic Aquarium habitats: 77 / 210 / 777 P). No P→G path exists in any
+  code path — the no-backward-conversion invariant, extended. And Pearls
+  sit entirely **outside the day's multiplier pipeline**: no charm, seed or
+  achievement bonus inflates them; the night pays its published number
+  exactly.
+- **Hands only, forever.** The Tidepool has no automation and never will —
+  it is deliberately the game's hand-made corner. Walking away mid-night
+  costs nothing; the pool is patient.
+- **Moonlight Blessings.** Each completed 7-soul set blesses one *day*
+  stage (+2% Juice / Suncoins / Stargems, Moonkin +2% everything); all 28
+  souls add +7% to everything, forever. These are bounded, published
+  player multipliers like charms — the day's *par sheets* are untouched,
+  and the simulator re-enumerates them with the night installed to prove
+  it, every run.
+
 ## Builds (Plan II Phase 37) — the Charm Bracelet
 
 Up to **7 charms** go on the bracelet. An equipped charm's per-level bonus

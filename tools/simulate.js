@@ -440,6 +440,66 @@ console.log('  VERDICT: ' + (dozerOK
   ? '✔ steady-state E[G/drop] > 1 G stake — stage is EV-positive, and upgrades widen it.'
   : '✘ base dozer is EV-negative — tune gutters/specials!'));
 
+// ── 3b. THE MOONLIT TIDEPOOL (Plan II Phase 39) ─────────────────────────────
+hr('3b. TIDEPOOL — "The Moonlit Tidepool" (stake: 7 G ≡ 1.000 P per cast, post-prestige, hands only)');
+
+var T = D.TIDEPOOL;
+var tideOK = true;
+var zoneEVs = [];
+Object.keys(T.ZONES).forEach(function (zoneId) {
+  var zone = T.ZONES[zoneId];
+  var members = T.CREATURES.filter(function (c) { return zone.sets.indexOf(c.set) >= 0; });
+  var wsum = 0, ev = 0;
+  members.forEach(function (c) {
+    var w = D.RARITY_WEIGHT[c.rarity];
+    wsum += w;
+    ev += w * T.PEARLS_BY_RARITY[c.rarity];
+  });
+  zoneEVs.push(ev / wsum);
+  console.log('  ' + zone.name.padEnd(14) + ' hosts ' + members.length + ' souls (' +
+    zone.sets.join(' + ') + ')  E[P/cast] = ' + (ev / wsum).toFixed(5) + ' (exact: ' + ev + '/' + wsum + ')');
+});
+zoneEVs.forEach(function (ev) {
+  if (Math.abs(ev - zoneEVs[0]) > 1e-12) tideOK = false;
+  if (ev < 1.0) tideOK = false;
+});
+// Monte Carlo agreement + level-up trajectory on the real cast path.
+(function () {
+  var g = new (require(path.join(__dirname, '..', 'js', 'state.js')).Game)();
+  g.s.stats.prestiges = 1;
+  g.gain('stargem', 1e9, true);
+  var trng = new rngMod.Rng(777039);
+  var N = 20000, pearls = 0;
+  for (var i = 0; i < N; i++) {
+    var r = g.castTidepool(trng);
+    pearls += r.credited;
+  }
+  var mc = pearls / N;
+  console.log('\n  Monte Carlo (' + N.toLocaleString() + ' casts, seed 777039, incl. maxed-dupe refines):');
+  console.log('    E[P/cast] = ' + mc.toFixed(4) + '  (base exact ' + zoneEVs[0].toFixed(4) +
+    '; refines only ever ADD — a full aquarium pays ' + (zoneEVs[0] + T.MAXED_DUPE_PEARLS).toFixed(3) + ')');
+  console.log('    souls found: ' + g.s.stats.creaturesFound + '/28 · sets complete: ' +
+    g.s.stats.aquariumSets + '/4');
+  if (mc < 1.0) tideOK = false;
+  // Day-regression proof: the night's existence must not move a single day
+  // figure — re-enumerate the slot par sheet and compare to the run above.
+  var again = slots.enumerateRTP(0).ev;
+  if (Math.abs(again - exact.ev) > 1e-12) {
+    tideOK = false;
+    console.log('  ✘ DAY REGRESSION: slot EV moved after tidepool simulation!');
+  } else {
+    console.log('    day-regression proof: slot par sheet re-enumerated byte-identically (' +
+      again.toFixed(5) + ') with the night installed.');
+  }
+})();
+console.log('\n  Moonlight Blessings (published caps): +2% one day stage per complete set,');
+console.log('  +7% everything for all 28 — a bounded gift, structurally terminal Pearls');
+console.log('  (no P→G path exists; the only sinks are cosmetic habitats: ' +
+  T.HABITATS.map(function (h) { return h.cost + ' P'; }).join(' / ') + ').');
+console.log('  VERDICT: ' + (tideOK
+  ? '✔ every zone pays the identical, floor-clearing E[P/cast]; the day is untouched.'
+  : '✘ TIDEPOOL ECONOMY BROKEN — see above.'));
+
 // ── 4. THE WHOLE CHAIN ──────────────────────────────────────────────────────
 hr('4. CHAIN PROOF — one-way value flow, every stage EV-positive');
 
@@ -457,6 +517,6 @@ console.log('  · No backward conversion exists (G→S→J impossible), so value
 console.log('  · Inflation sink: exponential upgrade costs (growth 1.15–2.6) and charm chests.');
 
 var allOK = slotOK && dozerOK && jPerMove > 1 && inflationOK && geomOK && ordersOK && squeezeOK &&
-            modesOK && meterOK && currentsOK && chainDepthOK;
+            modesOK && meterOK && currentsOK && chainDepthOK && tideOK;
 console.log('\n' + (allOK ? '  ✅ ALL PUBLISHED ECONOMY CLAIMS VERIFIED.' : '  ❌ ECONOMY CHECK FAILED — see above.'));
 process.exit(allOK ? 0 : 1);

@@ -47,6 +47,9 @@
     <div class="pill gem" id="pill-stargem" title="Stargems — pushed off the Star Harbor dozer (7 Suncoins per coin)">
       <img class="cur-ic" src="assets/sprites/gem.png" alt=""><b id="cur-stargem">0</b><small id="rate-stargem"></small>
     </div>
+    <div class="pill pearl hidden" id="pill-pearl" title="Pearls — the night's currency, fished from the Moonlit Tidepool (7 Stargems per cast). Spent only on the Aquarium.">
+      <img class="cur-ic" src="assets/sprites/sparkle.png" alt=""><b id="cur-pearl">0</b>
+    </div>
   </div>
   <div id="sunline" title="The Sunline — great hand moments anywhere (cascades of 4+, Sun-Ripened fruit, Beach Bonuses, Gem Storms) charge the chain. Full at 77 = RESONANCE: your next 21 actions across all three machines pay +7%. Never drains, never expires.">
     <span class="meterbar sunlinebar"><span id="sunline-bar"></span></span>
@@ -58,6 +61,7 @@
   <button class="tab active" data-tab="match3" role="tab" id="tab-match3" aria-controls="panel-match3" aria-selected="true"><img class="tabicon" src="assets/sprites/cherry.png" alt=""> Match</button>
   <button class="tab" data-tab="slots" role="tab" id="tab-slots" aria-controls="panel-slots" aria-selected="false"><img class="tabicon" src="assets/sprites/sun.png" alt=""> Slots<span class="lock" id="lock-slots"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
   <button class="tab" data-tab="dozer" role="tab" id="tab-dozer" aria-controls="panel-dozer" aria-selected="false"><img class="tabicon" src="assets/sprites/star.png" alt=""> Dozer<span class="lock" id="lock-dozer"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
+  <button class="tab" data-tab="tidepool" role="tab" id="tab-tidepool" aria-controls="panel-tidepool" aria-selected="false"><img class="tabicon" src="assets/sprites/sparkle.png" alt=""> Tidepool<span class="lock" id="lock-tidepool"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
 
   <div class="shopmenu">
     <button id="btn-shopmenu" class="shopbtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="shopmenu-panel" title="Grove, Charms &amp; Shop">
@@ -123,6 +127,26 @@
       <p><img class="veilicon" src="assets/sprites/lock.png" alt=""><br>Star Harbor opens once you've won <b>7 Suncoins</b> at the slots.</p>
       <div class="veilprogress"><div class="veilprogress-bar" id="veilbar-dozer"></div></div>
       <p class="mini" id="veiltext-dozer"></p>
+    </div>
+  </section>
+
+  <section class="panel night" id="panel-tidepool" role="tabpanel" aria-labelledby="tab-tidepool" tabindex="0">
+    <h2>The Moonlit Tidepool <small>— the night side of Triple7. Hands only, forever.</small></h2>
+    <div class="actionbar" id="zone-dial" role="group" aria-label="Choose your casting zone">
+      <span class="tip" title="Every zone pays the same expected Pearls — the zone chooses WHICH souls bite, never how much the night owes you. Published in the fairness contract.">Zone:</span>
+    </div>
+    <div class="actionbar">
+      <button id="btn-cast" class="bigbtn">CAST — 7 <img class="ic-img" src="assets/sprites/gem.png" alt="Stargems"></button>
+      <span class="tip">A glass lure sinks; one creature <b>always</b> bites and pays <b>Pearls</b> by its rarity. Duplicates level a soul to 7; maxed dupes refine into bonus Pearls. There is no automation here — the Tidepool is the game's hand-made corner.</span>
+    </div>
+    <div id="cast-result" class="card hidden"></div>
+    <div class="card" id="aquarium-card">
+      <h3><img class="h3icon" src="assets/sprites/sparkle.png" alt=""> The Aquarium <small id="aquarium-count"></small></h3>
+      <div id="aquarium-sets"></div>
+      <div id="habitat-row" class="actionbar"></div>
+    </div>
+    <div class="lockveil" id="veil-tidepool">
+      <p><img class="veilicon" src="assets/sprites/lock.png" alt=""><br>A distant moonlit shore… The Tidepool opens after your first <b>Preserve</b>.<br><span class="mini">(777 lifetime Stargems — the third seven — unlocks the night.)</span></p>
     </div>
   </section>
 

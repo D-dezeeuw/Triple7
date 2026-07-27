@@ -86,7 +86,7 @@ lands on `main`; audit code before trusting a checkbox.
 | 36 Chain Reforged | 🟡 | 36.1 Sunline/Resonance + 36.2 hand-offs (Pressed Juice free spins, Jackpot Splash free drops) SHIPPED with sims/tests/fairness chapter; 36.3 itineraries, 36.4 Golden Hour, 36.5 hub flows, 36.6 pours, 36.7 full gate unbuilt |
 | 37 Builds & Loadouts | 🟡 | 37.1 Charm Bracelet SHIPPED (×2 focus + set-focus doubling, upward-only migration, free respec, tap-to-equip cabinet UI, tests, fairness chapter); 37.2 specs, 37.3 branches, 37.4 tonics, 37.5 presets/console, 37.6 harness, 37.7 gate unbuilt |
 | 38 The Long Game | 🟡 | 38.2 seed softcap + projections, 38.3 warm start (+veils-stay-down verified), 38.4 jar shelf SHIPPED; 38.1 ceremony (rich confirm only), 38.5 grand sinks, 38.6 challenges, 38.7 milli-units/records unbuilt |
-| 39 Moonlit Tidepool | 🔭 | Nothing exists; Feature 30.10's RFC is unresolved — 39.1 resolves it |
+| 39 Moonlit Tidepool | 🟡 | THE NIGHT IS OPEN: 39.2 Pearl economy (terminal, 55/35 enumerated, own stream), 39.4 zone-cast core (hands-only, no timing envelope yet), 39.5 Aquarium + blessings, 39.6 prestige unlock + night palette SHIPPED with sims/tests/fairness chapter + day-regression proof; 39.1 RFC doc, 39.3 tide phases/scene art, 39.7's Plan III RFC file unbuilt |
 
 ### Absorption Map — where Plan I remainders now live
 
@@ -409,6 +409,23 @@ simulated, and the ledger tells the truth.
 - [x] §11.8 ceiling sweep re-run (unchanged at 456%/500% — Phase 33 spends J-faucet budget, not RTP ceiling headroom; recorded here)
 - [ ] Playwright journey: unlock a layout, complete an order, birth a Press, fill the combo meter — committed as a repeatable script
 - [x] Status Ledger II updated with an audit-trail paragraph (see ledger table + the audit note below)
+
+**Phase 39 audit trail (2026-07-27, verified against code):** The fourth machine is real. Shipped:
+Pearls as a fourth, structurally terminal currency (raw-only — `multFor('pearl')` is 1, no day
+multiplier ever inflates the night; sinks are three cosmetic habitats); the cast (7 G, one soul
+always bites from the zone's 8/4/2/1 weighted table, decided at commit; E[P/cast] = 110/70 ≈
+1.571 identical across all three zones — the zone chooses WHICH souls bite, a pure collection
+choice); 28 creatures in 4 sets mirroring the charm pattern, leveling to 7 with +3 P refines;
+Moonlight Blessings (+2% one day stage per set, +7% all for the full glass) wired into the day
+multipliers; unlock at first prestige with a locked-tab tease, night sky palette on the tab, a
+dedicated save-persisted `tidepool` RNG stream, and 3 achievements. The simulator enumerates the
+night exactly, Monte-Carlos the real cast path, and re-enumerates the slot par sheet with the
+night installed as a standing day-regression proof. Not built: the 39.1 RFC/decisions document
+and greybox-playtest paper trail (the machine itself is the resolution in practice — record the
+doc when 39.7 lands), 39.3 tide phases and the canvas scene (the panel is honest DOM), 39.4's
+ripple-timing skill envelope (casts are pure zone-choice draws for now — any future skill arrives
+as a published envelope), habitats-as-art, and 39.7's Plan III RFC file. `npm test` 86/86,
+simulate all claims verified incl. the day-regression check.
 
 **Phase 38 audit trail (2026-07-27, verified against code):** 38.2 shipped — the seed softcap is
 decided and implemented (+10%/seed to 100, +7% past; `seedBonus()` feeds `allMult()`), with
