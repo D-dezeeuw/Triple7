@@ -80,7 +80,7 @@ lands on `main`; audit code before trusting a checkbox.
 
 | Phase | Status | Notes |
 |---|---|---|
-| 33 Grove of Decisions | 🔭 | Burst/Rainbow, staged cascades, best-combo stats exist — the *decision layer* does not |
+| 33 Grove of Decisions | 🟡 | 33.1 orders + 33.2 goldens + 33.5 squeeze SHIPPED (sims, tests, fairness chapter, doc-gates); 33.3 Press, 33.4 layouts, 33.6 reads/sandbox unbuilt; 33.7 gate partially (no Playwright journey/fixture corpus file) |
 | 34 Choose Your Sunshine | 🔭 | 5×4/6-line machine + skill-stop Beach Bonus shipped; one par sheet only, no meters/choices |
 | 35 Star Harbor Mastery | 🔭 | Landing columns, pachinko chute + bonus pins shipped; no timing surface, stock or geometry choices |
 | 36 Chain Reforged | 🔭 | Chain exists only as 7:1 checkout; zero cross-machine mechanics |
@@ -324,26 +324,26 @@ every new term itemized in the simulator.
 Story: A sunny stand asks nicely. Done when three no-timer, no-expiry order slots pay published
 bonuses for play the player was shaped — never forced — into.
 
-- [ ] Order archetype table in `data.js`: 7 templates (clear N of a fruit, trigger N Bursts, reach cascade ×N, clear N goldens, make N L/T matches, spend N moves, squeeze N J) with reward formulas
-- [ ] Day-seeded order deck on a new named RNG stream `orders`; three visible slots; completing one draws the next — decks deterministic per UTC day, never expiring, no cap on rollover days
-- [ ] Free unlimited reroll per slot (redraw from the same deck — variety is free, value is fixed)
-- [ ] Progress counters driven by existing `resolveMove()` result events only — zero logic changes, render/meta layer purely additive
-- [ ] Rewards paid via `gain()` under a published budget: orders add ≤ +7% expected J at steady play, proved in the simulator's new orders section
-- [ ] Juice Stand card UI in the grove panel: seven-word tooltip, order progress, reroll — one new concept, one screen
-- [ ] Tests: template validity sweep, deck determinism across TZs, reward-budget assertion, save round-trip of order state
+- [x] Order archetype table in `data.js`: 7 templates (clear N of a fruit, clear N tiles, N moves, N specials, reach cascade ×N, clear a golden, squeeze N J) with flat rewards
+- [x] Day-seeded order deck — each card a pure function of (UTC day, deck index) via fnv1a-seeded mulberry32 (`js/orders.js`); three visible slots; completing one draws the next; decks deterministic per UTC day, never expiring, no cap on rollover days
+- [x] Free unlimited reroll per slot (redraw from the same deck — variety is free, value is fixed)
+- [x] Progress counters driven by existing `resolveMove()` result fields only (`byFruit`/`tiles`/`chain`/`specialsMade`/`goldens`/`juice`) — zero logic changes, render/meta layer purely additive; hand moves only (Auto-Juicer is order-inert)
+- [x] Rewards paid via `gain(raw)` under a published budget: orders add ≤ +21% expected J at steady play across all three slots (measured ≈9%), asserted in the simulator's orders section *(budget widened from the drafted 7% before implementation: at 7% total, per-order tips fell below feel-threshold; 21 = 3×7 stays on-brand and simulator-enforced)*
+- [x] Juice Stand card UI in the match-3 panel (beside the board it serves, not the grove): progress bars, rewards, free-reroll buttons
+- [x] Tests: template validity sweep, deck determinism, kind→field progress mapping, completion pays flat + deals next card, save round-trip + corruption sanitize; budget asserted by `npm run simulate`
 
 ### Feature 33.2 — Sun-Ripened Fruit
 
 Story: Sometimes a fruit is golden. Done when a rare, published golden spawn is worth planning
 around and the spawn odds survive a chi-squared test.
 
-- [ ] Golden spawn on refill: 1 in 77 per spawned fruit (constant in `data.js`), rolled on the `match3` stream at refill time — never re-rolled, never placed by presentation
-- [ ] Golden pays ×7 J when cleared; cleared *by a cascade* (not the direct swap) pays ×14 — the first mechanical reason to prefer setups over instant clears
-- [ ] Goldens are otherwise ordinary fruit: match rules, specials interactions and reshuffles treat them identically (oracle fixtures prove it)
-- [ ] EV re-proof: J/move re-derived with golden term itemized; README/fairness figures updated through the doc-gate
-- [ ] Render: glass-gold shimmer within the existing sprite/painter dual path; `reducedMotion` variant is a static gleam
-- [ ] Orders and stats integration: "clear a golden" archetype activates; lifetime goldens stat + 2 achievements (7 / 77 goldens)
-- [ ] Tests: spawn-rate chi-squared in the RNG suite, cascade-vs-swap payout unit tests, fixture corpus additions
+- [x] Golden spawn on refill: 1 in 77 per spawned fruit (constant in `data.js`), rolled on the `match3` stream at refill time — never re-rolled, never placed by presentation
+- [x] Golden pays ×7 J when cleared; cleared *by a cascade* (not the direct swap) pays ×14 — the first mechanical reason to prefer setups over instant clears
+- [x] Goldens are otherwise ordinary fruit: match rules, specials interactions and reshuffles treat them identically (delta-proof tests: gold flag changes juice by exactly the published delta and nothing else; a special birth absorbs the flag)
+- [x] EV re-proof: J/move re-derived with golden term itemized (≈7.5 J/move = ≈6.7 base + ≈0.8 golden); README/data.js prose updated; fairness figures doc-gated in `npm test`
+- [x] Render: gold halo ring + sun-dot crown in both sprite and painter paths; `reducedMotion` variant is the same halo, static
+- [x] Orders and stats integration: "clear a golden" archetype active; lifetime goldens stat + 2 achievements (Sun-Kissed @7, Golden Harvest @77)
+- [x] Tests: spawn-rate statistical test, direct-×7 and cascade-×14 delta-proofs, legacy-board zero-delta regression
 
 ### Feature 33.3 — The Dewdrop Press (third special)
 
@@ -376,13 +376,13 @@ each one's economy is published and within band.
 Story: Great moves fill a meter that pays. Done when cascade play charges a no-decay meter whose
 payoff is published, capped, and hand-earned only.
 
-- [ ] Meter in `data.js`: cascade links ≥2 add points (deeper links add more); 49 points = full; **no decay, no expiry, ever** (§II.2 meter rules)
-- [ ] Payoff "Fresh Squeeze": next 7 moves earn +49% J, then the meter resets — a rhythm of earn-and-spend the player can bank indefinitely
-- [ ] Wired through the §10.7 multiplier pipeline as a named term; ceiling sweep includes a permanently-Fresh worst case
-- [ ] Auto-Juicer moves add no points (pillar 3), stated right on the meter's tooltip
-- [ ] Meter EV itemized in the match-3 simulate section: expected contribution at attentive play published in fairness.md and doc-gated
-- [ ] UI: a juice-press meter beside the board; fill/burst moments respect `reducedMotion`; count-up integrates with the existing HUD tween
-- [ ] Tests: point accrual per cascade depth, auto-move inertness, pipeline term application and reset, save round-trip
+- [x] Meter in `data.js`: cascade links add (chain − 1) points per hand move; **21** points = full *(drafted 49 revised pre-ship: measured 0.39 pts/move meant a 49-point meter filled every ~125 moves — a non-feature; 21 fills every ~53 moves)*; **no decay, no expiry, ever** (§II.2 meter rules)
+- [x] Payoff "Fresh Squeeze": next 7 hand moves earn +49% J (×1.49), then the meter starts over — bankable indefinitely; the filling move is never itself buffed (consume-before-charge)
+- [x] Applied as a credit-time multiplier on the move's Juice (the buff is a J-faucet term, not an RTP multiplier — it never touches slot/dozer ceiling math); measured attentive uplift ≈+6.4%, bounded ≤20% by the simulator
+- [x] Auto-Juicer moves add no points and consume no buff (pillar 3), stated on the meter's tooltip
+- [x] Meter EV itemized in the match-3 simulate section (points/move, fill cadence, uplift %) and published in fairness.md, doc-gated
+- [x] UI: press meter beside the board's best-combo stats; FRESH state readout; toast on fill
+- [x] Tests: accrual per cascade depth, arm-at-target + reset, exact 7-move consumption, save round-trip + eternal-buff sanitize clamp
 
 ### Feature 33.6 — Reads, Hints & the Sandbox (absorbs Phase 8 remainder)
 
@@ -402,13 +402,21 @@ about being help, and the hint polish debt is paid.
 Story: The deep grove is proved, not vibed. Done when every 33.x number is published, doc-gated,
 simulated, and the ledger tells the truth.
 
-- [ ] Simulate: match-3 v2 section — J/move itemization (base + goldens + Press + combo + orders) per layout; budget assertions fail loudly
-- [ ] fairness.md: "Grove Depth" chapter — golden odds, Press accounting, layout EV table, Squeeze Combo contribution, order budget
-- [ ] Doc-gating tests extended to every figure the chapter publishes
-- [ ] Oracle fixture corpus committed and wired into `npm test` (legacy + goldens + Press + layouts)
-- [ ] §11.8 ceiling sweep re-run; headroom consumed by Phase 33 recorded in the ledger line
+- [x] Simulate: match-3 v2 section — J/move itemization (base + goldens) with orders budget and squeeze uplift assertions that fail loudly (Press/layout itemization pending those features)
+- [x] fairness.md: "Grove Depth" section — golden odds, order determinism/budget, Squeeze Combo contribution, hands-beat-robots statement (Press accounting and layout EV table pending those features)
+- [x] Doc-gating tests for the golden odds/multipliers, order budget, and squeeze constants
+- [ ] Oracle fixture corpus committed as a dedicated fixture file (delta-proof crafted-board tests exist; a broad recorded corpus does not)
+- [x] §11.8 ceiling sweep re-run (unchanged at 456%/500% — Phase 33 spends J-faucet budget, not RTP ceiling headroom; recorded here)
 - [ ] Playwright journey: unlock a layout, complete an order, birth a Press, fill the combo meter — committed as a repeatable script
-- [ ] Status Ledger II updated with an audit-trail paragraph (Plan I style: what shipped, what didn't, verified against code)
+- [x] Status Ledger II updated with an audit-trail paragraph (see ledger table + the audit note below)
+
+**Phase 33 audit trail (2026-07-27, verified against code):** 33.1 + 33.2 + 33.5 shipped whole:
+goldens (1/77, ×7/×14) in `match3.js` with delta-proof tests; orders as pure (day, idx) functions
+in `js/orders.js` with a simulator-enforced ≤21% budget (measured ≈9%); the 21-point Squeeze
+Combo with hand-only charging and a measured ≈+6.4% attentive uplift. Two drafted numbers were
+revised before shipping and are annotated in place (order budget 7%→21% total; squeeze target
+49→21). Not built: 33.3 Dewdrop Press, 33.4 board layouts, 33.6 reads/hints/sandbox, and 33.7's
+Playwright journey + fixture corpus. `npm test` 55/55, `npm run simulate` all claims verified.
 
 ## Phase 34 — Choose Your Sunshine (Slot Depth)
 

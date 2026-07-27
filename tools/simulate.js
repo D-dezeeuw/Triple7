@@ -122,9 +122,16 @@ console.log('    (The 5-Seven dream line: p = ' +
 // ── 2. MATCH-3 ──────────────────────────────────────────────────────────────
 hr('2. MATCH-3 — "Juicy Grove" (stake: one free move)');
 
+var orders = require(path.join(__dirname, '..', 'js', 'orders.js'));
 rng = new rngMod.Rng(777002);
 var board = match3.newBoard(rng);
 var totJ = 0, totTiles = 0, chains = {}, reshuffles = 0, specials = 0;
+var totGoldJ = 0, totGoldens = 0, spawnsSeen = 0;
+// Juice-Stand orders (Plan II 33.1) ride along: three live slots progressed by
+// every move exactly as the game progresses them, deck drawn from a fixed day.
+var ORDER_DAY = '2026-07-27', orderIdx = 0, orderJ = 0, ordersDone = 0;
+var slotsLive = [];
+while (slotsLive.length < D.ORDERS.SLOTS) slotsLive.push(orders.roll(ORDER_DAY, orderIdx++));
 for (var mv = 0; mv < N_MOVES; mv++) {
   var moves = match3.findAllMoves(board);
   if (!moves.length) { match3.reshuffle(board, rng); reshuffles++; mv--; continue; }
@@ -132,18 +139,56 @@ for (var mv = 0; mv < N_MOVES; mv++) {
   var out = match3.resolveMove(board, pick, rng, 0);
   if (!out.valid) continue;
   totJ += out.juice; totTiles += out.tiles; specials += out.specialsMade;
+  totGoldJ += out.goldJuice; totGoldens += out.goldens;
   chains[out.chain] = (chains[out.chain] || 0) + 1;
+  for (var os = 0; os < slotsLive.length; os++) {
+    slotsLive[os].progress += orders.progressFor(slotsLive[os], out);
+    if (slotsLive[os].progress >= slotsLive[os].n) {
+      orderJ += slotsLive[os].reward; ordersDone++;
+      slotsLive[os] = orders.roll(ORDER_DAY, orderIdx++);
+    }
+  }
 }
 var jPerMove = totJ / N_MOVES;
 console.log('  ' + N_MOVES.toLocaleString() + ' random valid moves (seed 777002, no upgrades):');
 console.log('    Juice/move   = ' + jPerMove.toFixed(3) + ' J  → a 7 J spin every ' +
   (7 / jPerMove).toFixed(2) + ' moves');
+console.log('    itemized: base ' + ((totJ - totGoldJ) / N_MOVES).toFixed(3) +
+  ' J + Sun-Ripened ' + (totGoldJ / N_MOVES).toFixed(3) + ' J (' +
+  pct(totGoldJ / totJ) + ' share, ' + totGoldens + ' goldens cleared @ spawn odds 1/' +
+  Math.round(1 / D.MATCH3.GOLDEN.CHANCE) + ')');
 console.log('    tiles/move   = ' + (totTiles / N_MOVES).toFixed(2) +
   ' · specials made: ' + specials + ' · deadlock reshuffles: ' + reshuffles);
 var chainKeys = Object.keys(chains).sort(function (a, b) { return a - b; });
 console.log('    cascade depth histogram: ' + chainKeys.map(function (k) {
   return 'x' + k + ':' + pct(chains[k] / N_MOVES);
 }).join('  '));
+
+// Orders budget (Plan II 33.1): directed play is seasoning, never the meal —
+// published bound: order rewards ≤ 21% of base Juice at steady random play.
+var orderShare = orderJ / totJ;
+console.log('\n  Juice-Stand orders: ' + ordersDone + ' filled over ' + N_MOVES.toLocaleString() +
+  ' moves → +' + orderJ + ' J (' + pct(orderShare) + ' of squeezed Juice; published budget ≤ 21%)');
+var ordersOK = orderShare <= 0.21;
+console.log('  VERDICT: ' + (ordersOK
+  ? '✔ order income sits inside the published ≤21% budget.'
+  : '✘ ORDER BUDGET BLOWN — ' + pct(orderShare) + ' exceeds the published 21%!'));
+
+// Squeeze Combo (Plan II 33.5): expected attentive-play contribution from the
+// measured cascade distribution — points/move = Σ (chain−1)·freq; the buff
+// covers BUFF_MOVES of every fill cycle. Hand moves only; autos earn 0 of this.
+var ptsPerMove = 0;
+chainKeys.forEach(function (k) { ptsPerMove += Math.max(0, k - 1) * chains[k] / N_MOVES; });
+var movesToFill = D.SQUEEZE.TARGET / Math.max(1e-9, ptsPerMove);
+var squeezeUplift = (D.SQUEEZE.BUFF_MULT - 1) * Math.min(1, D.SQUEEZE.BUFF_MOVES / movesToFill);
+console.log('\n  Squeeze Combo: ' + ptsPerMove.toFixed(3) + ' pts/move → meter fills every ~' +
+  movesToFill.toFixed(0) + ' moves → Fresh Squeeze uplift ≈ +' + pct(squeezeUplift) +
+  ' Juice for attentive hand play (autos: exactly +0%).');
+var squeezeOK = squeezeUplift <= 0.2;
+console.log('  VERDICT: ' + (squeezeOK
+  ? '✔ combo uplift stays a bonus (≤20%), not a new baseline.'
+  : '✘ combo uplift ' + pct(squeezeUplift) + ' exceeds the 20% design cap!'));
+
 console.log('\n  VERDICT: ✔ every move earns Juice (free faucet — the chain can never dead-end);');
 console.log('           human play beats random-move EV, so ' + jPerMove.toFixed(2) + ' J/move is the floor.');
 
@@ -272,6 +317,6 @@ console.log('    losing streaks are bounded by the free Match-3/Grove faucet (no
 console.log('  · No backward conversion exists (G→S→J impossible), so value flows one way.');
 console.log('  · Inflation sink: exponential upgrade costs (growth 1.15–2.6) and charm chests.');
 
-var allOK = slotOK && dozerOK && jPerMove > 1 && inflationOK && geomOK;
+var allOK = slotOK && dozerOK && jPerMove > 1 && inflationOK && geomOK && ordersOK && squeezeOK;
 console.log('\n' + (allOK ? '  ✅ ALL PUBLISHED ECONOMY CLAIMS VERIFIED.' : '  ❌ ECONOMY CHECK FAILED — see above.'));
 process.exit(allOK ? 0 : 1);

@@ -43,10 +43,14 @@
  *   for the current measured figures.
  *
  * ── MATCH-3 ─────────────────────────────────────────────────────────────────
- *   Each cleared tile = 1 J × cascade multiplier ×(1 + 0.5·(chain−1)).
- *   Measured by simulation (random valid moves, 8×8, 6 fruits): ≈ 6.6 J per
- *   move before upgrades — i.e. a slot spin (7 J) roughly every move. Free to
- *   play, strictly positive: this is the engine of the whole chain.
+ *   Each cleared tile = 1 J × cascade multiplier ×(1 + 0.5·(chain−1)); a
+ *   Sun-Ripened golden (1/77 spawn) counts as 7 tiles — 14 when a cascade
+ *   clears it. Measured by simulation (random valid moves, 8×8, 6 fruits):
+ *   ≈ 7.5 J per move before upgrades (≈6.7 base + ≈0.8 golden share) — i.e.
+ *   a slot spin (7 J) roughly every move. Free to play, strictly positive:
+ *   this is the engine of the whole chain. On top ride the Juice-Stand
+ *   orders (flat gifts, simulator-bounded ≤21% of squeezed Juice) and the
+ *   Squeeze Combo (hand-play-only Fresh Squeeze buff, ≈+6% attentive).
  *   (Random-move play is the FLOOR; a human choosing cascades beats it.)
  */
 (function (root, factory) {
@@ -77,8 +81,41 @@
     JUICE_PER_TILE: 1,
     CASCADE_STEP: 0.5,          // chain n pays ×(1 + 0.5·(n−1))
     SPECIAL4_BONUS: 3,          // flat J on creating a line-blast
-    SPECIAL5_BONUS: 7           // flat J on creating a rainbow
+    SPECIAL5_BONUS: 7,          // flat J on creating a rainbow
+    // Sun-Ripened fruit (Plan II Feature 33.2): a rare golden spawn worth
+    // planning around. Rolled once per spawned fruit on the match3 stream at
+    // refill time — never re-rolled, never placed by presentation. A golden
+    // counts as MULT tiles of juice when cleared by the direct swap, and
+    // CASCADE_MULT tiles when a cascade (chain ≥ 2) clears it — the first
+    // mechanical reason to prefer setups over instant clears.
+    GOLDEN: { CHANCE: 1 / 77, MULT: 7, CASCADE_MULT: 14 }
   };
+
+  // ── Juice-Stand Orders (Plan II Feature 33.1) ──────────────────────────────
+  // Three no-timer, no-expiry request slots; each order is a pure function of
+  // (UTC day, deck index) so decks are deterministic and rerolls are free
+  // variety, never re-rolled value. Rewards are flat raw-J gifts (like the
+  // Daily Squeeze); tools/simulate.js asserts their steady-play total stays
+  // ≤ 21% of base match-3 Juice (≤7% per slot — the published budget).
+  var ORDERS = {
+    SLOTS: 3,
+    TEMPLATES: [
+      { kind: 'fruit',    n: 49,  reward: 14 },   // clear 49 of one fruit
+      { kind: 'tiles',    n: 210, reward: 7 },    // clear 210 fruit total
+      { kind: 'moves',    n: 21,  reward: 7 },    // make 21 squeezes
+      { kind: 'specials', n: 7,   reward: 7 },    // craft 7 Bursts/Rainbows
+      { kind: 'cascade',  n: 4,   reward: 7 },    // reach a ×4 cascade once
+      { kind: 'golden',   n: 1,   reward: 7 },    // clear a Sun-Ripened fruit
+      { kind: 'juice',    n: 210, reward: 14 }    // squeeze 210 base Juice
+    ]
+  };
+
+  // ── Squeeze Combo (Plan II Feature 33.5) ───────────────────────────────────
+  // Cascade links (chain − 1 per move) fill a 21-point meter — hand moves
+  // only, Auto-Juicer is meter-inert (pillar 3: hands beat robots, gently).
+  // A full meter arms "Fresh Squeeze": the next BUFF_MOVES hand moves earn
+  // ×BUFF_MULT Juice, then the meter starts over. No decay, no expiry, ever.
+  var SQUEEZE = { TARGET: 21, BUFF_MOVES: 7, BUFF_MULT: 1.49 };
 
   // ── Slot machine ───────────────────────────────────────────────────────────
   // Sunshine Sevens 2.0: a 5×4 video slot. Every one of the 20 window cells is
@@ -347,7 +384,12 @@
     { id: 'grove77',       name: 'Grove Baron',     stat: 'buildings',  at: 77,     gems: 21 },
     { id: 'seed1',         name: 'Preserved!',      stat: 'prestiges',  at: 1,      gems: 0 },
     { id: 'clock15',       name: 'Coffee Break',    stat: 'playSec',    at: 900,    gems: 2 },
-    { id: 'clock3600',     name: 'Cozy Afternoon',  stat: 'playSec',    at: 3600,   gems: 7 }
+    { id: 'clock3600',     name: 'Cozy Afternoon',  stat: 'playSec',    at: 3600,   gems: 7 },
+    // Plan II Phase 33 — Grove of Decisions
+    { id: 'golden7',       name: 'Sun-Kissed',      stat: 'goldens',    at: 7,      gems: 2 },
+    { id: 'golden77',      name: 'Golden Harvest',  stat: 'goldens',    at: 77,     gems: 7 },
+    { id: 'order7',        name: 'Regular Customer', stat: 'ordersDone', at: 7,     gems: 3 },
+    { id: 'squeeze7',      name: 'Fresh Squeezed',  stat: 'squeezes',   at: 7,      gems: 3 }
   ];
   var ACH_GLOBAL_BONUS = 0.01;
 
@@ -368,7 +410,8 @@
 
   return {
     CURRENCIES: CURRENCIES, CONVERSION: CONVERSION,
-    MATCH3: MATCH3, SLOT: SLOT, RESORT: RESORT, DOZER: DOZER,
+    MATCH3: MATCH3, ORDERS: ORDERS, SQUEEZE: SQUEEZE,
+    SLOT: SLOT, RESORT: RESORT, DOZER: DOZER,
     CHARM_SETS: CHARM_SETS, CHARMS: CHARMS, RARITY_WEIGHT: RARITY_WEIGHT,
     CHARM_CHEST_COST_G: CHARM_CHEST_COST_G, CHARM_MAXED_DUPE_GEMS: CHARM_MAXED_DUPE_GEMS,
     GROVE: GROVE, BUILDINGS: BUILDINGS, UPGRADES: UPGRADES, AUTO: AUTO, OFFLINE: OFFLINE,

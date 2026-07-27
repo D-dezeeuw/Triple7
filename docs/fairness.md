@@ -248,6 +248,35 @@ thousands of fuzzed moves. It is the loop's unconditional faucet: no matter
 how a slot or dozer session goes, you can always walk back to the board and
 earn your way back up.
 
+### Grove Depth (Plan II Phase 33)
+
+Three additions ride on top of the base board. Every number here is the same
+constant the code reads (`js/data.js`), and `npm run simulate` re-measures
+and bounds them on every run:
+
+- **Sun-Ripened fruit.** Each spawned fruit rolls golden with probability
+  **1/77**, decided on the match-3 stream at refill time — never placed or
+  re-rolled by presentation. A golden counts as **7 tiles** of Juice when
+  your swap clears it directly, and **14 tiles** when a cascade (chain ≥ 2)
+  clears it — the game's first published reason to prefer a setup over an
+  instant clear. Goldens are otherwise perfectly ordinary fruit: same
+  matching, same gravity, same reshuffles. Measured share of total Juice at
+  random play: ≈10% (`npm run simulate` prints the current figure).
+- **Juice-Stand orders.** Three request slots, dealt deterministically from
+  a deck that is a pure function of (UTC day, deck index) — a clock rewind
+  deals the identical cards, and rerolls simply advance the deck (free
+  variety, never re-rolled value). Orders **never expire**, progress only on
+  hand moves (the Auto-Juicer is order-inert), and pay **flat Juice gifts**
+  with a simulator-enforced budget: total order income ≤ **21%** of squeezed
+  Juice at steady play (measured ≈9%).
+- **Squeeze Combo.** Cascade links (chain − 1 per hand move) fill a
+  **21-point** meter with **no decay and no expiry** — a half-full meter
+  waits forever. A full meter arms **Fresh Squeeze**: the next **7 hand
+  moves** earn **+49% Juice**, then the meter starts over. The Auto-Juicer
+  neither fills nor consumes the meter — attentive hands earn ≈+6% Juice
+  over a session (measured); robots earn exactly +0% of it. That asymmetry
+  is deliberate and permanent: *hands beat robots, gently.*
+
 ## No dark patterns, published as a pledge
 
 - No currency conversion ever runs backward (Stargems → Suncoins → Juice is

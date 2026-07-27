@@ -36,9 +36,10 @@ weighted virtual stops, the same par-sheet model real slots use — with a
 (1 in 43). The dozer returns ~**204 %** per drop at steady state (~247 % fully
 upgraded): conservation says coins in ≈ coins out, minus the side gutters
 (≈6.6 % of exits at bare geometry), plus rare higher-value denominations, the
-pachinko chute's perks and its bonus pins. Match-3 is free to play (≈6.6 Juice
-per move, so a spin roughly every move) and the grove drips Juice passively, so
-the chain can never dead-end. Exponential upgrade costs are the sink that keeps
+pachinko chute's perks and its bonus pins. Match-3 is free to play (≈7.5 Juice
+per move — including the rare ×7 **Sun-Ripened** golden fruit, ×14 when a
+cascade clears it — so a spin roughly every move) and the grove drips Juice
+passively, so the chain can never dead-end. Exponential upgrade costs are the sink that keeps
 numbers meaningful.
 
 Don't take the numbers on faith — every odds table is written down in full in

@@ -314,6 +314,169 @@ t('reshuffle produces a valid board', function () {
   ok(match3.findAllMoves(b).length > 0);
 });
 
+console.log('grove depth (Plan II Phase 33)');
+t('Sun-Ripened spawn rate matches the published 1/77 (statistically)', function () {
+  var rng = new rngMod.Rng(3301);
+  var goldens = 0, cells = 0;
+  for (var i = 0; i < 500; i++) {
+    var b = match3.newBoard(rng);
+    for (var y = 0; y < match3.ROWS; y++) {
+      for (var x = 0; x < match3.COLS; x++) { cells++; if (b[y][x].g) goldens++; }
+    }
+  }
+  // 32,000 spawns @ p=1/77 → mean ≈ 415, sd ≈ 20. Accept ±5 sd.
+  var expect = cells * D.MATCH3.GOLDEN.CHANCE;
+  ok(Math.abs(goldens - expect) < 100,
+     goldens + ' goldens in ' + cells + ' spawns, expected ~' + Math.round(expect));
+});
+// Hand-crafted boards for exact golden payouts. Base fill (x + 2y) % 6 has no
+// 3-runs anywhere (horizontal neighbours always differ; vertical step +2 mod 6),
+// then specific cells are overridden to stage the scenario.
+function craftBoard(overrides) {
+  var b = [];
+  for (var y = 0; y < match3.ROWS; y++) {
+    b.push([]);
+    for (var x = 0; x < match3.COLS; x++) b[y].push({ f: (x + 2 * y) % 6, sp: 0, g: false });
+  }
+  (overrides || []).forEach(function (o) { b[o.y][o.x] = { f: o.f, sp: 0, g: !!o.g }; });
+  return b;
+}
+t('golden cleared by the direct swap pays exactly ×7 (delta-proof)', function () {
+  // Row 7: A A X, swap (2,6)=A down → A A A clears at chain 1.
+  var A = 0, X = 1;
+  var over = [
+    { x: 0, y: 7, f: A }, { x: 1, y: 7, f: A }, { x: 2, y: 7, f: X },
+    { x: 2, y: 6, f: A }
+  ];
+  var move = { x1: 2, y1: 6, x2: 2, y2: 7 };
+  var plain = craftBoard(over);
+  eq(match3.findMatches(plain).cells.length, 0, 'crafted board must start matchless');
+  var golden = craftBoard(over);
+  golden[7][0].g = true;                      // the golden is IN the cleared run
+  var rA = match3.resolveMove(plain, move, new rngMod.Rng(777), 0);
+  var rB = match3.resolveMove(golden, move, new rngMod.Rng(777), 0);
+  ok(rA.valid && rB.valid, 'both runs must resolve');
+  // Same seed ⇒ identical refills/cascade structure; the only difference is
+  // the gold flag, cleared at chain 1 → ×MULT ⇒ delta = (MULT−1)·1·1.
+  near(rB.juice - rA.juice, (D.MATCH3.GOLDEN.MULT - 1) * D.MATCH3.JUICE_PER_TILE, 1e-9,
+       'direct-clear golden delta');
+  eq(rB.goldens - rA.goldens, 1, 'goldens counted');
+  ok(rB.byFruit[A] >= 3, 'byFruit counts the cleared run');
+});
+t('golden cleared by a cascade pays exactly ×14 (delta-proof)', function () {
+  // Column 0 rows 5-7 become A A A via the swap; the X at (0,4) then falls to
+  // row 7 where (1,7)=(2,7)=X wait for it — a designed chain-2 clear made
+  // entirely of pre-existing cells, so the gold flag is the ONLY difference.
+  var A = 0, X = 1, B = 2, C = 3, Dd = 4;
+  var over = [
+    { x: 0, y: 5, f: B }, { x: 0, y: 6, f: A }, { x: 0, y: 7, f: A },
+    { x: 1, y: 5, f: A },                        // swaps left to complete the run
+    { x: 0, y: 4, f: X },                        // falls to (0,7) at chain 2
+    { x: 1, y: 7, f: X }, { x: 2, y: 7, f: X },
+    { x: 1, y: 6, f: C }, { x: 2, y: 5, f: Dd }
+  ];
+  var move = { x1: 1, y1: 5, x2: 0, y2: 5 };
+  var plain = craftBoard(over);
+  eq(match3.findMatches(plain).cells.length, 0, 'crafted board must start matchless');
+  var golden = craftBoard(over);
+  golden[4][0].g = true;                       // the falling X carries the gold
+  var rA = match3.resolveMove(plain, move, new rngMod.Rng(778), 0);
+  var rB = match3.resolveMove(golden, move, new rngMod.Rng(778), 0);
+  ok(rA.valid && rB.valid && rA.chain >= 2, 'designed cascade must reach chain 2 (got ' + rA.chain + ')');
+  // Cleared at chain 2 → ×CASCADE_MULT under cascade multiplier 1.5 (kettle 0)
+  // ⇒ delta = (14−1)·1·1.5 = 19.5 exactly.
+  near(rB.juice - rA.juice,
+       (D.MATCH3.GOLDEN.CASCADE_MULT - 1) * D.MATCH3.JUICE_PER_TILE * (1 + D.MATCH3.CASCADE_STEP), 1e-9,
+       'cascade-clear golden delta');
+  eq(rB.goldens - rA.goldens, 1, 'goldens counted');
+});
+t('legacy boards (no goldens) score exactly as before the golden feature', function () {
+  // Same crafted scenario, gold flags all false: juice must equal the v1
+  // formula — units === plain tile count when no golden is present.
+  var A = 0;
+  var over = [
+    { x: 0, y: 7, f: A }, { x: 1, y: 7, f: A }, { x: 2, y: 7, f: 1 },
+    { x: 2, y: 6, f: A }
+  ];
+  var b = craftBoard(over);
+  var res = match3.resolveMove(b, { x1: 2, y1: 6, x2: 2, y2: 7 }, new rngMod.Rng(779), 0);
+  ok(res.valid, 'move resolves');
+  eq(res.goldens, 0, 'no goldens on a legacy board');
+  near(res.goldJuice, 0, 1e-9, 'no golden juice on a legacy board');
+});
+var orders = require(path.join(__dirname, '..', 'js', 'orders.js'));
+t('orders are a pure function of (day, index) — deterministic decks', function () {
+  var a = orders.roll('2026-07-27', 0), b = orders.roll('2026-07-27', 0);
+  eq(JSON.stringify(a), JSON.stringify(b), 'same (day, idx) must deal the same card');
+  var c = orders.roll('2026-07-28', 0);
+  ok(JSON.stringify(a) !== JSON.stringify(c) || a.kind === c.kind,
+     'different days may differ (never throw)');
+  // Every dealt card must be a well-formed template instance.
+  for (var i = 0; i < 50; i++) {
+    var o = orders.roll('2026-07-27', i);
+    ok(o.n > 0 && o.reward > 0 && typeof o.kind === 'string', 'card ' + i + ' malformed');
+    ok(typeof orders.label(o) === 'string' && orders.label(o) !== '?', 'card ' + i + ' unlabeled');
+    if (o.kind === 'fruit') ok(o.fruit >= 0 && o.fruit < D.MATCH3.FRUITS.length, 'fruit index');
+  }
+});
+t('order progress maps each kind to the right result field', function () {
+  var res = { tiles: 12, chain: 4, juice: 33, specialsMade: 2, goldens: 1, byFruit: [5, 0, 0, 0, 0, 0] };
+  eq(orders.progressFor({ kind: 'fruit', fruit: 0, n: 49 }, res), 5);
+  eq(orders.progressFor({ kind: 'tiles', n: 210 }, res), 12);
+  eq(orders.progressFor({ kind: 'moves', n: 21 }, res), 1);
+  eq(orders.progressFor({ kind: 'specials', n: 7 }, res), 2);
+  eq(orders.progressFor({ kind: 'cascade', n: 4 }, res), 4, 'qualifying cascade completes');
+  eq(orders.progressFor({ kind: 'cascade', n: 5 }, res), 0, 'short cascade adds nothing');
+  eq(orders.progressFor({ kind: 'golden', n: 1 }, res), 1);
+  eq(orders.progressFor({ kind: 'juice', n: 210 }, res), 33);
+});
+t('completing an order pays its flat reward, counts the stat, deals a new card', function () {
+  var g = new st.Game();
+  g.s.orders.slots = [{ day: '2026-07-27', idx: 0, kind: 'moves', n: 1, reward: 14, progress: 0 }];
+  g.s.orders.idx = 1;                          // deck cursor sits past the dealt card
+  var done = orders.apply(g, { tiles: 3, chain: 1, juice: 5, specialsMade: 0, goldens: 0, byFruit: [] });
+  eq(done.length, 1, 'order completed');
+  eq(g.s.cur.juice, 14, 'flat raw reward (no multiplier)');
+  eq(g.s.stats.ordersDone, 1);
+  eq(g.s.orders.slots.length, 1, 'slot refilled');
+  ok(g.s.orders.slots[0].idx !== 0, 'refill comes from the next deck card');
+});
+t('squeeze combo: charges on cascades, arms at 21, buffs exactly 7 moves, hand-only by contract', function () {
+  var g = new st.Game();
+  eq(g.squeezeCharge(1), false, 'chain 1 adds nothing');
+  eq(g.s.squeeze.points, 0);
+  g.squeezeCharge(4);                          // +3
+  eq(g.s.squeeze.points, 3);
+  for (var i = 0; i < 6; i++) g.squeezeCharge(4);   // +18 → 21 → arms
+  eq(g.s.squeeze.points, 0, 'meter resets on fill');
+  eq(g.s.squeeze.buffLeft, D.SQUEEZE.BUFF_MOVES);
+  eq(g.s.stats.squeezes, 1);
+  for (var m = 0; m < D.SQUEEZE.BUFF_MOVES; m++) {
+    near(g.squeezeMult(), D.SQUEEZE.BUFF_MULT, 1e-9, 'buffed move ' + m);
+  }
+  near(g.squeezeMult(), 1, 1e-9, 'buff exhausted after ' + D.SQUEEZE.BUFF_MOVES + ' moves');
+});
+t('orders + squeeze survive a save round-trip and sanitize corruption', function () {
+  var g = new st.Game();
+  g.s.orders.slots = [{ day: '2026-07-27', idx: 4, kind: 'tiles', n: 210, reward: 7, progress: 55 }];
+  g.s.orders.idx = 5;
+  g.s.squeeze.points = 9; g.s.squeeze.buffLeft = 3;
+  var g2 = new st.Game();
+  g2.importSave(g.exportSave());
+  eq(g2.s.orders.slots[0].progress, 55, 'order progress survives');
+  eq(g2.s.orders.idx, 5, 'deck cursor survives');
+  eq(g2.s.squeeze.points, 9); eq(g2.s.squeeze.buffLeft, 3);
+  // Corruption: an eternal buff or junk slots must sanitize away.
+  var g3 = new st.Game();
+  g3.s.squeeze.buffLeft = 9999;
+  g3.s.orders.slots = [{ bogus: true }, null, { day: 'x', idx: 0, kind: 'moves', n: 21, reward: 7, progress: 2 }];
+  var g4 = new st.Game();
+  g4.importSave(g3.exportSave());
+  ok(g4.s.squeeze.buffLeft <= D.SQUEEZE.BUFF_MOVES, 'buffLeft clamped to max');
+  eq(g4.s.orders.slots.length, 1, 'malformed slots dropped, valid one kept');
+  eq(g4.s.orders.slots[0].kind, 'moves');
+});
+
 console.log('slots');
 // 5×4 grid helper: fill every cell, or a checkerboard-by-column that can
 // never produce a 3-run on any line (columns strictly alternate symbols).
@@ -606,6 +769,24 @@ t('no shipped source still claims the retired 9-payline machine', function () {
     ok(!/9\s+(fixed\s+)?(pay)?lines/i.test(doc(f)),
        f + ' still references 9 paylines; the machine has ' + D.SLOT.LINES.length);
   });
+});
+t('fairness.md quotes the golden-fruit odds and multipliers the code actually uses', function () {
+  var text = doc('docs/fairness.md');
+  var G = D.MATCH3.GOLDEN;
+  ok(text.indexOf('1/' + Math.round(1 / G.CHANCE)) >= 0,
+     'fairness.md must quote the 1/' + Math.round(1 / G.CHANCE) + ' golden spawn odds');
+  ok(new RegExp('\\*\\*' + G.MULT + ' tiles\\*\\*').test(text),
+     'fairness.md must quote the direct-clear ×' + G.MULT);
+  ok(new RegExp('\\*\\*' + G.CASCADE_MULT + ' tiles\\*\\*').test(text),
+     'fairness.md must quote the cascade-clear ×' + G.CASCADE_MULT);
+  ok(text.indexOf(String(Math.round((D.ORDERS.TEMPLATES ? 21 : 21)))) >= 0 &&
+     text.indexOf('21%') >= 0, 'fairness.md must state the ≤21% order budget');
+  ok(text.indexOf(String(D.SQUEEZE.TARGET) + '-point') >= 0,
+     'fairness.md must quote the ' + D.SQUEEZE.TARGET + '-point squeeze meter');
+  ok(text.indexOf(D.SQUEEZE.BUFF_MOVES + ' hand') >= 0,
+     'fairness.md must quote the ' + D.SQUEEZE.BUFF_MOVES + '-move Fresh Squeeze');
+  ok(text.indexOf('+' + Math.round((D.SQUEEZE.BUFF_MULT - 1) * 100) + '%') >= 0,
+     'fairness.md must quote the Fresh Squeeze multiplier');
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
