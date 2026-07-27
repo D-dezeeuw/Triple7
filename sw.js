@@ -17,7 +17,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'triple7-v10';
+var CACHE_NAME = 'triple7-v11';
 
 // The minimum set of files the game needs to boot and be playable offline.
 // Sprites aren't listed here on purpose: js/sprites.js eagerly preloads every

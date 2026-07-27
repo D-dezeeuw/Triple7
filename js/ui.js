@@ -111,13 +111,21 @@
     $('btn-prestige').addEventListener('click', function () {
       var next = game.prestigeSeedsTotal();
       if (!game.prestigeAvailable()) return;
-      if (!confirm('Make Preserves?\n\nResets Juice, Suncoins, Stargems, Grove and Upgrades.\nKeeps Charms, Milestones — and grants Golden Seeds (' +
-                   game.s.seeds + ' → ' + next + ', each +10% to everything).')) return;
+      if (!confirm('Make Preserves?\n\n' +
+                   'RESETS: Juice, Suncoins, Stargems, Grove, Upgrades.\n' +
+                   'KEEPS: Charms & Bracelet, Milestones, Sun Meter, Sunline,\n' +
+                   'free spins/drops, Weather & Current choices, your jars.\n\n' +
+                   'Golden Seeds: ' + game.s.seeds + ' → ' + next +
+                   ' (each +10%, +7% past 100 — forever).\n' +
+                   'The new lap starts WARM: your first 77 Juice pay double,\n' +
+                   'and the Slots/Dozer stay unlocked.')) return;
       game.doPrestige();
       game.checkAchievements();
       ui.sfx('jackpot');
-      ui.toast('Preserves made! ' + game.s.seeds + ' Golden Seeds — everything earns +' +
-               Math.round(game.s.seeds * 10) + '% forever.', 'gold', 'jar');
+      var jar = game.s.jars[game.s.jars.length - 1];
+      ui.toast('Preserves made! Jar #' + jar.n + ' (' + jar.lid + ' lid, ' + U.fmt(jar.lapG) +
+               ' G) joins the shelf — +' + Math.round(game.seedBonus() * 100) + '% to everything, forever.',
+               'gold', 'jar');
       ui.rebuildAll();
     });
 
@@ -734,18 +742,35 @@
     });
     $('ach-count').textContent = '— ' + achieved + '/' + D.ACHIEVEMENTS.length + ' earned, each +1% everything';
 
-    // Prestige card
+    // Prestige card (projections per Plan II 38.2)
     var card = $('prestige-card');
     var lifetime = game.s.lifetime.stargem;
     if (lifetime >= D.PRESTIGE.UNLOCK_LIFETIME_G * 0.5) {
       card.classList.remove('hidden');
       var next = game.prestigeSeedsTotal();
+      var nextAt = game.nextSeedAtG();
       $('prestige-info').innerHTML = 'Lifetime Stargems: <b>' + U.fmt(lifetime) + '</b> · Golden Seeds: <b>' +
-        game.s.seeds + '</b> → would become <b>' + next + '</b>.<br>' +
-        'Preserving resets currencies, grove and upgrades — charms and milestones stay. Each seed is +10% to everything, forever.';
+        game.s.seeds + '</b> → would become <b>' + next + '</b>' +
+        ' · seed #' + (next + 1) + ' at <b>' + U.fmt(nextAt) + '</b> lifetime G (' +
+        U.fmt(Math.max(0, nextAt - lifetime)) + ' to go).<br>' +
+        'Preserving resets currencies, grove and upgrades — charms, bracelet and milestones stay. ' +
+        'Each seed +10% to everything (+7% past 100), forever. Every new lap starts warm: first ' +
+        D.PRESTIGE.WARM_JUICE + ' Juice pay double.';
       $('btn-prestige').disabled = !game.prestigeAvailable();
     } else {
       card.classList.add('hidden');
+    }
+    // The Jar Shelf (Plan II 38.4)
+    var shelf = $('jar-shelf');
+    if (game.s.jars.length > 0) {
+      shelf.classList.remove('hidden');
+      $('jar-list').innerHTML = game.s.jars.slice().reverse().map(function (j) {
+        var h = Math.floor(j.sec / 3600), m = Math.floor((j.sec % 3600) / 60);
+        return '<div><b>Jar #' + j.n + '</b> — ' + U.fmt(j.lapG) + ' G in ' +
+               (h > 0 ? h + 'h ' : '') + m + 'm · ' + j.lid + ' lid · ' + j.seeds + ' seeds</div>';
+      }).join('');
+    } else {
+      shelf.classList.add('hidden');
     }
   };
 

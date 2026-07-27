@@ -85,7 +85,7 @@ lands on `main`; audit code before trusting a checkbox.
 | 35 Star Harbor Mastery | 🟡 | 35.3 earned events (storms/surges/pelicans) + 35.2 Harbor Currents SHIPPED; 35.1 resolved as a measured NEGATIVE result (timing is physics-neutral — published in fairness.md, no fake dial built); 35.4-35.7 chute builds/geometry/runs/full gate unbuilt |
 | 36 Chain Reforged | 🟡 | 36.1 Sunline/Resonance + 36.2 hand-offs (Pressed Juice free spins, Jackpot Splash free drops) SHIPPED with sims/tests/fairness chapter; 36.3 itineraries, 36.4 Golden Hour, 36.5 hub flows, 36.6 pours, 36.7 full gate unbuilt |
 | 37 Builds & Loadouts | 🟡 | 37.1 Charm Bracelet SHIPPED (×2 focus + set-focus doubling, upward-only migration, free respec, tap-to-equip cabinet UI, tests, fairness chapter); 37.2 specs, 37.3 branches, 37.4 tonics, 37.5 presets/console, 37.6 harness, 37.7 gate unbuilt |
-| 38 The Long Game | 🔭 | A sliver of 28.7 (personal RTP stat) shipped in Plan I; the other 9½ features of Phase 28 are unbuilt |
+| 38 The Long Game | 🟡 | 38.2 seed softcap + projections, 38.3 warm start (+veils-stay-down verified), 38.4 jar shelf SHIPPED; 38.1 ceremony (rich confirm only), 38.5 grand sinks, 38.6 challenges, 38.7 milli-units/records unbuilt |
 | 39 Moonlit Tidepool | 🔭 | Nothing exists; Feature 30.10's RFC is unresolved — 39.1 resolves it |
 
 ### Absorption Map — where Plan I remainders now live
@@ -409,6 +409,18 @@ simulated, and the ledger tells the truth.
 - [x] §11.8 ceiling sweep re-run (unchanged at 456%/500% — Phase 33 spends J-faucet budget, not RTP ceiling headroom; recorded here)
 - [ ] Playwright journey: unlock a layout, complete an order, birth a Press, fill the combo meter — committed as a repeatable script
 - [x] Status Ledger II updated with an audit-trail paragraph (see ledger table + the audit note below)
+
+**Phase 38 audit trail (2026-07-27, verified against code):** 38.2 shipped — the seed softcap is
+decided and implemented (+10%/seed to 100, +7% past; `seedBonus()` feeds `allMult()`), with
+next-seed threshold + distance projected on the prestige card. 38.3 shipped in part — warm start
+(first 77 J of every post-prestige lap pays double, consumed as it doubles, Juice only) and the
+veils-stay-down accelerator (verified: lifetime totals survive prestige, so slots/dozer never
+re-lock — this was latent v1 behavior, now tested and stated in the dialog); keep-a-building and
+price memory not built. 38.4 shipped — every prestige mints a jar (lap G, duration, seeds,
+gold/silver/bronze lid by G/hour) onto a 49-jar shelf in the Grove; malformed jars sanitize away.
+38.1 only as a richer confirm dialog (kept/reset receipt + warm-start note) — the full ceremony
+remains. Not built: 38.5 grand sinks, 38.6 challenge preserves, 38.7 milli-units decision &
+per-lap records. `npm test` 79/79, simulate verified.
 
 **Phase 37 audit trail (2026-07-27, verified against code):** 37.1 shipped whole — the bracelet
 holds 7 of the (now 28, soon more) charms; equipped charms' per-level bonuses count ×2 and a

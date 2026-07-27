@@ -407,7 +407,8 @@ no stage's published RTP counts another stage's gift twice.
   you, no "log in or lose your bonus." If a future feature needs any of
   these to work, the feature is wrong for this game, not the pledge.
 - Every multiplier source is bounded (upgrade max levels, charm level 7,
-  achievement count, prestige seed count) — bonuses cannot compound past a
+  achievement count, prestige seed count — softcapped at 100 seeds, +10%
+  each dropping to +7% past the knee) — bonuses cannot compound past a
   ceiling `npm run simulate`'s balance checks watch for.
 - Save codes (`T71.xxxxxxxx....`) carry an FNV-1a checksum and are validated
   end-to-end before ever touching live state; a corrupted or hand-edited
