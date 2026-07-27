@@ -144,9 +144,14 @@
     // saved up manually — Auto-Juicer has no cost, so no reserve applies.
     stepAuto('autojuicer', dt, function () { return views.match3.autoMove(); });
     stepAuto('autospinner', dt, function () {
-      var reserve = game.s.settings.reserve.juice || 0;
-      if (game.s.cur.juice - D.CONVERSION.SPIN_COST_J < reserve) return false;
-      return views.slots.spin();
+      // A banked free spin costs nothing, so the reserve floor only gates
+      // paid spins. spin(true) marks the spin as automated — resonance still
+      // applies (floors once earned), but hand-only charges never do.
+      if (game.s.freeSpins <= 0) {
+        var reserve = game.s.settings.reserve.juice || 0;
+        if (game.s.cur.juice - D.CONVERSION.SPIN_COST_J < reserve) return false;
+      }
+      return views.slots.spin(true);
     });
     stepAuto('autodropper', dt, function () {
       var reserve = game.s.settings.reserve.suncoin || 0;

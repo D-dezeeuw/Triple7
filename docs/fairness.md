@@ -354,6 +354,31 @@ and bounds them on every run:
   over a session (measured); robots earn exactly +0% of it. That asymmetry
   is deliberate and permanent: *hands beat robots, gently.*
 
+## The Chain (Plan II Phase 36) — machines that talk to each other
+
+- **The Sunline.** One chain-wide 77-point meter, charged by great *hand*
+  moments: a cascade of 4+ (+7), each Sun-Ripened fruit cleared (+3), a
+  hand-spun Beach Bonus (+7), a Gem Storm (+7). Full = **RESONANCE**: the
+  next **21 actions** — moves, spins and drops in any mix — pay **+7%**.
+  Once earned, automated actions shine too (a floor is a floor), but
+  automation never charges the meter: *hands beat robots, gently.* Charging
+  pauses during resonance (earn it, spend it, earn it again), the meter
+  never drains on its own, and the measured average uplift at steady play
+  is under +1% — a glow, not a new baseline (`npm run simulate` bounds it).
+- **Pressed Juice.** A hand cascade of **5+** bottles a token; **7 tokens**
+  pour a **free spin** (banked without cap, consumed before paid spins —
+  the Auto-Spinner may drink one, and the reserve floor only ever gates
+  *paid* spins). Worth ≈+0.1% of Juice income at steady play — itemized.
+- **Jackpot Splash.** Catching the skill-stop **peak** (the TRIPLE SEVEN —
+  a moment the blind auto-stop can never land on, so it is intrinsically
+  hand-earned) rolls **1 free drop** down to the harbor. A resonant drop's
+  boost rides its actual coin onto the table and pays when that coin falls
+  — attribution you can watch.
+
+Cross-currency accounting rule (Plan II §II.2): free actions are valued at
+the receiving stage's own published EV and itemized by `npm run simulate`;
+no stage's published RTP counts another stage's gift twice.
+
 ## No dark patterns, published as a pledge
 
 - No currency conversion ever runs backward (Stargems → Suncoins → Juice is

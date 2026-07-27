@@ -239,6 +239,25 @@
      * Richer than v1's 1.18401 on purpose: requested "win rate a bit higher". */
   };
 
+  // ── The Chain Reforged (Plan II Phase 36) ──────────────────────────────────
+  // The Sunline: great HAND moments anywhere charge one chain-wide 77-point
+  // meter (no decay, no expiry); full = RESONANCE — the next 21 actions
+  // (moves, spins and drops, any mix, autos included once earned) pay ×1.07.
+  // Charging pauses during resonance (earn it, spend it, earn it again).
+  // Hand-offs: a hand cascade of 5+ bottles a Pressed Juice token — 7 tokens
+  // pour a FREE SPIN; catching the skill-stop peak (the TRIPLE SEVEN, which
+  // the blind auto-stop can never land on) splashes a FREE DROP to the
+  // harbor. Free actions bank without cap and are consumed before paid ones.
+  var CHAIN = {
+    SUNLINE_TARGET: 77,
+    CHARGE: { cascade4: 7, bonus: 7, storm: 7, golden: 3 },
+    RESONANCE_ACTIONS: 21,
+    RESONANCE_MULT: 1.07,
+    PRESS_CHAIN: 5,
+    PRESS_TOKENS_FOR_SPIN: 7,
+    JACKPOT_FREE_DROPS: 1
+  };
+
   // ── Beach Getaway (slots top screen) ──────────────────────────────────────
   // Vacation-resort progression drawn above the reels. Levels derive from
   // lifetime spin COUNT only — never from outcomes — so the meter is pure
@@ -485,7 +504,10 @@
     { id: 'pity1',         name: 'Saved by the Sun', stat: 'pityBonuses', at: 1,    gems: 3 },
     // Plan II Phase 35 — Star Harbor Mastery
     { id: 'storm1',        name: 'First Gem Storm', stat: 'storms',     at: 1,      gems: 3 },
-    { id: 'pelican1',      name: 'A Pelican Visits', stat: 'pelicans',  at: 1,      gems: 2 }
+    { id: 'pelican1',      name: 'A Pelican Visits', stat: 'pelicans',  at: 1,      gems: 2 },
+    // Plan II Phase 36 — The Chain Reforged
+    { id: 'resonance1',    name: 'The Chain Sings', stat: 'resonances', at: 1,      gems: 3 },
+    { id: 'freespin7',     name: 'Bottled Sunshine', stat: 'freeSpinsEarned', at: 7, gems: 7 }
   ];
   var ACH_GLOBAL_BONUS = 0.01;
 
@@ -506,7 +528,7 @@
 
   return {
     CURRENCIES: CURRENCIES, CONVERSION: CONVERSION,
-    MATCH3: MATCH3, ORDERS: ORDERS, SQUEEZE: SQUEEZE,
+    MATCH3: MATCH3, ORDERS: ORDERS, SQUEEZE: SQUEEZE, CHAIN: CHAIN,
     SLOT: SLOT, RESORT: RESORT, DOZER: DOZER,
     CHARM_SETS: CHARM_SETS, CHARMS: CHARMS, RARITY_WEIGHT: RARITY_WEIGHT,
     CHARM_CHEST_COST_G: CHARM_CHEST_COST_G, CHARM_MAXED_DUPE_GEMS: CHARM_MAXED_DUPE_GEMS,

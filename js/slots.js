@@ -266,29 +266,35 @@
 
   View.prototype.canSpin = function () {
     return !this.spinning && !this.bonus &&
-           this.g.canAfford('juice', D.CONVERSION.SPIN_COST_J);
+           (this.g.s.freeSpins > 0 ||
+            this.g.canAfford('juice', D.CONVERSION.SPIN_COST_J));
   };
 
-  View.prototype.spin = function () {
+  View.prototype.spin = function (isAuto) {
     // During the bonus, the SPIN button (and the Auto-Spinner, which calls
     // this same method) becomes the STOP button.
     if (this.bonus) return this.stopBonus();
     if (!this.canSpin()) {
       // Mirrors dozer.js's tryDrop: only the "can't afford it" case earns a
       // 'bad' cue — already-spinning is just a no-op, not a failed purchase.
-      if (this.hooks.sfx && !this.g.canAfford('juice', D.CONVERSION.SPIN_COST_J)) this.hooks.sfx('bad');
+      if (this.hooks.sfx && !this.canSpin() && !this.spinning && !this.bonus) this.hooks.sfx('bad');
       return false;
     }
     var g = this.g;
     var mode = g.s.slotMode || 'classic';
     if (mode !== this.stripMode) this.buildStrips(mode);
-    g.spend('juice', D.CONVERSION.SPIN_COST_J);
+    // Free spins (Plan II 36.2) pour before Juice is touched.
+    if (g.s.freeSpins > 0) g.s.freeSpins--;
+    else g.spend('juice', D.CONVERSION.SPIN_COST_J);
     var res = resolveSpin(this.rng, g.upLvl('luckysevens'), mode);
     // Sun Meter (Plan II 34.2): a full meter forces this spin's Beach Bonus
     // if the decided grid didn't trigger naturally — decided here, at stake
     // time, before any presentation (§11.2). Fills on autos too (it's a
     // pity floor, not a skill envelope).
     g.applySunMeter(res);
+    // Resonance (36.1): every spin is an action; charging stays hand-gated.
+    res.resMult = g.resonanceMult();
+    res.isAuto = !!isAuto;
     this.result = res;
     this.spinning = true;
     this.lastWin = null;
@@ -373,8 +379,10 @@
   View.prototype.settle = function () {
     var g = this.g, res = this.result;
     var creditedSun = 0;
-    if (res.sun > 0) creditedSun = g.gain('suncoin', res.sun);
+    if (res.sun > 0) creditedSun = g.gain('suncoin', res.sun * (res.resMult || 1));
     g.s.stats.slotSunWon += creditedSun;   // Phase 28.7: personal RTP tracking
+    // The Sunline (36.1): a hand-spun Beach Bonus trigger charges the chain.
+    if (res.bonus && !res.isAuto) g.sunlineCharge('bonus');
     if (res.sun > 0) {
       this.flash = res.sun >= 35 ? 2.5 : 1.2;
       if (this.hooks.sfx) this.hooks.sfx('win');
@@ -437,6 +445,10 @@
       // counts as the "TRIPLE SEVEN" moment (stats + achievement + fanfare).
       b.gems = g.gain('stargem', S.BONUS.PEAK_GEMS);
       g.s.stats.jackpots++;
+      // Jackpot Splash (Plan II 36.2): the peak catch is inherently a hand
+      // moment (the blind auto-stop always lands on the ladder's first rung,
+      // never the peak) — it rolls a free drop down to the harbor.
+      g.jackpotSplash();
       this.flash = 3.0;
       if (this.hooks.sfx) this.hooks.sfx('jackpot');
       if (this.hooks.onJackpot) this.hooks.onJackpot(b.award, b.gems);

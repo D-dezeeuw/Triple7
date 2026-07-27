@@ -50,6 +50,8 @@
         pityBonuses: 0,
         // Plan II Phase 35 (Star Harbor Mastery)
         storms: 0, surges: 0, pelicans: 0,
+        // Plan II Phase 36 (The Chain Reforged)
+        resonances: 0, freeSpinsEarned: 0, freeDropsEarned: 0,
         // Personal RTP (Phase 28.7 / §11.11): Suncoins credited specifically
         // by slot settlements, and Stargems credited specifically by dozer
         // front-exits/specials — separate from sunEarned/gemsEarned, which
@@ -110,7 +112,13 @@
       // Survives prestige on purpose — variance insurance, not progress.
       sunMeter: 0,
       // Harbor Current (Plan II 35.2): the active specials-mix preset.
-      harborCurrent: 'balanced'
+      harborCurrent: 'balanced',
+      // The Sunline (Plan II 36.1): chain-wide resonance meter + armed
+      // resonance actions. No decay, no expiry (§II.2 meter rules).
+      sunline: { points: 0, actionsLeft: 0 },
+      // Hand-offs (Plan II 36.2): Pressed Juice tokens toward a free spin,
+      // and banked free actions (consumed before paid ones, never capped).
+      pressedJuice: 0, freeSpins: 0, freeDrops: 0
     };
   }
 
@@ -197,6 +205,21 @@
     if (typeof s.harborCurrent !== 'string' || !D.DOZER.CURRENTS[s.harborCurrent]) {
       s.harborCurrent = 'balanced';
     }
+    // Sunline + hand-off banks: finite, non-negative, resonance clamped to
+    // one legitimate arming (a hand-edited eternal resonance never ships).
+    if (!s.sunline || typeof s.sunline !== 'object') s.sunline = { points: 0, actionsLeft: 0 };
+    if (!isFinite(s.sunline.points) || s.sunline.points < 0) s.sunline.points = 0;
+    if (!isFinite(s.sunline.actionsLeft) || s.sunline.actionsLeft < 0) s.sunline.actionsLeft = 0;
+    s.sunline.points = Math.min(s.sunline.points, D.CHAIN.SUNLINE_TARGET);
+    s.sunline.actionsLeft = Math.min(Math.floor(s.sunline.actionsLeft), D.CHAIN.RESONANCE_ACTIONS);
+    ['pressedJuice', 'freeSpins', 'freeDrops'].forEach(function (k) {
+      if (!isFinite(s[k]) || s[k] < 0) s[k] = 0;
+      s[k] = Math.floor(s[k]);
+    });
+    s.pressedJuice = Math.min(s.pressedJuice, D.CHAIN.PRESS_TOKENS_FOR_SPIN);
+    ['resonances', 'freeSpinsEarned', 'freeDropsEarned'].forEach(function (k) {
+      if (!isFinite(s.stats[k]) || s.stats[k] < 0) s.stats[k] = 0;
+    });
     // Weather Dial: the mode must be one the data actually defines.
     if (typeof s.slotMode !== 'string' || !D.SLOT.MODES[s.slotMode]) s.slotMode = 'classic';
     // Sun Meter: finite, 0..SEGMENTS (a hand-edited eternal guarantee clamps
@@ -436,6 +459,53 @@
                                this.s.sunMeter + (res.scatters || 0));
     this.emit('sunmeter', this.s.sunMeter);
     return res;
+  };
+
+  // ── The Sunline & hand-offs (Plan II Phase 36) ────────────────────────────
+  // Hand moments charge (the callers enforce hand-only); once RESONANCE is
+  // armed, every action — automated or not — shines for 21 actions. Charging
+  // pauses while resonance runs: earn it, spend it, earn it again.
+  Game.prototype.sunlineCharge = function (kind, count) {
+    var pts = (D.CHAIN.CHARGE[kind] || 0) * (count || 1);
+    if (pts <= 0) return false;
+    var sl = this.s.sunline;
+    if (sl.actionsLeft > 0) return false;
+    sl.points += pts;
+    if (sl.points >= D.CHAIN.SUNLINE_TARGET) {
+      sl.points = 0;
+      sl.actionsLeft = D.CHAIN.RESONANCE_ACTIONS;
+      this.s.stats.resonances++;
+      this.emit('resonance');
+      return true;
+    }
+    this.emit('sunline');
+    return false;
+  };
+  // Consume one action's resonance (call once per move/spin/drop, at the
+  // action's start). Returns that action's multiplier.
+  Game.prototype.resonanceMult = function () {
+    var sl = this.s.sunline;
+    if (sl.actionsLeft > 0) { sl.actionsLeft--; return D.CHAIN.RESONANCE_MULT; }
+    return 1;
+  };
+  // A hand cascade of PRESS_CHAIN+ bottles a token; 7 tokens pour a free spin.
+  Game.prototype.bottlePressedJuice = function () {
+    this.s.pressedJuice++;
+    if (this.s.pressedJuice >= D.CHAIN.PRESS_TOKENS_FOR_SPIN) {
+      this.s.pressedJuice = 0;
+      this.s.freeSpins++;
+      this.s.stats.freeSpinsEarned++;
+      this.emit('freespin');
+      return true;
+    }
+    this.emit('pressed');
+    return false;
+  };
+  // The TRIPLE SEVEN peak catch splashes free drops toward the harbor.
+  Game.prototype.jackpotSplash = function () {
+    this.s.freeDrops += D.CHAIN.JACKPOT_FREE_DROPS;
+    this.s.stats.freeDropsEarned += D.CHAIN.JACKPOT_FREE_DROPS;
+    this.emit('freedrop');
   };
 
   // ── Achievements ──────────────────────────────────────────────────────────

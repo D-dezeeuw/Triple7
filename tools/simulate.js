@@ -239,6 +239,34 @@ console.log('  VERDICT: ' + (squeezeOK
   ? '✔ combo uplift stays a bonus (≤20%), not a new baseline.'
   : '✘ combo uplift ' + pct(squeezeUplift) + ' exceeds the 20% design cap!'));
 
+// The Sunline (Plan II 36.1): expected charge rate from the measured cascade
+// distribution + golden rate (match-3 alone — bonuses/storms only speed it up).
+var pGE4 = 0, pGE5 = 0;
+chainKeys.forEach(function (k) {
+  if (k >= 4) pGE4 += chains[k] / N_MOVES;
+  if (k >= 5) pGE5 += chains[k] / N_MOVES;
+});
+var sunlinePts = D.CHAIN.CHARGE.cascade4 * pGE4 + D.CHAIN.CHARGE.golden * (totGoldens / N_MOVES);
+var sunlineFill = D.CHAIN.SUNLINE_TARGET / Math.max(1e-9, sunlinePts);
+var resUptime = D.CHAIN.RESONANCE_ACTIONS / (sunlineFill + D.CHAIN.RESONANCE_ACTIONS);
+var resUplift = (D.CHAIN.RESONANCE_MULT - 1) * resUptime;
+console.log('\n  The Sunline (Plan II 36.1): ' + sunlinePts.toFixed(3) + ' pts/hand-move (match-3 alone)');
+console.log('    → fills every ~' + sunlineFill.toFixed(0) + ' moves → resonance uptime ≈ ' +
+  pct(resUptime) + ' → average uplift ≈ +' + pct(resUplift) +
+  ' (bonuses/storms only quicken it; autos charge nothing).');
+// Pressed Juice (36.2): free-spin cadence and its J-equivalent value.
+var tokenRate = pGE5;
+var freeSpinEvery = D.CHAIN.PRESS_TOKENS_FOR_SPIN / Math.max(1e-9, tokenRate);
+var freeSpinJ = exact.ev * D.CONVERSION.JUICE_PER_SUN;   // one spin's EV in J-equivalents
+var pressUplift = (freeSpinJ / freeSpinEvery) / jPerMove;
+console.log('  Pressed Juice (36.2): P(hand chain ≥ ' + D.CHAIN.PRESS_CHAIN + ') = ' + pct(tokenRate) +
+  ' → a free spin every ~' + freeSpinEvery.toFixed(0) + ' hand moves ≈ +' + pct(pressUplift) +
+  ' J-equiv (jackpot splashes: 1 free drop per hand-caught TRIPLE SEVEN, flat).');
+var chainDepthOK = resUplift <= 0.03 && pressUplift <= 0.02;
+console.log('  VERDICT: ' + (chainDepthOK
+  ? '✔ chain bonuses stay seasoning (resonance ≤3%, pressed juice ≤2%), never the meal.'
+  : '✘ CHAIN BONUS OUT OF BAND — resonance ' + pct(resUplift) + ' / pressed ' + pct(pressUplift)));
+
 console.log('\n  VERDICT: ✔ every move earns Juice (free faucet — the chain can never dead-end);');
 console.log('           human play beats random-move EV, so ' + jPerMove.toFixed(2) + ' J/move is the floor.');
 
@@ -420,6 +448,6 @@ console.log('  · No backward conversion exists (G→S→J impossible), so value
 console.log('  · Inflation sink: exponential upgrade costs (growth 1.15–2.6) and charm chests.');
 
 var allOK = slotOK && dozerOK && jPerMove > 1 && inflationOK && geomOK && ordersOK && squeezeOK &&
-            modesOK && meterOK && currentsOK;
+            modesOK && meterOK && currentsOK && chainDepthOK;
 console.log('\n' + (allOK ? '  ✅ ALL PUBLISHED ECONOMY CLAIMS VERIFIED.' : '  ❌ ECONOMY CHECK FAILED — see above.'));
 process.exit(allOK ? 0 : 1);

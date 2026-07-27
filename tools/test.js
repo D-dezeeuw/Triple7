@@ -661,6 +661,70 @@ t('slot mode and sun meter survive saves and sanitize corruption', function () {
   eq(g4.s.sunMeter, D.SLOT.SUN_METER.SEGMENTS, 'meter clamps to one legitimate fill');
 });
 
+console.log('the chain reforged (Plan II Phase 36)');
+t('sunline charges by kind, arms at 77, pays 21 actions, pauses while resonant', function () {
+  var g = new st.Game();
+  g.sunlineCharge('cascade4');
+  eq(g.s.sunline.points, D.CHAIN.CHARGE.cascade4);
+  g.sunlineCharge('golden', 2);
+  eq(g.s.sunline.points, D.CHAIN.CHARGE.cascade4 + 2 * D.CHAIN.CHARGE.golden);
+  eq(g.sunlineCharge('mystery'), false, 'unknown kinds charge nothing');
+  // Fill to the target.
+  g.s.sunline.points = D.CHAIN.SUNLINE_TARGET - 1;
+  var armed = g.sunlineCharge('bonus');
+  eq(armed, true, 'crossing the target arms resonance');
+  eq(g.s.sunline.points, 0);
+  eq(g.s.sunline.actionsLeft, D.CHAIN.RESONANCE_ACTIONS);
+  eq(g.s.stats.resonances, 1);
+  // Charging pauses during resonance; consumption pays exactly 21 actions.
+  eq(g.sunlineCharge('storm'), false, 'no charging during resonance');
+  eq(g.s.sunline.points, 0, 'paused charge adds nothing');
+  for (var i = 0; i < D.CHAIN.RESONANCE_ACTIONS; i++) {
+    near(g.resonanceMult(), D.CHAIN.RESONANCE_MULT, 1e-9, 'action ' + i);
+  }
+  near(g.resonanceMult(), 1, 1e-9, 'resonance exhausted');
+  eq(g.sunlineCharge('storm'), false, 'charging resumes (returns false: not armed)');
+  eq(g.s.sunline.points, D.CHAIN.CHARGE.storm, 'points flow again after resonance ends');
+});
+t('pressed juice bottles a free spin at 7 tokens; jackpot splash banks a free drop', function () {
+  var g = new st.Game();
+  for (var i = 0; i < D.CHAIN.PRESS_TOKENS_FOR_SPIN - 1; i++) {
+    eq(g.bottlePressedJuice(), false, 'token ' + i + ' must not pour yet');
+  }
+  eq(g.s.pressedJuice, D.CHAIN.PRESS_TOKENS_FOR_SPIN - 1);
+  eq(g.bottlePressedJuice(), true, 'the 7th token pours a free spin');
+  eq(g.s.pressedJuice, 0);
+  eq(g.s.freeSpins, 1);
+  eq(g.s.stats.freeSpinsEarned, 1);
+  g.jackpotSplash();
+  eq(g.s.freeDrops, D.CHAIN.JACKPOT_FREE_DROPS);
+  eq(g.s.stats.freeDropsEarned, D.CHAIN.JACKPOT_FREE_DROPS);
+});
+t('sunline and free-action banks survive saves and sanitize corruption', function () {
+  var g = new st.Game();
+  g.s.sunline.points = 40;
+  g.s.pressedJuice = 3; g.s.freeSpins = 2; g.s.freeDrops = 1;
+  var g2 = new st.Game();
+  g2.importSave(g.exportSave());
+  eq(g2.s.sunline.points, 40);
+  eq(g2.s.pressedJuice, 3); eq(g2.s.freeSpins, 2); eq(g2.s.freeDrops, 1);
+  var g3 = new st.Game();
+  g3.s.sunline = { points: 9999, actionsLeft: 9999 };
+  g3.s.freeSpins = -4; g3.s.pressedJuice = NaN;
+  var g4 = new st.Game();
+  g4.importSave(g3.exportSave());
+  ok(g4.s.sunline.points <= D.CHAIN.SUNLINE_TARGET, 'points clamp to the target');
+  ok(g4.s.sunline.actionsLeft <= D.CHAIN.RESONANCE_ACTIONS, 'no eternal resonance');
+  eq(g4.s.freeSpins, 0); eq(g4.s.pressedJuice, 0);
+});
+t('a resonant dozer coin keeps its multiplier across a table save', function () {
+  var w = new dozer.World(new rngMod.Rng(3601), {}, { noStock: true });
+  var c = w.spawn('coin', 100, 200);
+  c.res = D.CHAIN.RESONANCE_MULT;
+  var w2 = dozer.World.deserialize(new rngMod.Rng(3602), {}, w.serialize());
+  near(w2.coins[0].res, D.CHAIN.RESONANCE_MULT, 1e-9, 'res multiplier survives the save');
+});
+
 console.log('dozer');
 t('world starts stocked and coins stay finite & in-bounds', function () {
   var rng = new rngMod.Rng(5);
