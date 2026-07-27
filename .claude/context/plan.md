@@ -45,6 +45,11 @@ probability is published, every economy claim is machine-verified, and the only 
   eternal fallback) and unlockable **holiday destinations** that turn theming into progression:
   the game becomes a *place you travel to*.
 
+- **Horizon 5 — The Deep Game (Phases 33–39).** Player-facing gameplay depth: decisions, honest
+  bounded skill, cross-machine play, builds, a designed endgame, and the fourth machine. Lives in
+  its own document, [`plan2.md`](plan2.md) — **Vision Plan II**, same handoff rules, a 7×7×7
+  format (343 tasks), with an Absorption Map saying exactly which Plan I remainders now live there.
+
 **Non-goals, forever:** monetization of any kind, accounts, servers, telemetry, time pressure,
 FOMO. If a future idea needs one of these, the idea is wrong for Triple7.
 
@@ -76,6 +81,12 @@ FOMO. If a future idea needs one of these, the idea is wrong for Triple7.
    symbols, coins, all 28 charms, UI icons, logo/favicon) with a working white-card post-process
    and graceful canvas fallback; a per-asset provenance/licensing manifest (31.9) and destination
    backdrop art remain.
+6. **Vision Plan II (set 2026-07-27)**: the next era — *gameplay depth for the player* — is
+   charted in [`plan2.md`](plan2.md) (Phases 33–39: per-machine depth, cross-machine play, builds
+   & loadouts, the finished endgame, and the fourth-machine decision). Plan I remains authoritative
+   for Phases 1–32 and all reference sections; where Plan II absorbs a Plan I remainder (Phase 28,
+   Features 8.x-hint, 12.x, 18.6, 24.3, 30.10), its Absorption Map says so — plan that work once,
+   check boxes in both documents when it lands.
 
 ### Status Ledger — repo vs vision
 

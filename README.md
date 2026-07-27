@@ -91,7 +91,10 @@ stale-while-revalidate; delete it and the game is still exactly the static
 site it always was.
 
 The full design document and 32-phase roadmap live in
-[`.claude/context/plan.md`](.claude/context/plan.md).
+[`.claude/context/plan.md`](.claude/context/plan.md). Where the game goes next —
+**Vision Plan II**, a gameplay-depth roadmap (Phases 33–39: deeper match-3/slots/dozer play,
+cross-machine combos, builds & loadouts, a designed endgame, and a fourth machine for the
+night) — lives in [`.claude/context/plan2.md`](.claude/context/plan2.md).
 
 ## Contributing
 

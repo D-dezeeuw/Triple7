@@ -17,7 +17,10 @@ those to work, it's a great idea for a different game.
 
 Read `.claude/context/plan.md` — it is the single source of truth for vision,
 math, and architecture, written as an agile handoff document (§0 explains how
-to use it). In particular:
+to use it). Its sequel, `.claude/context/plan2.md` (**Vision Plan II**), charts
+the current gameplay-depth roadmap (Phases 33–39) under the same rules and adds
+four more hard invariants (skill envelopes, no trap choices, depth adds
+ceilings not floors, the seven-word rule). In particular:
 
 - **§0's hard invariants** are non-negotiable in any PR: every economy stage
   stays EV-positive, outcomes are decided before presentation begins, no
