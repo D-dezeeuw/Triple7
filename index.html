@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Triple7 — a juicy idle of three little machines</title>
+<meta name="description" content="Match fruit, spin suns, push stars. A free cozy idle game of three linked mini-games. No ads, no purchases, saves in your browser.">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="assets/icons/favicon-64.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css">
+<!-- App-like install + offline (installable PWA; the shipped game still makes
+     zero runtime network calls once cached — see sw.js). -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#34a8e8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Triple7">
+</head>
+<body>
+<div id="sky">
+  <div class="sun"></div>
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+</div>
+
+<button id="btn-daily" class="iconbtn dailybtn hidden" title="Claim your Daily Squeeze — a small free gift, once per day, no streak to break"><img src="assets/sprites/droplet.png" alt="Claim Daily Squeeze"></button>
+
+<div id="fixedhead">
+<header id="topbar">
+  <div class="headtop">
+    <h1 class="logo"><img class="logomark" src="assets/sprites/strawberry.png" alt="" width="44" height="44">Triple<span class="seven">7</span></h1>
+    <div class="headbtns">
+      <button id="btn-passport" class="iconbtn" title="Passport — travel between unlocked destinations"><img src="assets/sprites/compass.png" alt="Passport"></button>
+      <button id="btn-settings" class="iconbtn" title="Settings, save &amp; about"><img src="assets/sprites/gear.png" alt="Settings"></button>
+    </div>
+  </div>
+  <div id="hud">
+    <div class="pill juice" id="pill-juice" title="Juice — squeeze it in the Grove match-3">
+      <img class="cur-ic" src="assets/sprites/droplet.png" alt=""><b id="cur-juice">0</b><small id="rate-juice"></small>
+    </div>
+    <div class="pill sun" id="pill-suncoin" title="Suncoins — won at the Sunshine Sevens slots (7 Juice per spin)">
+      <img class="cur-ic" src="assets/sprites/suncoin.png" alt=""><b id="cur-suncoin">0</b><small id="rate-suncoin"></small>
+    </div>
+    <div class="pill gem" id="pill-stargem" title="Stargems — pushed off the Star Harbor dozer (7 Suncoins per coin)">
+      <img class="cur-ic" src="assets/sprites/gem.png" alt=""><b id="cur-stargem">0</b><small id="rate-stargem"></small>
+    </div>
+  </div>
+</header>
+
+<nav id="tabs" role="tablist" aria-label="Games and panels">
+  <button class="tab active" data-tab="match3" role="tab" id="tab-match3" aria-controls="panel-match3" aria-selected="true"><img class="tabicon" src="assets/sprites/cherry.png" alt=""> Match</button>
+  <button class="tab" data-tab="slots" role="tab" id="tab-slots" aria-controls="panel-slots" aria-selected="false"><img class="tabicon" src="assets/sprites/sun.png" alt=""> Slots<span class="lock" id="lock-slots"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
+  <button class="tab" data-tab="dozer" role="tab" id="tab-dozer" aria-controls="panel-dozer" aria-selected="false"><img class="tabicon" src="assets/sprites/star.png" alt=""> Dozer<span class="lock" id="lock-dozer"><img src="assets/sprites/lock.png" alt="Locked"></span></button>
+
+  <div class="shopmenu">
+    <button id="btn-shopmenu" class="shopbtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="shopmenu-panel" title="Grove, Charms &amp; Shop">
+      <img class="tabicon" src="assets/sprites/arrowup.png" alt=""> <span class="hamlines" aria-hidden="true">☰</span>
+    </button>
+    <div id="shopmenu-panel" class="shopmenu-panel hidden">
+      <button class="tab" data-tab="grove" role="tab" id="tab-grove" aria-controls="panel-grove" aria-selected="false"><img class="tabicon" src="assets/sprites/sprout.png" alt=""> Grove</button>
+      <button class="tab" data-tab="charms" role="tab" id="tab-charms" aria-controls="panel-charms" aria-selected="false"><img class="tabicon" src="assets/sprites/sparkle.png" alt=""> Charms</button>
+      <button class="tab" data-tab="shop" role="tab" id="tab-shop" aria-controls="panel-shop" aria-selected="false"><img class="tabicon" src="assets/sprites/arrowup.png" alt=""> Shop</button>
+    </div>
+  </div>
+</nav>
+</div>
+
+<main>
+  <section class="panel active" id="panel-match3" role="tabpanel" aria-labelledby="tab-match3" tabindex="0">
+    <div class="gamewrap"><canvas id="cv-match3"></canvas></div>
+    <div class="m3stats">
+      <span class="combostat" title="Your longest cascade chain in a single move">Best combo <b id="stat-bestchain">×0</b></span>
+      <span class="combostat" title="Most fruit cleared in a single move">Most cleared <b id="stat-besttiles">0</b></span>
+    </div>
+    <div class="actionbar">
+      <span class="tip">Swap two fruits to match 3+. Every cleared fruit squeezes <b>Juice</b>. 4-in-a-row makes a Burst, 5 makes a Rainbow!</span>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-slots" role="tabpanel" aria-labelledby="tab-slots" tabindex="0">
+    <div class="gamewrap slotwrap"><canvas id="cv-slots"></canvas></div>
+    <div class="actionbar">
+      <button id="btn-spin" class="bigbtn">SPIN — 7 <img class="ic-img" src="assets/sprites/droplet.png" alt="Juice"></button>
+      <button id="btn-paytable" class="minibtn">Paytable</button>
+    </div>
+    <div class="lockveil" id="veil-slots">
+      <p><img class="veilicon" src="assets/sprites/lock.png" alt=""><br>The Sunshine Sevens wake up once you've squeezed <b>7 Juice</b>.<br>Go match some fruit!</p>
+      <div class="veilprogress"><div class="veilprogress-bar" id="veilbar-slots"></div></div>
+      <p class="mini" id="veiltext-slots"></p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-dozer" role="tabpanel" aria-labelledby="tab-dozer" tabindex="0">
+    <div class="gamewrap"><canvas id="cv-dozer"></canvas></div>
+    <div class="actionbar">
+      <button id="btn-drop" class="bigbtn">DROP — 7 <img class="ic-img" src="assets/sprites/suncoin.png" alt="Suncoins"></button>
+      <span class="tip">Tap to pick a release spot — your coin plinks down the pachinko pegs, and its exit slot grants a perk (<b>2×</b> pay window, side <b>barriers</b>, a coin worth <b>×2</b>, or a <b>quake</b>). Coins off the front edge become <b>Stargems</b>!</span>
+    </div>
+    <div class="lockveil" id="veil-dozer">
+      <p><img class="veilicon" src="assets/sprites/lock.png" alt=""><br>Star Harbor opens once you've won <b>7 Suncoins</b> at the slots.</p>
+      <div class="veilprogress"><div class="veilprogress-bar" id="veilbar-dozer"></div></div>
+      <p class="mini" id="veiltext-dozer"></p>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-grove" role="tabpanel" aria-labelledby="tab-grove" tabindex="0">
+    <h2>Sunshine Grove <small>— plant things, earn while you're away</small></h2>
+    <div id="grove-list" class="cardlist"></div>
+    <div id="prestige-card" class="card prestige hidden">
+      <h3><img class="h3icon" src="assets/sprites/jar.png" alt=""> Make Preserves</h3>
+      <p id="prestige-info"></p>
+      <button id="btn-prestige" class="bigbtn">Preserve!</button>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-charms" role="tabpanel" aria-labelledby="tab-charms" tabindex="0">
+    <h2>Charm Cabinet <small>— glass fruit, forever bonuses</small></h2>
+    <div class="actionbar">
+      <button id="btn-chest" class="bigbtn">Charm Chest — 77 <img class="ic-img" src="assets/sprites/gem.png" alt="Stargems"></button>
+      <span class="tip">Chests and dozer prizes hold random charms. Duplicates level a charm up (max 7).</span>
+    </div>
+    <div id="charm-sets"></div>
+  </section>
+
+  <section class="panel" id="panel-shop" role="tabpanel" aria-labelledby="tab-shop" tabindex="0">
+    <h2>Upgrade Shop <small>— spend Stargems, bend the odds</small></h2>
+    <div id="shop-list" class="cardlist"></div>
+    <h2>Milestones <small id="ach-count"></small></h2>
+    <div id="ach-list" class="cardlist"></div>
+  </section>
+</main>
+
+<div id="toasts" role="status" aria-live="polite"></div>
+
+<dialog id="dlg-settings">
+  <h2>Settings &amp; Save</h2>
+  <div class="setrow"><label><input type="checkbox" id="set-sfx" checked> Sound effects</label></div>
+  <div class="setrow"><label><input type="checkbox" id="set-particles" checked> Extra sparkle</label></div>
+  <div class="setrow"><label><input type="checkbox" id="set-motion"> Reduce motion</label></div>
+  <p class="mini">Keyboard: press <kbd>1</kbd>–<kbd>6</kbd> to jump straight to a tab, or arrow keys to move between tabs once one has focus.</p>
+  <div class="setrow"><button id="btn-replay-intro" class="minibtn">Replay welcome intro</button></div>
+  <h3>Automation reserves</h3>
+  <p class="mini">Auto-Spinner and Auto-Dropper (once bought in the Shop) never spend below these floors — set them to protect Juice or Suncoins you're saving up by hand.</p>
+  <div class="setrow">
+    <label>Keep ≥ <input type="number" id="set-reserve-juice" min="0" step="1" value="0" style="width:5em"> Juice</label>
+  </div>
+  <div class="setrow">
+    <label>Keep ≥ <input type="number" id="set-reserve-suncoin" min="0" step="1" value="0" style="width:5em"> Suncoins</label>
+  </div>
+  <h3>Save data</h3>
+  <p class="mini">Your game autosaves in this browser. Copy the code below to move or back up your progress.</p>
+  <textarea id="save-code" rows="4" spellcheck="false"></textarea>
+  <div class="setrow">
+    <button id="btn-export" class="minibtn">Export → code</button>
+    <button id="btn-copy" class="minibtn">Copy</button>
+    <button id="btn-import" class="minibtn">Import code</button>
+  </div>
+  <div class="setrow danger">
+    <button id="btn-reset" class="minibtn">Hard reset…</button>
+  </div>
+  <h3>Stats</h3>
+  <div id="stats-list" class="mini"></div>
+  <p class="mini">Triple7 is free &amp; open source (Apache-2.0). No ads, no accounts, no purchases — just fruit.
+    Every odds table in this game is published in <a href="docs/fairness.md" target="_blank" rel="noopener">the fairness contract</a> and verified by <code>npm run simulate</code>.</p>
+  <div class="setrow"><button id="btn-close-settings" class="bigbtn">Back to the fruit</button></div>
+</dialog>
+
+<dialog id="dlg-intro">
+  <h2><img class="h3icon" src="assets/sprites/strawberry.png" alt=""> Welcome to Triple7!</h2>
+  <p>Three little machines, one juicy chain:</p>
+  <ol class="intro-steps">
+    <li><img class="intro-ic" src="assets/sprites/cherry.png" alt=""><span><b>Match</b> glass fruit on the board below — every match squeezes <b>Juice</b>, always free.</span></li>
+    <li><img class="intro-ic" src="assets/sprites/sun.png" alt=""><span>Feed 7 Juice to the <b>Slots</b> for a spin — wins pay <b>Suncoins</b>.</span></li>
+    <li><img class="intro-ic" src="assets/sprites/gem.png" alt=""><span>Drop 7 Suncoins into the <b>Dozer</b> — coins pushed off the edge pay <b>Stargems</b>.</span></li>
+  </ol>
+  <p class="mini">Spend Stargems on charms, upgrades and automation to make the whole loop faster. No ads, no accounts, no purchases — just fruit. (Replay this anytime from Settings.)</p>
+  <div class="setrow"><button id="btn-close-intro" class="bigbtn">Let's play!</button></div>
+</dialog>
+
+<dialog id="dlg-welcome">
+  <h2><img class="h3icon" src="assets/sprites/sun.png" alt=""> Welcome back!</h2>
+  <p id="welcome-body"></p>
+  <div class="setrow"><button id="btn-close-welcome" class="bigbtn">Collect</button></div>
+</dialog>
+
+<dialog id="dlg-paytable">
+  <h2>Sunshine Sevens — Paytable</h2>
+  <div id="paytable-body" class="mini"></div>
+  <div class="setrow"><button id="btn-close-paytable" class="bigbtn">Got it</button></div>
+</dialog>
+
+<dialog id="dlg-passport">
+  <h2><img class="h3icon" src="assets/sprites/compass.png" alt=""> Passport</h2>
+  <p class="mini">Travel between destinations you've unlocked — a change of scenery only, never a change of odds. Every stage stays exactly as fair everywhere.</p>
+  <div id="passport-list" class="cardlist"></div>
+  <div class="setrow"><button id="btn-close-passport" class="bigbtn">Close</button></div>
+</dialog>
+
+<script src="js/util.js"></script>
+<script src="js/rng.js"></script>
+<script src="js/data.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/state.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/match3.js"></script>
+<script src="js/slots.js"></script>
+<script src="js/dozer.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

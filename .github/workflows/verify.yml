@@ -1,0 +1,36 @@
+# Triple7 — verification gate.
+#
+# This is the ONLY workflow in the repo and it deliberately builds nothing and
+# deploys nothing: GitHub Pages serves the repository as-is, which is a hard
+# invariant (see CONTRIBUTING.md). All this does is run, on every push and PR,
+# the two commands CONTRIBUTING already asks contributors to run by hand — so
+# a rebalance that breaks the published economy, or prose that drifts away from
+# the code, fails here instead of shipping.
+name: verify
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No install step: the game and its tooling have zero dependencies.
+      - name: Syntax-check every shipped module
+        run: node --check js/*.js && node --check tools/*.js && node --check sw.js
+
+      - name: Logic tests
+        run: npm test
+
+      # Full sample sizes; exits non-zero if any published economy claim (or
+      # the inflation ceiling, or the gutter-geometry band) stops holding.
+      - name: Economy proof
+        run: npm run simulate
