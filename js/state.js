@@ -119,6 +119,12 @@
       sunMeter: 0,
       // Harbor Current (Plan II 35.2): the active specials-mix preset.
       harborCurrent: 'balanced',
+      // Lap bookkeeping (Plan II 38.3/38.4): where this lap started (for the
+      // jar's per-lap record) and the warm-start Juice remaining. Lap 1 of a
+      // fresh save starts unwarmed by design — warmth is prestige's gift.
+      lap: { startG: 0, startSec: 0, warmLeft: 0 },
+      // The jar shelf (Plan II 38.4): one compact tuple per preserved lap.
+      jars: [],
       // The Sunline (Plan II 36.1): chain-wide resonance meter + armed
       // resonance actions. No decay, no expiry (§II.2 meter rules).
       sunline: { points: 0, actionsLeft: 0 },
@@ -247,6 +253,17 @@
     ['resonances', 'freeSpinsEarned', 'freeDropsEarned'].forEach(function (k) {
       if (!isFinite(s.stats[k]) || s.stats[k] < 0) s.stats[k] = 0;
     });
+    // Lap bookkeeping + jar shelf (Plan II 38): finite fields, warm window
+    // clamped to its published size, malformed jars dropped, shelf capped.
+    if (!s.lap || typeof s.lap !== 'object') s.lap = { startG: 0, startSec: 0, warmLeft: 0 };
+    ['startG', 'startSec', 'warmLeft'].forEach(function (k) {
+      if (!isFinite(s.lap[k]) || s.lap[k] < 0) s.lap[k] = 0;
+    });
+    s.lap.warmLeft = Math.min(s.lap.warmLeft, D.PRESTIGE.WARM_JUICE);
+    if (!Array.isArray(s.jars)) s.jars = [];
+    s.jars = s.jars.filter(function (j) {
+      return j && isFinite(j.n) && isFinite(j.lapG) && j.lapG >= 0 && isFinite(j.sec) && j.sec >= 0;
+    }).slice(-D.JARS.MAX_JARS);
     // Weather Dial: the mode must be one the data actually defines.
     if (typeof s.slotMode !== 'string' || !D.SLOT.MODES[s.slotMode]) s.slotMode = 'classic';
     // Sun Meter: finite, 0..SEGMENTS (a hand-edited eternal guarantee clamps
@@ -330,10 +347,17 @@
     return n;
   };
 
+  // Seed bonus with the deep-lap softcap (Plan II 38.2): +10% a seed up to
+  // 100, +7% for every seed past it — decided before 1e12 magnitudes arrive.
+  Game.prototype.seedBonus = function () {
+    var seeds = this.s.seeds, cap = D.PRESTIGE.SOFTCAP_SEEDS;
+    return Math.min(seeds, cap) * D.PRESTIGE.SEED_BONUS +
+           Math.max(0, seeds - cap) * D.PRESTIGE.SEED_BONUS_SOFT;
+  };
   Game.prototype.allMult = function () {
     return (1 + this.charmBonus('all')) *
            (1 + this.achCount() * D.ACH_GLOBAL_BONUS) *
-           (1 + this.s.seeds * D.PRESTIGE.SEED_BONUS);
+           (1 + this.seedBonus());
   };
   Game.prototype.juiceMult = function () {
     return (1 + this.charmBonus('juice')) *
@@ -358,6 +382,13 @@
   Game.prototype.gain = function (cur, amount, raw) {
     if (amount <= 0) return 0;
     var credited = raw ? amount : amount * this.multFor(cur);
+    // Warm start (Plan II 38.3): the first WARM_JUICE Juice of a fresh lap
+    // pays double — the warm portion is consumed as it doubles.
+    if (cur === 'juice' && this.s.lap && this.s.lap.warmLeft > 0) {
+      var warm = Math.min(credited, this.s.lap.warmLeft);
+      this.s.lap.warmLeft -= warm;
+      credited += warm;
+    }
     this.s.cur[cur] += credited;
     this.s.lifetime[cur] += credited;
     if (cur === 'juice') this.s.stats.juiceEarned += credited;
@@ -592,15 +623,35 @@
     return this.s.lifetime.stargem >= D.PRESTIGE.UNLOCK_LIFETIME_G &&
            this.prestigeSeedsTotal() > this.s.seeds;
   };
+  // The next seed's lifetime-G threshold (for the projection display).
+  Game.prototype.nextSeedAtG = function () {
+    var next = this.prestigeSeedsTotal() + 1;
+    return D.PRESTIGE.DIVISOR * next * next;
+  };
   Game.prototype.doPrestige = function () {
     if (!this.prestigeAvailable()) return false;
     var total = this.prestigeSeedsTotal();
     var s = this.s;
+    // Mint this lap's jar (Plan II 38.4) before anything resets: a compact,
+    // save-safe tuple. Lid tier by the lap's Stargem rate per hour.
+    var lapG = Math.max(0, s.lifetime.stargem - s.lap.startG);
+    var lapSec = Math.max(1, s.stats.playSec - s.lap.startSec);
+    var rate = lapG / (lapSec / 3600);
+    s.jars.push({
+      n: s.stats.prestiges + 1, lapG: lapG, sec: lapSec, seeds: total,
+      lid: rate >= D.JARS.GOLD_G_PER_H ? 'gold' : rate >= D.JARS.SILVER_G_PER_H ? 'silver' : 'bronze'
+    });
+    if (s.jars.length > D.JARS.MAX_JARS) s.jars = s.jars.slice(-D.JARS.MAX_JARS);
     s.seeds = total;
     s.cur = { juice: 0, suncoin: 0, stargem: 0 };
     s.buildings = {};
     s.upgrades = {};
     s.stats.prestiges++;
+    // The new lap starts here — warm (38.3), with fresh per-lap bookkeeping.
+    // (Slots/dozer stay unlocked: their veils read LIFETIME totals, which a
+    // preserve never resets — the discovery arc is a first-lap story.)
+    s.lap = { startG: s.lifetime.stargem, startSec: s.stats.playSec,
+              warmLeft: D.PRESTIGE.WARM_JUICE };
     this.emit('prestige', total);
     return true;
   };

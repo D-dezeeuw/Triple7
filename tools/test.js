@@ -799,6 +799,70 @@ t('a fresh charm auto-equips while the bracelet has room', function () {
   g.s.bracelet.forEach(function (id) { ok(g.s.charms[id] > 0, id + ' equipped but not owned'); });
 });
 
+console.log('the long game (Plan II Phase 38)');
+t('seed bonus softcaps past 100 seeds (+10% → +7%)', function () {
+  var g = new st.Game();
+  g.s.seeds = 50;
+  near(g.seedBonus(), 5.0, 1e-9, '50 seeds, full rate');
+  g.s.seeds = 100;
+  near(g.seedBonus(), 10.0, 1e-9, 'exactly at the knee');
+  g.s.seeds = 110;
+  near(g.seedBonus(), 10.0 + 10 * 0.07, 1e-9, 'past the knee, softer rate');
+  // allMult must use the softcapped bonus.
+  near(g.allMult(), 1 + g.seedBonus(), 1e-9, 'no charms/achievements: allMult = 1 + seedBonus');
+});
+t('a fresh lap starts warm: the first 77 Juice pay double, then warmth is spent', function () {
+  var g = new st.Game();
+  // Reach prestige legitimately.
+  g.s.lifetime.stargem = 777;
+  g.s.stats.playSec = 3600;
+  ok(g.doPrestige(), 'prestige fires');
+  eq(g.s.lap.warmLeft, D.PRESTIGE.WARM_JUICE);
+  var got1 = g.gain('juice', 10, true);
+  near(got1, 20, 1e-9, 'warm juice pays double');
+  near(g.s.lap.warmLeft, 67, 1e-9);
+  var got2 = g.gain('juice', 100, true);
+  near(got2, 167, 1e-9, 'the last 67 warm + 33 plain');
+  eq(g.s.lap.warmLeft, 0);
+  near(g.gain('juice', 10, true), 10, 1e-9, 'warmth spent — plain rates resume');
+  // Suncoins never warm.
+  g.s.lap.warmLeft = 50;
+  near(g.gain('suncoin', 10, true), 10, 1e-9, 'warm applies to Juice only');
+});
+t('each prestige mints a jar with the lap\'s record; the shelf caps at 49', function () {
+  var g = new st.Game();
+  g.s.lifetime.stargem = 777 * 4;    // enough for seeds jumps across laps
+  g.s.stats.playSec = 1800;          // a 30-minute lap at 3108 G → gold rate
+  ok(g.doPrestige());
+  eq(g.s.jars.length, 1);
+  var jar = g.s.jars[0];
+  eq(jar.n, 1);
+  eq(jar.lapG, 777 * 4, 'first lap counts all lifetime G');
+  eq(jar.lid, 'gold', 'a 6.2K G/h lap earns the gold lid (rate ' + (jar.lapG / (jar.sec / 3600)).toFixed(0) + ')');
+  // Next lap: only the delta counts.
+  g.s.lifetime.stargem += 777;
+  g.s.stats.playSec += 7200;         // slow lap → bronze
+  g.s.seeds = 0;                     // force availability again for the test
+  ok(g.doPrestige());
+  eq(g.s.jars[1].lapG, 777, 'jar 2 records only its own lap');
+  eq(g.s.jars[1].lid, 'bronze');
+  // Shelf cap: stuff it and confirm the oldest fall into memory (stats keep the count).
+  for (var i = 0; i < 60; i++) g.s.jars.push({ n: 100 + i, lapG: 1, sec: 60, seeds: 1, lid: 'bronze' });
+  var g2 = new st.Game();
+  g2.importSave(g.exportSave());
+  ok(g2.s.jars.length <= D.JARS.MAX_JARS, 'shelf holds at most ' + D.JARS.MAX_JARS);
+});
+t('prestige keeps the veils down: lifetime totals are never reset', function () {
+  var g = new st.Game();
+  g.gain('juice', 100, true);
+  g.gain('suncoin', 50, true);
+  g.s.lifetime.stargem = 777;
+  ok(g.doPrestige());
+  ok(g.s.lifetime.juice >= 100, 'lifetime juice survives (slots stay unlocked)');
+  ok(g.s.lifetime.suncoin >= 50, 'lifetime suncoins survive (dozer stays unlocked)');
+  eq(g.s.cur.juice, 0, 'current balances do reset');
+});
+
 console.log('dozer');
 t('world starts stocked and coins stay finite & in-bounds', function () {
   var rng = new rngMod.Rng(5);

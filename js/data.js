@@ -471,8 +471,18 @@
 
   // ── Prestige: "Making Preserves" ──────────────────────────────────────────
   // Unlocks at 777 lifetime Stargems. Seeds = floor(sqrt(lifetimeG / 77)).
-  // Each Golden Seed = permanent +10% to ALL earnings. Charms/achievements kept.
-  var PRESTIGE = { UNLOCK_LIFETIME_G: 777, DIVISOR: 77, SEED_BONUS: 0.10 };
+  // Each Golden Seed = permanent +10% to ALL earnings — +7% per seed past
+  // the 100-seed softcap (Plan II 38.2: decided BEFORE the magnitudes
+  // arrive, so deep-lap growth flattens gently instead of compounding away).
+  // Charms/achievements kept. Each lap also starts warm (Plan II 38.3):
+  // the first WARM_JUICE Juice earned after a prestige pays double.
+  var PRESTIGE = { UNLOCK_LIFETIME_G: 777, DIVISOR: 77, SEED_BONUS: 0.10,
+                   SOFTCAP_SEEDS: 100, SEED_BONUS_SOFT: 0.07,
+                   WARM_JUICE: 77 };
+  // Preserve jars (Plan II 38.4): shelf keeps the last MAX_JARS lap records
+  // (stats.prestiges preserves the true lifetime count). Lid tiers by the
+  // lap's Stargem rate per hour.
+  var JARS = { MAX_JARS: 49, GOLD_G_PER_H: 1554, SILVER_G_PER_H: 777 };
 
   // ── Achievements: id, name, stat tracked, threshold, reward gems ──────────
   // Every achievement also grants a permanent +1% to all earnings.
@@ -542,7 +552,8 @@
     CHARM_CHEST_COST_G: CHARM_CHEST_COST_G, CHARM_MAXED_DUPE_GEMS: CHARM_MAXED_DUPE_GEMS,
     BRACELET_SLOTS: BRACELET_SLOTS,
     GROVE: GROVE, BUILDINGS: BUILDINGS, UPGRADES: UPGRADES, AUTO: AUTO, OFFLINE: OFFLINE,
-    PRESTIGE: PRESTIGE, ACHIEVEMENTS: ACHIEVEMENTS, ACH_GLOBAL_BONUS: ACH_GLOBAL_BONUS,
+    PRESTIGE: PRESTIGE, JARS: JARS,
+    ACHIEVEMENTS: ACHIEVEMENTS, ACH_GLOBAL_BONUS: ACH_GLOBAL_BONUS,
     DESTINATIONS: DESTINATIONS
   };
 });
