@@ -23,7 +23,7 @@
   var NONE = 0, BURST = 1, RAINBOW = 2;   // special kinds
   var RAINBOW_FRUIT = -1;
 
-  function cell(fruit, special) { return { f: fruit, sp: special || NONE }; }
+  function cell(fruit, special, gold) { return { f: fruit, sp: special || NONE, g: !!gold }; }
 
   // ── Pure board ops ────────────────────────────────────────────────────────
 
@@ -34,6 +34,10 @@
     while (tries++ < 8 && wouldRun(board, x, y, f)) f = Math.floor(rng.float() * NF);
     return f;
   }
+  // Sun-Ripened roll (Feature 33.2): one extra draw per spawned fruit decides
+  // golden-ness at spawn time — economy RNG on the match3 stream, decided
+  // before any presentation, exactly like every other outcome (§11.2).
+  function rollGold(rng) { return rng.float() < D.MATCH3.GOLDEN.CHANCE; }
   function wouldRun(board, x, y, f) {
     var a = x >= 2 && at(board, x - 1, y) && board[y][x - 1].f === f && board[y][x - 2].f === f;
     var b = y >= 2 && at(board, x, y - 1) && board[y - 1][x].f === f && board[y - 2][x].f === f;
@@ -47,7 +51,7 @@
     var b = [];
     for (var y = 0; y < ROWS; y++) {
       b.push([]);
-      for (var x = 0; x < COLS; x++) b[y].push(null), b[y][x] = cell(rollFruit(rng, b, x, y));
+      for (var x = 0; x < COLS; x++) b[y].push(null), b[y][x] = cell(rollFruit(rng, b, x, y), NONE, rollGold(rng));
     }
     if (!findAllMoves(b).length) return newBoard(rng);   // extremely rare
     return b;
@@ -131,7 +135,7 @@
       }
       var order = 0;
       for (var yy = write; yy >= 0; yy--) {
-        board[yy][x] = cell(rollFruit(rng, board, x, yy));
+        board[yy][x] = cell(rollFruit(rng, board, x, yy), NONE, rollGold(rng));
         spawns.push({ x: x, y: yy, order: order++ });
       }
     }
@@ -188,7 +192,7 @@
       s.push([]);
       for (var x = 0; x < COLS; x++) {
         var c = board[y][x];
-        s[y].push(c ? { f: c.f, sp: c.sp } : null);
+        s[y].push(c ? { f: c.f, sp: c.sp, g: c.g } : null);
       }
     }
     return s;
@@ -212,10 +216,31 @@
     return run.cells[Math.floor(run.cells.length / 2)];
   }
 
+  // Score a clear-set before wiping it: `units` is tile-equivalents of juice
+  // (a Sun-Ripened golden counts as GOLDEN.MULT units on a direct clear,
+  // GOLDEN.CASCADE_MULT when a cascade clears it). With no goldens present,
+  // units === plain cell count, so legacy boards resolve byte-identically.
+  function scoreSet(board, cellsSet, cascadeClear, byFruit) {
+    var n = 0, units = 0, goldens = 0;
+    var G = D.MATCH3.GOLDEN;
+    for (var k in cellsSet) {
+      var p = k.split(','), x = +p[0], y = +p[1];
+      var c = board[y][x];
+      if (!c) continue;
+      n++;
+      units += c.g ? (cascadeClear ? G.CASCADE_MULT : G.MULT) : 1;
+      if (c.g) goldens++;
+      if (byFruit && c.f >= 0) byFruit[c.f] = (byFruit[c.f] || 0) + 1;
+    }
+    return { n: n, units: units, goldens: goldens };
+  }
+
   function resolveMove(board, move, rng, kettleLvl, steps) {
     var a = board[move.y1][move.x1], b = board[move.y2] && board[move.y2][move.x2];
     if (!a || !b) return { valid: false };
     var juice = 0, tiles = 0, chain = 0, specialsMade = 0;
+    var goldens = 0, goldJuice = 0, byFruit = [];
+    for (var bf = 0; bf < NF; bf++) byFruit.push(0);
     var kettle = 1 + 0.1 * (kettleLvl || 0);
 
     // Rainbow swaps clear all of the partner fruit (both rainbows = full board).
@@ -233,8 +258,12 @@
       }
       expandSpecials(board, set);
       var pre0 = steps ? snap(board) : null;
+      var sc0 = scoreSet(board, set, false, byFruit);
       var n0 = clearCells(board, set);
-      tiles += n0; chain = 1; juice += n0 * D.MATCH3.JUICE_PER_TILE;
+      tiles += n0; chain = 1;
+      juice += sc0.units * D.MATCH3.JUICE_PER_TILE;
+      goldens += sc0.goldens;
+      goldJuice += (sc0.units - sc0.n) * D.MATCH3.JUICE_PER_TILE;
       var col0 = collapse(board, rng);
       if (steps) {
         steps.push({ pre: pre0, post: snap(board), cleared: Object.keys(set),
@@ -277,9 +306,15 @@
       for (var i2 = 0; i2 < m.cells.length; i2++) setC[m.cells[i2].x + ',' + m.cells[i2].y] = true;
       expandSpecials(board, setC);
       var clearedKeys = steps ? Object.keys(setC) : null;
+      // chain ≥ 2 means a cascade is doing the clearing — Sun-Ripened fruit
+      // caught by one pays its doubled CASCADE_MULT (the setup reward).
+      var sc = scoreSet(board, setC, chain > 1, byFruit);
       var n = clearCells(board, setC);
       tiles += n;
-      juice += n * D.MATCH3.JUICE_PER_TILE * (1 + D.MATCH3.CASCADE_STEP * kettle * (chain - 1));
+      var cascMult = 1 + D.MATCH3.CASCADE_STEP * kettle * (chain - 1);
+      juice += sc.units * D.MATCH3.JUICE_PER_TILE * cascMult;
+      goldens += sc.goldens;
+      goldJuice += (sc.units - sc.n) * D.MATCH3.JUICE_PER_TILE * cascMult;
       var colr = collapse(board, rng);
       if (steps) {
         steps.push({ pre: pre, post: snap(board), cleared: clearedKeys,
@@ -292,7 +327,8 @@
       reshuffle(board, rng);
       if (steps) steps.push({ reshuffle: true, pre: preShuffle, post: snap(board) });
     }
-    return { valid: true, juice: juice, tiles: tiles, chain: chain, specialsMade: specialsMade };
+    return { valid: true, juice: juice, tiles: tiles, chain: chain, specialsMade: specialsMade,
+             goldens: goldens, goldJuice: goldJuice, byFruit: byFruit };
   }
   function adjacent(m) { return Math.abs(m.x1 - m.x2) + Math.abs(m.y1 - m.y2) === 1; }
 
@@ -403,7 +439,7 @@
     this.cv.addEventListener('pointercancel', function () { dragFrom = null; swiped = false; });
   };
 
-  View.prototype.trySwap = function (a, b) {
+  View.prototype.trySwap = function (a, b, isAuto) {
     var self = this;
     if (!at(this.board, b.x, b.y)) return;
     this.sel = null;
@@ -421,19 +457,30 @@
       var steps = [];
       var res = resolveMove(self.board, { x1: a.x, y1: a.y, x2: b.x, y2: b.y },
                             self.rng, self.g.upLvl('combokettle'), steps);
-      self.finishMove(res, b, steps);
+      self.finishMove(res, b, steps, isAuto);
     });
   };
 
   // Credit is immediate (state stays authoritative); the recorded steps then
   // play back visually — pop, fall, repeat — while input stays locked.
-  View.prototype.finishMove = function (res, at, steps) {
+  View.prototype.finishMove = function (res, at, steps, isAuto) {
     if (!res.valid) { this.busy = false; return; }
     var g = this.g;
-    var credited = g.gain('juice', res.juice);
+    // Fresh Squeeze (Feature 33.5): an armed buff multiplies this hand move's
+    // Juice; the Auto-Juicer neither consumes nor charges the meter. Consume
+    // BEFORE charging so the move that fills the meter isn't itself buffed.
+    var buff = isAuto ? 1 : g.squeezeMult();
+    var credited = g.gain('juice', res.juice * buff);
     g.s.stats.matches++;
+    if (res.goldens) g.s.stats.goldens += res.goldens;
     if (res.chain > g.s.stats.bestChain) g.s.stats.bestChain = res.chain;
     if (res.tiles > g.s.stats.bestClear) g.s.stats.bestClear = res.tiles;
+    if (!isAuto) {
+      g.squeezeCharge(res.chain);
+      // Juice-Stand orders (Feature 33.1): hand moves only — directed play is
+      // for hands, the robot just keeps the grove warm.
+      if (typeof T7 !== 'undefined' && T7.orders) T7.orders.apply(g, res);
+    }
     if (this.hooks.onJuice) this.hooks.onJuice(credited, res.chain, res.tiles);
     g.checkAchievements();
     if (steps && steps.length) {
@@ -613,7 +660,7 @@
     var moves = findAllMoves(this.board);
     if (!moves.length) { reshuffle(this.board, this.rng); return false; }
     var mv = this.rng.pick(moves);
-    this.trySwap({ x: mv.x1, y: mv.y1 }, { x: mv.x2, y: mv.y2 });
+    this.trySwap({ x: mv.x1, y: mv.y1 }, { x: mv.x2, y: mv.y2 }, true);
     return true;
   };
 
@@ -660,6 +707,7 @@
         roundRect(ctx, cx - side / 2 + 2, cy - side / 2 + 2, side - 4, side - 4, side * 0.22);
         ctx.stroke();
       }
+      if (c.g) this.drawGoldenHalo(ctx, cx, cy, r);
       return;
     }
 
@@ -717,7 +765,19 @@
       ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(cx, cy, r * 1.05, 0, 7); ctx.stroke();
     }
+    if (c.g) this.drawGoldenHalo(ctx, cx, cy, r);
     this.drawShine(ctx, cx, cy, r);
+  };
+  // Sun-Ripened halo (Feature 33.2): a warm gold ring + a tiny sun-dot crown.
+  // Reduced motion gets the same halo, statically — a golden must always be
+  // recognizable at a glance, never only by its animation.
+  View.prototype.drawGoldenHalo = function (ctx, cx, cy, r) {
+    var pulse = this.g.s.settings.reducedMotion ? 0.85 : 0.7 + 0.3 * Math.sin(this.time * 4);
+    ctx.strokeStyle = 'rgba(255, 208, 66, ' + pulse.toFixed(3) + ')';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.16, 0, 7); ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 236, 150, 0.95)';
+    ctx.beginPath(); ctx.arc(cx, cy - r * 1.16, r * 0.14, 0, 7); ctx.fill();
   };
   View.prototype.drawShine = function (ctx, cx, cy, r) {
     ctx.fillStyle = 'rgba(255,255,255,0.75)';

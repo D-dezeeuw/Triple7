@@ -269,6 +269,20 @@
       });
       ui.sfx('achieve');
     });
+
+    // Juice-Stand orders + Squeeze Combo (Plan II Phase 33)
+    T7.orders.ensure(game);
+    game.on('orderDone', function (o) {
+      ui.toast('Order filled: ' + T7.orders.label(o) + ' — the stand tips +' + o.reward + ' Juice!', 'gold', 'droplet');
+      ui.sfx('buy');
+    });
+    game.on('orders', function () { ui.renderOrders(); });
+    game.on('squeeze', function () {
+      ui.toast('FRESH SQUEEZE! Your next ' + D.SQUEEZE.BUFF_MOVES + ' moves earn +' +
+               Math.round((D.SQUEEZE.BUFF_MULT - 1) * 100) + '% Juice.', 'gold', 'droplet');
+      ui.sfx('cascade');
+    });
+    ui.renderOrders();
     // Deliberate whole-state resets snap the HUD instantly — an animated
     // count-down to zero on prestige/import/reset would just read as lag.
     function snapDisplayedCur() {
@@ -404,7 +418,9 @@
       spins: 'slot spins', jackpots: 'Triple Sevens', sunEarned: 'lifetime Suncoins',
       drops: 'dozer coins dropped', coinsFallen: 'coins pushed off', gemsEarned: 'lifetime Stargems',
       charms: 'unique charms', sets: 'complete charm sets', buildings: 'grove plants',
-      prestiges: 'Preserves made', playSec: 'seconds played'
+      prestiges: 'Preserves made', playSec: 'seconds played',
+      goldens: 'Sun-Ripened fruit cleared', ordersDone: 'Juice-Stand orders filled',
+      squeezes: 'Fresh Squeezes'
     }[a.stat] || a.stat;
     return 'Reach ' + U.fmt(a.at) + ' ' + what + (a.gems ? ' · +' + a.gems + ' G' : '');
   }
@@ -501,6 +517,29 @@
     });
   };
 
+  // ── Juice-Stand orders (Plan II 33.1) ─────────────────────────────────────
+  ui.renderOrders = function () {
+    var wrap = $('orders-list');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    game.s.orders.slots.forEach(function (o, i) {
+      var row = document.createElement('div');
+      row.className = 'orderrow';
+      var pct = U.clamp(o.progress / o.n * 100, 0, 100);
+      row.innerHTML =
+        '<span class="orderlabel">' + T7.orders.label(o) + '</span>' +
+        '<span class="meterbar orderbar"><span style="width:' + pct + '%"></span></span>' +
+        '<span class="orderprog mini">' + U.fmtInt(Math.min(o.progress, o.n)) + '/' + U.fmtInt(o.n) + '</span>' +
+        '<span class="orderpay mini">+' + o.reward + ' J</span>' +
+        '<button class="minibtn orderreroll" title="Swap for the next request — free, always">↻</button>';
+      row.querySelector('.orderreroll').addEventListener('click', function () {
+        T7.orders.reroll(game, i);
+        ui.sfx('select');
+      });
+      wrap.appendChild(row);
+    });
+  };
+
   ui.renderStats = function () {
     var s = game.s.stats;
     var rows = [
@@ -508,6 +547,9 @@
       ['Match-3 moves', U.fmtInt(s.matches)],
       ['Best cascade', 'x' + s.bestChain],
       ['Most cleared in one move', U.fmtInt(s.bestClear)],
+      ['Sun-Ripened fruit cleared', U.fmtInt(s.goldens)],
+      ['Juice-Stand orders filled', U.fmtInt(s.ordersDone)],
+      ['Fresh Squeezes', U.fmtInt(s.squeezes)],
       ['Slot spins', U.fmtInt(s.spins)],
       ['Beach Getaway', 'Level ' + T7.slots.resortLevel(s.spins) + ' — ' +
         D.RESORT.LEVELS[T7.slots.resortLevel(s.spins) - 1].name],
@@ -623,6 +665,13 @@
       $('btn-daily').classList.toggle('hidden', !game.dailyBonusInfo().available);
       $('stat-bestchain').textContent = '×' + game.s.stats.bestChain;
       $('stat-besttiles').textContent = U.fmtInt(game.s.stats.bestClear);
+      // Squeeze Combo meter + order progress (only re-render when changed)
+      var sq = game.s.squeeze;
+      $('squeeze-bar').style.width = U.clamp(sq.points / D.SQUEEZE.TARGET * 100, 0, 100) + '%';
+      $('squeeze-state').textContent = sq.buffLeft > 0
+        ? 'FRESH ×' + sq.buffLeft : sq.points + '/' + D.SQUEEZE.TARGET;
+      var oSig = game.s.orders.slots.map(function (o) { return o.idx + ':' + o.progress; }).join('|');
+      if (oSig !== ui._orderSig) { ui._orderSig = oSig; ui.renderOrders(); }
       $('veil-slots').classList.toggle('hidden', slotsOpen);
       $('veil-dozer').classList.toggle('hidden', dozerOpen);
       if (!slotsOpen) {

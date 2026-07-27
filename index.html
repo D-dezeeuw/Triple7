@@ -74,9 +74,16 @@
     <div class="m3stats">
       <span class="combostat" title="Your longest cascade chain in a single move">Best combo <b id="stat-bestchain">×0</b></span>
       <span class="combostat" title="Most fruit cleared in a single move">Most cleared <b id="stat-besttiles">0</b></span>
+      <span class="combostat squeezestat" title="Cascades fill the press — full at 21 arms Fresh Squeeze: your next 7 hand moves earn +49% Juice. Never drains, never expires. (Auto-Juicer moves don't count — hands only.)">
+        Squeeze Combo <span class="meterbar"><span id="squeeze-bar"></span></span> <b id="squeeze-state"></b>
+      </span>
     </div>
     <div class="actionbar">
-      <span class="tip">Swap two fruits to match 3+. Every cleared fruit squeezes <b>Juice</b>. 4-in-a-row makes a Burst, 5 makes a Rainbow!</span>
+      <span class="tip">Swap two fruits to match 3+. Every cleared fruit squeezes <b>Juice</b>. 4-in-a-row makes a Burst, 5 makes a Rainbow — and a rare <b>Sun-Ripened</b> golden pays ×7 (×14 if a cascade clears it)!</span>
+    </div>
+    <div class="card orders" id="orders-card">
+      <h3><img class="h3icon" src="assets/sprites/droplet.png" alt=""> Juice Stand <small>— three cozy requests, no rush ever</small></h3>
+      <div id="orders-list"></div>
     </div>
   </section>
 
@@ -204,6 +211,7 @@
 <script src="js/data.js"></script>
 <script src="js/sprites.js"></script>
 <script src="js/state.js"></script>
+<script src="js/orders.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/match3.js"></script>
 <script src="js/slots.js"></script>

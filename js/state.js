@@ -44,6 +44,8 @@
         spins: 0, jackpots: 0, sunEarned: 0,
         drops: 0, coinsFallen: 0, gemsEarned: 0,
         charms: 0, sets: 0, buildings: 0, prestiges: 0, playSec: 0,
+        // Plan II Phase 33 (Grove of Decisions)
+        goldens: 0, ordersDone: 0, squeezes: 0,
         // Personal RTP (Phase 28.7 / §11.11): Suncoins credited specifically
         // by slot settlements, and Stargems credited specifically by dozer
         // front-exits/specials — separate from sunEarned/gemsEarned, which
@@ -89,7 +91,14 @@
       // Onboarding (Phase 22 MVP): a fresh save shows the welcome intro once;
       // an existing save (migrating in) is never interrupted by it — see the
       // "true on old saves" backfill in sanitize().
-      onboarding: { introSeen: false }
+      onboarding: { introSeen: false },
+      // Juice-Stand orders (Plan II 33.1): deck cursor + the three live
+      // slots. Orders are pure functions of (day, idx) — see js/orders.js.
+      orders: { idx: 0, slots: [] },
+      // Squeeze Combo (Plan II 33.5): meter points + armed Fresh Squeeze
+      // moves remaining. No decay, no expiry — a half-full meter waits
+      // forever (§II.2 meter rules).
+      squeeze: { points: 0, buffLeft: 0 }
     };
   }
 
@@ -152,6 +161,25 @@
     if (s.stats.matches > 0 || s.stats.spins > 0 || s.stats.drops > 0 || s.lifetime.juice > 0) {
       s.onboarding.introSeen = true;
     }
+    // Squeeze Combo: finite non-negative numbers, buff capped at its max —
+    // a hand-edited save must never arm an eternal Fresh Squeeze.
+    if (!s.squeeze || typeof s.squeeze !== 'object') s.squeeze = { points: 0, buffLeft: 0 };
+    if (!isFinite(s.squeeze.points) || s.squeeze.points < 0) s.squeeze.points = 0;
+    if (!isFinite(s.squeeze.buffLeft) || s.squeeze.buffLeft < 0) s.squeeze.buffLeft = 0;
+    s.squeeze.points = Math.min(s.squeeze.points, D.SQUEEZE.TARGET);
+    s.squeeze.buffLeft = Math.min(Math.floor(s.squeeze.buffLeft), D.SQUEEZE.BUFF_MOVES);
+    // Orders: drop malformed slot records; the deck cursor only counts up.
+    if (!s.orders || typeof s.orders !== 'object') s.orders = { idx: 0, slots: [] };
+    if (!isFinite(s.orders.idx) || s.orders.idx < 0) s.orders.idx = 0;
+    s.orders.idx = Math.floor(s.orders.idx);
+    if (!Array.isArray(s.orders.slots)) s.orders.slots = [];
+    s.orders.slots = s.orders.slots.filter(function (o) {
+      return o && typeof o.kind === 'string' && isFinite(o.n) && o.n > 0 &&
+             isFinite(o.reward) && o.reward >= 0 && isFinite(o.progress);
+    }).slice(0, D.ORDERS.SLOTS);
+    ['goldens', 'ordersDone', 'squeezes'].forEach(function (k) {
+      if (!isFinite(s.stats[k]) || s.stats[k] < 0) s.stats[k] = 0;
+    });
     // A corrupted/hand-edited save must never crash the dozer on load — drop
     // any record missing the fields World.deserialize needs.
     if (!Array.isArray(s.dozerTable)) {
@@ -337,6 +365,32 @@
     this.s.stats.sets = this.completeSets();
     this.emit('charm', { charm: picked, level: lvl + 1 });
     return { charm: picked, level: lvl + 1 };
+  };
+
+  // ── Squeeze Combo (Plan II Feature 33.5) ──────────────────────────────────
+  // Cascade links from HAND moves fill the meter (chain − 1 points per move);
+  // a full meter arms Fresh Squeeze for the next BUFF_MOVES hand moves.
+  // The caller (match3 View) enforces hand-only: autos never call these.
+  Game.prototype.squeezeCharge = function (chain) {
+    var pts = Math.max(0, (chain || 0) - 1);
+    if (pts <= 0) return false;
+    var sq = this.s.squeeze;
+    sq.points += pts;
+    if (sq.points >= D.SQUEEZE.TARGET) {
+      sq.points = 0;                          // spillover is discarded — published
+      sq.buffLeft = D.SQUEEZE.BUFF_MOVES;
+      this.s.stats.squeezes++;
+      this.emit('squeeze');
+      return true;
+    }
+    return false;
+  };
+  // Consume one armed move (call once per hand move, BEFORE charging, so the
+  // filling move is never itself buffed). Returns this move's multiplier.
+  Game.prototype.squeezeMult = function () {
+    var sq = this.s.squeeze;
+    if (sq.buffLeft > 0) { sq.buffLeft--; return D.SQUEEZE.BUFF_MULT; }
+    return 1;
   };
 
   // ── Achievements ──────────────────────────────────────────────────────────

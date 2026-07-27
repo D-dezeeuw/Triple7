@@ -377,3 +377,26 @@ dialog h2 { margin-top: 0; }
   font: 11px/1.5 "Courier New", monospace; padding: 8px 10px;
   border-radius: 8px; white-space: pre; pointer-events: none;
 }
+
+/* ── Plan II Phase 33: Juice Stand & Squeeze Combo ─────────────────────── */
+.meterbar {
+  display: inline-block; width: 84px; height: 8px; border-radius: 999px;
+  background: rgba(255,255,255,0.22); overflow: hidden; vertical-align: middle;
+}
+.meterbar > span, .meterbar > #squeeze-bar {
+  display: block; height: 100%; width: 0%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--sun), #fff3c4);
+  transition: width 0.3s ease;
+}
+.squeezestat b { min-width: 2.8em; text-align: right; }
+#panel-match3 .orders { margin: 4px 4px 12px; }
+.orderrow {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.orderrow:last-child { border-bottom: none; }
+.orderlabel { flex: 1 1 160px; font-size: 0.9rem; }
+.orderbar { flex: 0 0 84px; }
+.orderprog { min-width: 4em; text-align: right; opacity: 0.85; }
+.orderpay { color: var(--sun); font-weight: 700; }
+.orderreroll { padding: 4px 10px; }

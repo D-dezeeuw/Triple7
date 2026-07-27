@@ -17,7 +17,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'triple7-v5';
+var CACHE_NAME = 'triple7-v6';
 
 // The minimum set of files the game needs to boot and be playable offline.
 // Sprites aren't listed here on purpose: js/sprites.js eagerly preloads every
@@ -33,6 +33,7 @@ var SHELL = [
   'js/data.js',
   'js/sprites.js',
   'js/state.js',
+  'js/orders.js',
   'js/audio.js',
   'js/match3.js',
   'js/slots.js',
