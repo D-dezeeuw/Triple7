@@ -693,7 +693,9 @@
     });
     if (s.jars.length > D.JARS.MAX_JARS) s.jars = s.jars.slice(-D.JARS.MAX_JARS);
     s.seeds = total;
-    s.cur = { juice: 0, suncoin: 0, stargem: 0 };
+    // A Preserve resets the DAY's currencies; Pearls are the night's and
+    // survive — the Tidepool sits outside the lap entirely (Plan II 39.6).
+    s.cur = { juice: 0, suncoin: 0, stargem: 0, pearl: s.cur.pearl || 0 };
     s.buildings = {};
     s.upgrades = {};
     s.stats.prestiges++;

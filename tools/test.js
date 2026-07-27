@@ -1171,6 +1171,19 @@ t('tidepool state survives saves; corruption sanitizes clean', function () {
   eq(g4.s.tidepool.habitats.castle, undefined, 'unknown habitats vanish');
   eq(g4.s.cur.pearl, 0, 'negative pearls sanitize to zero');
 });
+t('pearls survive a Preserve — the night sits outside the lap', function () {
+  // Regression: doPrestige once rebuilt s.cur with only the day currencies,
+  // silently wiping pearls to undefined (→ NaN on the next gain). Caught by
+  // the end-to-end journey smoke; pinned here forever.
+  var g = new st.Game();
+  g.gain('pearl', 12, true);
+  g.s.lifetime.stargem = 777;
+  ok(g.doPrestige());
+  eq(g.s.cur.pearl, 12, 'pearls must survive the preserve');
+  eq(g.s.cur.stargem, 0, 'day currencies still reset');
+  g.gain('pearl', 3, true);
+  eq(g.s.cur.pearl, 15, 'and the balance still adds cleanly after');
+});
 t('a pre-pearl save migrates in with zeroed pearls and nothing else changed', function () {
   var g = new st.Game();
   g.gain('juice', 100, true);

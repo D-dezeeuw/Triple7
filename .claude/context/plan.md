@@ -87,6 +87,15 @@ FOMO. If a future idea needs one of these, the idea is wrong for Triple7.
    for Phases 1–32 and all reference sections; where Plan II absorbs a Plan I remainder (Phase 28,
    Features 8.x-hint, 12.x, 18.6, 24.3, 30.10), its Absorption Map says so — plan that work once,
    check boxes in both documents when it lands.
+7. **Plan II first execution pass landed (2026-07-27, same day)**: all seven phases shipped an
+   honest first slice to `main` — goldens/orders/squeeze (33), weather dial + sun meter (34),
+   earned dozer events + harbor currents + a measured timing-neutrality result (35), the Sunline +
+   free-action hand-offs (36), the charm bracelet (37), seed softcap + warm laps + the jar shelf
+   (38, credit against Phase 28 here: 28.2's softcap is decided AND implemented, 28.3 partially,
+   28.4's shelf core), and **the Moonlit Tidepool itself (39) — Feature 30.10's fourth-machine
+   question is now answered in running code** (the RFC paper trail still owed). Per-phase truth
+   lives in plan2.md's Status Ledger II audit trails; every phase merged with `npm test` and
+   `npm run simulate` green.
 
 ### Status Ledger — repo vs vision
 
