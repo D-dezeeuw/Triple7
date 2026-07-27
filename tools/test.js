@@ -725,6 +725,80 @@ t('a resonant dozer coin keeps its multiplier across a table save', function () 
   near(w2.coins[0].res, D.CHAIN.RESONANCE_MULT, 1e-9, 'res multiplier survives the save');
 });
 
+console.log('builds & loadouts (Plan II Phase 37)');
+t('bracelet focus doubles equipped charms exactly, on top of unchanged passives', function () {
+  var g = new st.Game();
+  g.s.charms.lemondrop = 3;                       // citrus, perLevel 0.05
+  g.s.charms.cherrytwin = 2;                      // berry, perLevel 0.05
+  var baseJuice = g.charmBonus('juice');
+  near(baseJuice, 0.15, 1e-9, 'unequipped citrus passive');
+  g.equipCharm('lemondrop');
+  near(g.charmBonus('juice'), 0.30, 1e-9, 'equipped citrus counts double');
+  near(g.charmBonus('suncoin'), 0.10, 1e-9, 'other sets untouched by the equip');
+  g.equipCharm('lemondrop');                      // toggle off
+  near(g.charmBonus('juice'), baseJuice, 1e-9, 'unequip restores the exact baseline');
+});
+t('a bracelet holding one complete set doubles its set bonus', function () {
+  var g = new st.Game();
+  var citrus = D.CHARMS.filter(function (c) { return c.set === 'citrus'; });
+  eq(citrus.length, 7, 'a set is exactly seven charms');
+  citrus.forEach(function (c) { g.s.charms[c.id] = 1; });
+  var levels = 7 * 0.05;
+  near(g.charmBonus('juice'), levels + 0.25, 1e-9, 'complete set, no focus');
+  citrus.forEach(function (c) { g.equipCharm(c.id); });
+  near(g.charmBonus('juice'), levels * 2 + 0.25 * 2, 1e-9, 'full-set bracelet doubles levels AND set bonus');
+});
+t('equip rules: owned only, 7 slots, free toggle', function () {
+  var g = new st.Game();
+  eq(g.equipCharm('lemondrop'), false, 'cannot equip an unowned charm');
+  var owned = D.CHARMS.slice(0, 8);
+  owned.forEach(function (c) { g.s.charms[c.id] = 1; });
+  for (var i = 0; i < 7; i++) eq(g.equipCharm(owned[i].id), true, 'slot ' + i);
+  eq(g.equipCharm(owned[7].id), false, 'slot 8 must not exist');
+  eq(g.equipCharm(owned[0].id), true, 'unequip is free');
+  eq(g.equipCharm(owned[7].id), true, 'freed slot takes the new charm');
+});
+t('migration: a never-initialized bracelet auto-picks the best seven owned', function () {
+  var g = new st.Game();
+  // A pre-bracelet save: charms owned, bracelet field absent entirely.
+  D.CHARMS.slice(0, 10).forEach(function (c) { g.s.charms[c.id] = 2; });
+  g.s.charms.galaxyfig = 7;                       // celestial, should rank first
+  delete g.s.bracelet;
+  var g2 = new st.Game();
+  g2.importSave(g.exportSave());
+  eq(g2.s.bracelet.length, 7, 'auto-filled to seven');
+  ok(g2.s.bracelet.indexOf('galaxyfig') >= 0, 'the maxed celestial makes the cut');
+  // And the migrated player is strictly stronger than before (invariant 11).
+  var g3 = new st.Game();
+  D.CHARMS.slice(0, 10).forEach(function (c) { g3.s.charms[c.id] = 2; });
+  g3.s.charms.galaxyfig = 7;
+  g3.s.bracelet = [];
+  ok(g2.charmBonus('all') > g3.charmBonus('all'), 'auto-equip only ever adds');
+});
+t('bracelet sanitize: unknown/unowned/duplicate ids drop, player-emptied stays empty', function () {
+  var g = new st.Game();
+  g.s.charms.lemondrop = 1;
+  g.s.bracelet = ['lemondrop', 'lemondrop', 'notacharm', 'cherrytwin', 42];
+  var g2 = new st.Game();
+  g2.importSave(g.exportSave());
+  eq(g2.s.bracelet.length, 1, 'only the owned, real, unique charm survives');
+  eq(g2.s.bracelet[0], 'lemondrop');
+  var g3 = new st.Game();
+  g3.s.charms.lemondrop = 5;
+  g3.s.bracelet = [];                             // deliberate empty choice
+  var g4 = new st.Game();
+  g4.importSave(g3.exportSave());
+  eq(g4.s.bracelet.length, 0, 'an emptied bracelet is a choice, not a bug to fix');
+});
+t('a fresh charm auto-equips while the bracelet has room', function () {
+  var g = new st.Game();
+  var rng = new rngMod.Rng(3701);
+  for (var i = 0; i < 10; i++) g.awardRandomCharm(rng);
+  ok(g.s.bracelet.length > 0, 'awards fill the bracelet');
+  ok(g.s.bracelet.length <= D.BRACELET_SLOTS, 'never past seven');
+  g.s.bracelet.forEach(function (id) { ok(g.s.charms[id] > 0, id + ' equipped but not owned'); });
+});
+
 console.log('dozer');
 t('world starts stocked and coins stay finite & in-bounds', function () {
   var rng = new rngMod.Rng(5);

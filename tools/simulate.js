@@ -159,6 +159,15 @@ console.log('  VERDICT: ' + (meterOK
   ? '✔ meter EV is a bounded, published floor (+' + pct(meterEV) + ' RTP).'
   : '✘ METER EV OUT OF BOUNDS: ' + meterEV.toFixed(4)));
 
+// Charm Bracelet ceiling note (Plan II 37.1): the focus doubles equipped
+// charms only, so its absolute worst case is bounded by construction at
+// 2× the (already finite, level-capped) charm bonus — printed for the
+// §11.8 ledger, no new assert needed beyond the existing ceiling.
+var celestialMax = 7 * 7 * 0.03 + 0.15;   // 7 charms × lvl7 × perLevel + set bonus
+console.log('\n  Charm Bracelet (Plan II 37.1): worst case = full maxed celestial focus:');
+console.log('    "+all" bonus ' + celestialMax.toFixed(2) + ' → ' + (celestialMax * 2).toFixed(2) +
+  ' (equipped levels AND set bonus doubled) — bounded at 2× a level-capped base by construction.');
+
 // Bonus drought odds (§10.3): published so players can trust the number
 // rather than guess it — a rare event should still be an honestly-stated one.
 console.log('\n  Beach Bonus drought odds (published — honesty over hype):');

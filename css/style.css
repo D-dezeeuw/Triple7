@@ -421,3 +421,22 @@ dialog h2 { margin-top: 0; }
   background: linear-gradient(90deg, #ffe066, #fff8d6, #ffe066);
 }
 #sunline.resonant b { color: var(--sun); }
+
+/* ── Plan II Phase 37: The Charm Bracelet ───────────────────────────────── */
+.braceletbar {
+  background: var(--glass); border: 1px solid var(--glass-edge);
+  border-radius: 12px; padding: 8px 14px; margin-bottom: 12px;
+  color: #fff; text-shadow: 0 1px 2px rgba(7,52,79,0.5);
+}
+.charm { position: relative; }
+.charm:not(.unowned) { cursor: pointer; }
+.charm.equipped {
+  outline: 2px solid var(--sun);
+  outline-offset: -1px;
+  box-shadow: 0 0 12px rgba(255, 201, 60, 0.45);
+}
+.charm .eqmark {
+  position: absolute; top: 2px; right: 5px;
+  color: var(--sun); font-size: 0.85rem;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}

@@ -84,7 +84,7 @@ lands on `main`; audit code before trusting a checkbox.
 | 34 Choose Your Sunshine | 🟡 | 34.1 Weather Dial (3 enumerated par sheets) + 34.2 Sun Meter SHIPPED (sims, tests, fairness tables, doc-gates); 34.3 Sungrowth, 34.4 Bonus II, 34.5 held reels, 34.6 amenities unbuilt; 34.7 gate partial |
 | 35 Star Harbor Mastery | 🟡 | 35.3 earned events (storms/surges/pelicans) + 35.2 Harbor Currents SHIPPED; 35.1 resolved as a measured NEGATIVE result (timing is physics-neutral — published in fairness.md, no fake dial built); 35.4-35.7 chute builds/geometry/runs/full gate unbuilt |
 | 36 Chain Reforged | 🟡 | 36.1 Sunline/Resonance + 36.2 hand-offs (Pressed Juice free spins, Jackpot Splash free drops) SHIPPED with sims/tests/fairness chapter; 36.3 itineraries, 36.4 Golden Hour, 36.5 hub flows, 36.6 pours, 36.7 full gate unbuilt |
-| 37 Builds & Loadouts | 🔭 | 28 charms / 12 upgrades all passively additive; no loadout, spec or branch anywhere |
+| 37 Builds & Loadouts | 🟡 | 37.1 Charm Bracelet SHIPPED (×2 focus + set-focus doubling, upward-only migration, free respec, tap-to-equip cabinet UI, tests, fairness chapter); 37.2 specs, 37.3 branches, 37.4 tonics, 37.5 presets/console, 37.6 harness, 37.7 gate unbuilt |
 | 38 The Long Game | 🔭 | A sliver of 28.7 (personal RTP stat) shipped in Plan I; the other 9½ features of Phase 28 are unbuilt |
 | 39 Moonlit Tidepool | 🔭 | Nothing exists; Feature 30.10's RFC is unresolved — 39.1 resolves it |
 
@@ -409,6 +409,16 @@ simulated, and the ledger tells the truth.
 - [x] §11.8 ceiling sweep re-run (unchanged at 456%/500% — Phase 33 spends J-faucet budget, not RTP ceiling headroom; recorded here)
 - [ ] Playwright journey: unlock a layout, complete an order, birth a Press, fill the combo meter — committed as a repeatable script
 - [x] Status Ledger II updated with an audit-trail paragraph (see ledger table + the audit note below)
+
+**Phase 37 audit trail (2026-07-27, verified against code):** 37.1 shipped whole — the bracelet
+holds 7 of the (now 28, soon more) charms; equipped charms' per-level bonuses count ×2 and a
+full-set bracelet doubles that set's completion bonus; strictly additive (exact-baseline tests),
+free toggle, unknown/unowned/duplicate sanitize, `null`-vs-`[]` semantics so migration auto-fits
+the best seven exactly once while a deliberately emptied bracelet stays empty, new charms
+auto-equip while slots are free. Worst case (full maxed celestial focus: +1.62 → +3.24 "all")
+printed by the simulator for the §11.8 ledger — bounded at 2× a level-capped base by
+construction. Not built: 37.2–37.7 (specs, branches, tonics, presets/console, viability harness,
+meta gate). `npm test` 75/75, simulate verified.
 
 **Phase 36 audit trail (2026-07-27, verified against code):** 36.1 shipped — the Sunline
 (77 points; hand charges: cascade4 +7, golden +3, hand bonus +7, storm +7; charging pauses during
