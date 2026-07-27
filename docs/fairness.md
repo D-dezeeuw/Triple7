@@ -172,6 +172,40 @@ random source. None of it reads or perturbs the seeded slots stream, none of
 it changes any probability above, and the gifts are excluded from the
 personal-RTP stat so that audit stays a clean per-stake measure.
 
+### The Weather Dial (Plan II Phase 34) — three par sheets, your choice
+
+The machine now carries **three complete, published par sheets** — pick one
+any time, switch free, no cost, no cooldown. Same 7-Juice spin everywhere;
+what you choose is the *variance*, never the value:
+
+| Weather | Exact EV (base) | RTP | Hit rate (measured) | Character |
+|---|---|---|---|---|
+| Classic Sunshine | 1.45613 S/spin | 145.6% | ≈44.4% | the original sheet |
+| Gentle Breeze | 1.44678 S/spin | 144.7% | ≈46.0% | wins small and steady; top fruit line pays just 7 S |
+| Storm Surf | 1.47305 S/spin | 147.3% | ≈22.5% | cherries/lemons need 4+; star pays up to 245 S, the Seven line 2100 S |
+
+Three rules hold in every weather, enforced by `npm test` and
+`npm run simulate`: the **Seven keeps its 2 stops of 64** (so scatter odds,
+the Beach Bonus and the Sun Meter are identical everywhere), every mode's EV
+stays **within ±3 RTP points** of Classic (there is no "wrong" dial
+position), and every *positive* pay stays **≥ 2 S** — in Storm a 3-run of
+cherries pays nothing and is simply *not a win* (no celebration, no line
+flash), never a win smaller than the stake. The in-game Paytable renders the
+active sheet and the three-way comparison from the same `enumerateRTP()`
+the simulator verifies.
+
+### The Sun Meter (Plan II Phase 34) — honest pity, counted honestly
+
+Every Seven that lands anywhere in the decided window fills **1 of 77
+segments**. A full meter **guarantees your next spin enters the Beach
+Bonus** — decided at stake time like everything else — then the meter starts
+over. It never drains, never expires, survives prestige, and fills on
+auto-spins too: it is a *floor for everyone*, not a skill surface. And it is
+economy, not decoration: E[sevens/spin] = 0.625, so the meter fills every
+≈123 spins and forces a bonus on the ≈97.7% of those fills that wouldn't
+have triggered naturally — worth **+0.108 S/spin** (≈ +10.8 RTP points)
+on top of the base par in every mode, itemized on every `npm run simulate`.
+
 ## Coin dozer — "Star Harbor"
 
 The dozer has no separate "roll" at all — the randomness *is* the physics.

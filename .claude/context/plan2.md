@@ -81,7 +81,7 @@ lands on `main`; audit code before trusting a checkbox.
 | Phase | Status | Notes |
 |---|---|---|
 | 33 Grove of Decisions | 🟡 | 33.1 orders + 33.2 goldens + 33.5 squeeze SHIPPED (sims, tests, fairness chapter, doc-gates); 33.3 Press, 33.4 layouts, 33.6 reads/sandbox unbuilt; 33.7 gate partially (no Playwright journey/fixture corpus file) |
-| 34 Choose Your Sunshine | 🔭 | 5×4/6-line machine + skill-stop Beach Bonus shipped; one par sheet only, no meters/choices |
+| 34 Choose Your Sunshine | 🟡 | 34.1 Weather Dial (3 enumerated par sheets) + 34.2 Sun Meter SHIPPED (sims, tests, fairness tables, doc-gates); 34.3 Sungrowth, 34.4 Bonus II, 34.5 held reels, 34.6 amenities unbuilt; 34.7 gate partial |
 | 35 Star Harbor Mastery | 🔭 | Landing columns, pachinko chute + bonus pins shipped; no timing surface, stock or geometry choices |
 | 36 Chain Reforged | 🔭 | Chain exists only as 7:1 checkout; zero cross-machine mechanics |
 | 37 Builds & Loadouts | 🔭 | 28 charms / 12 upgrades all passively additive; no loadout, spec or branch anywhere |
@@ -410,6 +410,15 @@ simulated, and the ledger tells the truth.
 - [ ] Playwright journey: unlock a layout, complete an order, birth a Press, fill the combo meter — committed as a repeatable script
 - [x] Status Ledger II updated with an audit-trail paragraph (see ledger table + the audit note below)
 
+**Phase 34 audit trail (2026-07-27, verified against code):** 34.1 + 34.2 shipped whole: the
+Weather Dial's three exactly-enumerated par sheets (144.7/145.6/147.3% RTP, sevens fixed at 2/64
+everywhere, zero-pay 3-runs are non-wins, every positive pay ≥ 2 S) and the 77-segment Sun Meter
+(+0.108 S/spin itemized pity floor, fills for autos, forced entries decided at stake time). One
+drafted claim corrected in place: a ~60%-hit Gentle mode is mathematically impossible under the
+≥2 S pay floor at RTP parity. Not built: 34.3 Sungrowth, 34.4 Beach Bonus II, 34.5 Sticky
+Sunshine, 34.6 amenities; 34.7's committed journey suite. `npm test` 61/61, simulate verified,
+headless smoke green (dial switches, storm spins, paytable dashes render).
+
 **Phase 33 audit trail (2026-07-27, verified against code):** 33.1 + 33.2 + 33.5 shipped whole:
 goldens (1/77, ×7/×14) in `match3.js` with delta-proof tests; orders as pure (day, idx) functions
 in `js/orders.js` with a simulator-enforced ≤21% budget (measured ≈9%); the 21-point Squeeze
@@ -431,26 +440,26 @@ Bonus II and Sticky Sunshine ship with every configuration proved and every figu
 Story: Three suns, one honest machine. Done when Gentle Breeze, Classic Sunshine and Storm Surf
 are three published par sheets the player flips between freely.
 
-- [ ] Three full par sheets in `data.js` (stop weights + pay tables): Gentle Breeze (~60% hit, small pays), Classic Sunshine (today's 44.5%/145.6% sheet, untouched), Storm Surf (~25% hit, top-heavy pays)
-- [ ] RTP parity: all three within ±2 points of Classic's 145.6%, by exact enumeration of each sheet — variance is the product, value is constant
-- [ ] Mode switch: a weather dial on the cabinet, free, anytime, persisted; spins always cost 7 J regardless of mode
-- [ ] Beach Bonus trigger rate re-derived per mode and published (scatter density differs per sheet — no hidden bonus starvation, §11.7)
-- [ ] Paytable UI shows the *active* sheet with a three-way comparison view; seven-word dial tooltip ("same value, choose your weather")
-- [ ] Fairness.md: side-by-side mode table (RTP, hit rate, bonus rate, top pay odds) — doc-gated
-- [ ] Tests: per-mode enumeration matches published figures, mode persistence, Monte Carlo 3σ agreement per mode
+- [x] Three full par sheets in `data.js`: Classic Sunshine (untouched 44.4%-hit/145.6% sheet), Gentle Breeze (≈46.0% hit, top fruit pay 7 S — flat, tiny variance), Storm Surf (≈22.5% hit, cherries/lemons pay 0 on 3-runs, star 245 S / seven 2100 S) *(drafted "~60% hit" Gentle proved impossible under the ≥2 S pay floor at RTP parity — a 60%-hit machine paying ≥2× stake per win cannot hold 145%; Gentle's identity revised to "same rhythm, tiny waves", annotated here)*
+- [x] RTP parity: all three within ±2 points of Classic by exact enumeration (144.68 / 145.61 / 147.31) — variance is the product, value is constant
+- [x] Mode switch: the Weather Dial under the cabinet, free, anytime, persisted (`s.slotMode`); spins cost 7 J in every mode
+- [x] Beach Bonus rate identical per mode *by construction* — the Seven keeps its 2 stops in every sheet (tested), stronger than per-mode re-derivation
+- [x] Paytable UI shows the active sheet (— for zero pays) plus the three-way live comparison
+- [x] fairness.md: side-by-side mode table (exact EV, RTP, measured hit, character) — every mode's EV doc-gated
+- [x] Tests: per-mode enumeration parity band, 64-stop + fixed-seven + no-sub-stake-pay assertions, zero-pay-run non-win, legacy-call byte-compat, mode persistence + sanitize; per-mode MC hit in `npm run simulate`
 
 ### Feature 34.2 — The Sun Meter (honest pity)
 
 Story: Every Seven fills the sun. Done when a 77-segment, never-decaying meter guarantees a Beach
 Bonus at full and its EV is counted, not hidden.
 
-- [ ] Meter: each Seven landing anywhere in the window fills one of 77 segments; full meter = guaranteed Beach Bonus entry on the next spin, then resets
-- [ ] No decay, no expiry, survives prestige (it's variance insurance, not progress) — stated on the meter
-- [ ] Effective RTP recomputed with the meter's expected contribution itemized per mode; §11.8 sweep updated
-- [ ] Meter fill honors decide-before-present: Sevens are counted from the decided window, presentation merely reveals them
-- [ ] Autos: meter fills on auto-spins too — it's a pity floor, not a skill bonus (pillar 3 distinguishes floors from envelopes; write this reasoning into fairness.md)
-- [ ] UI: a sun that visibly ripens over the cabinet; full-meter moment is a cozy sunrise, `reducedMotion`-gated
-- [ ] Tests: fill counting vs decided windows, guarantee firing exactly at 77, persistence, RTP itemization assertion
+- [x] Meter: each Seven landing anywhere in the window fills one of 77 segments; full meter = guaranteed Beach Bonus entry on the next spin (forced at stake time, `res.pity` marked), then resets
+- [x] No decay, no expiry, survives prestige (it's variance insurance, not progress) — stated on the meter tooltip and in fairness.md
+- [x] Effective RTP itemized: +0.108 S/spin (≈+10.8 RTP points), identical in every mode by the fixed-seven rule; bounded in `npm run simulate`
+- [x] Meter fill honors decide-before-present: Sevens counted from the decided window in `applySunMeter()`, presentation merely reveals them
+- [x] Autos: meter fills on auto-spins too — a pity floor, not a skill bonus; reasoning written into fairness.md
+- [x] UI: meter bar + BONUS NEXT state beside the spin button *(the drafted "ripening sun over the cabinet" canvas treatment deferred to the 34.7 polish pass — the honest meter shipped first)*; "Saved by the Sun" achievement on the first rescue
+- [x] Tests: fill counting vs decided results, forced-entry + natural-reset semantics, persistence, clamp sanitize; EV itemization asserted in the simulator
 
 ### Feature 34.3 — Symbol Sungrowth
 

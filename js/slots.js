@@ -19,11 +19,21 @@
   var S = D.SLOT;
   var COLS = S.GRID.COLS, ROWS = S.GRID.ROWS, CELLS = COLS * ROWS;
 
+  // Volatility modes (Plan II 34.1): each mode is a complete par sheet.
+  // 'classic' (or no mode) resolves to the base REEL/PAYS, so every legacy
+  // call site keeps its exact pre-mode behavior. The seven's weight is
+  // identical in every mode — asserted by tests — so scatter/bonus math and
+  // the Sun Meter never depend on the weather.
+  function modeDef(mode) {
+    var m = S.MODES && S.MODES[mode];
+    return { reel: (m && m.reel) || S.REEL, pays: (m && m.pays) || S.PAYS };
+  }
+
   // Weights are fixed for all upgrade levels now — Lucky Sevens extends the
   // bonus ladder instead of touching the reels (see ladderFor), keeping the
   // scatter frequency, and with it the inflation ceiling, bounded.
-  function reelWeights() {
-    return S.REEL.map(function (r) { return { id: r.id, w: r.w }; });
+  function reelWeights(mode) {
+    return modeDef(mode).reel.map(function (r) { return { id: r.id, w: r.w }; });
   }
 
   // The effective bonus ladder at a Lucky Sevens level, and its full up-then-
@@ -54,7 +64,8 @@
   // run anchored at reel 1, the classic rule. Returns
   // { lineWins: [{line, sym, n, start, pay}], scatters, sun, bonus } —
   // sun is the pre-multiplier sum of line pays; bonus means 3+ scatter Sevens.
-  function evaluate(grid) {
+  function evaluate(grid, mode) {
+    var pays = modeDef(mode).pays;
     var lineWins = [], sun = 0;
     for (var l = 0; l < S.LINES.length; l++) {
       var rows = S.LINES[l];
@@ -67,8 +78,10 @@
         if (n >= 3 && (!best || n > best.n)) best = { sym: sym, n: n, start: start };
         if (best && best.n >= 3) break;   // a second 3+ run can't fit in 5 cells
       }
-      if (best) {
-        var pay = S.PAYS[best.sym][best.n - 3];
+      // A run whose pay is 0 (Storm's low fruit at 3) is simply not a win —
+      // no line entry, no celebration, never a loss disguised as one (§11.7).
+      if (best && pays[best.sym][best.n - 3] > 0) {
+        var pay = pays[best.sym][best.n - 3];
         lineWins.push({ line: l, sym: best.sym, n: best.n, start: best.start, pay: pay });
         sun += pay;
       }
@@ -84,14 +97,14 @@
   // One spin: draws the 20 cells column-major (col 0 top→bottom, then col 1…)
   // so the rng stream stays reproducible, then evaluates. Returns
   // { grid, lineWins, scatters, sun, bonus } — sun is pre-multiplier.
-  function resolveSpin(rng, luckyLvl) {
-    var weights = reelWeights();
+  function resolveSpin(rng, luckyLvl, mode) {
+    var weights = reelWeights(mode);
     var grid = [];
     for (var c = 0; c < COLS; c++) {
       grid.push([]);
       for (var r = 0; r < ROWS; r++) grid[c].push(rng.weighted(weights).id);
     }
-    var ev = evaluate(grid);
+    var ev = evaluate(grid, mode);
     ev.grid = grid;
     void luckyLvl;   // kept in the signature for call-site compatibility
     return ev;
@@ -114,8 +127,9 @@
   //   this baseline — see docs/fairness.md).
   // Expectation is linear even though lines share cells, so the totals are
   // exact. Returns the par sheet used by tests, the simulator, the paytable.
-  function enumerateRTP(luckyLvl) {
-    var weights = reelWeights();
+  function enumerateRTP(luckyLvl, mode) {
+    var def = modeDef(mode);
+    var weights = reelWeights(mode);
     var total = 0;
     weights.forEach(function (w) { total += w.w; });
     var nFlat = 0, nShaped = 0;
@@ -127,7 +141,8 @@
         var pFlat = n === 3 ? 3 * Math.pow(p, 3) * q * q + 2 * Math.pow(p, 4) * q :
                     n === 4 ? 2 * Math.pow(p, 4) * q : Math.pow(p, 5);
         var pShaped = Math.pow(p, n) * (n < COLS ? q : 1);
-        var pay = S.PAYS[w.id][n - 3];
+        var pay = def.pays[w.id][n - 3];
+        if (pay <= 0) continue;             // zero-pay runs are not wins
         var evPart = (nFlat * pFlat + nShaped * pShaped) * pay;
         linesEV += evPart;
         expLineWins += nFlat * pFlat + nShaped * pShaped;
@@ -167,7 +182,7 @@
   }
 
   var core = { resolveSpin: resolveSpin, evaluate: evaluate, enumerateRTP: enumerateRTP,
-               reelWeights: reelWeights, resortLevel: resortLevel,
+               reelWeights: reelWeights, resortLevel: resortLevel, modeDef: modeDef,
                ladderFor: ladderFor, ladderCycle: ladderCycle,
                ladderBlindMean: ladderBlindMean };
 
@@ -211,16 +226,8 @@
     // symbols are spliced in from resolveSpin), so it uses Math.random — the
     // seeded slots stream must be spent only on actual outcomes, or simply
     // opening the Slots tab would shift the next spin's result.
-    this.strips = [];
-    for (var r = 0; r < COLS; r++) {
-      var strip = [];
-      S.REEL.forEach(function (s) { for (var i = 0; i < s.w; i++) strip.push(s.id); });
-      for (var i = strip.length - 1; i > 0; i--) {
-        var j = Math.floor(Math.random() * (i + 1));
-        var tmp = strip[i]; strip[i] = strip[j]; strip[j] = tmp;
-      }
-      this.strips.push(strip);
-    }
+    this.stripMode = game.s.slotMode || 'classic';
+    this.buildStrips(this.stripMode);
     this.pos = [0, 0, 0, 0, 0];           // strip position of the window's top row
     this.reel = [null, null, null, null, null];
     this.spinning = false;
@@ -239,6 +246,24 @@
     });
   }
 
+  // Visual strips honestly reflect the ACTIVE mode's 64 weighted stops, so a
+  // Weather Dial switch rebuilds them — what scrolls past always matches the
+  // odds you're actually playing (§11.3: displayed reels must not lie).
+  View.prototype.buildStrips = function (mode) {
+    this.strips = [];
+    var reel = modeDef(mode).reel;
+    for (var r = 0; r < COLS; r++) {
+      var strip = [];
+      reel.forEach(function (s) { for (var i = 0; i < s.w; i++) strip.push(s.id); });
+      for (var i = strip.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));   // decorative order only
+        var tmp = strip[i]; strip[i] = strip[j]; strip[j] = tmp;
+      }
+      this.strips.push(strip);
+    }
+    this.stripMode = mode;
+  };
+
   View.prototype.canSpin = function () {
     return !this.spinning && !this.bonus &&
            this.g.canAfford('juice', D.CONVERSION.SPIN_COST_J);
@@ -255,8 +280,15 @@
       return false;
     }
     var g = this.g;
+    var mode = g.s.slotMode || 'classic';
+    if (mode !== this.stripMode) this.buildStrips(mode);
     g.spend('juice', D.CONVERSION.SPIN_COST_J);
-    var res = resolveSpin(this.rng, g.upLvl('luckysevens'));
+    var res = resolveSpin(this.rng, g.upLvl('luckysevens'), mode);
+    // Sun Meter (Plan II 34.2): a full meter forces this spin's Beach Bonus
+    // if the decided grid didn't trigger naturally — decided here, at stake
+    // time, before any presentation (§11.2). Fills on autos too (it's a
+    // pity floor, not a skill envelope).
+    g.applySunMeter(res);
     this.result = res;
     this.spinning = true;
     this.lastWin = null;

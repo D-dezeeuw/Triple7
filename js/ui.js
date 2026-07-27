@@ -200,28 +200,43 @@
     // Every figure below is computed live from enumerateRTP()/data.js, never
     // copied, so the dialog cannot drift from the machine it describes.
     $('btn-paytable').addEventListener('click', function () {
-      var rtp = T7.slots.enumerateRTP(game.upLvl('luckysevens'));
+      var mode = game.s.slotMode || 'classic';
+      var def = T7.slots.modeDef(mode);
+      var rtp = T7.slots.enumerateRTP(game.upLvl('luckysevens'), mode);
       var mult = game.sunMult();
       var order = ['seven', 'star', 'berry', 'melon', 'lemon', 'cherry'];
-      var html = '<p class="mini"><b>' + D.SLOT.LINES.length + ' paylines</b> across the 5×4 window: ' +
+      var html = '<p class="mini"><b>Weather: ' + D.SLOT.MODES[mode].name + '</b> — ' +
+                 D.SLOT.MODES[mode].blurb + '</p>';
+      html += '<p class="mini"><b>' + D.SLOT.LINES.length + ' paylines</b> across the 5×4 window: ' +
                  'the <b>4 rows</b> pay any run of 3+ matching symbols <b>anywhere along the row</b>, ' +
                  'and the <b>V and Λ</b> lines pay runs starting from reel 1. ' +
                  'Faint guide lines on the machine trace every path.</p>';
       html += '<table><tr><td><b>Symbol</b></td><td><b>×3</b></td><td><b>×4</b></td><td><b>×5</b></td>' +
               '<td><b>3-run odds/row</b></td></tr>';
       order.forEach(function (sym) {
-        var pays = D.SLOT.PAYS[sym];
+        var pays = def.pays[sym];
         var w = 0;
-        D.SLOT.REEL.forEach(function (r) { if (r.id === sym) w = r.w; });
+        def.reel.forEach(function (r) { if (r.id === sym) w = r.w; });
         var p = w / 64, q = 1 - p;
         var p3row = 3 * p * p * p * q * q + 2 * p * p * p * p * q;   // run of exactly 3, anywhere in the row
+        function payCell(v) { return v > 0 ? U.fmt(v * mult) : '—'; }
         html += '<tr><td>' + sym + '</td>' +
-                '<td>' + U.fmt(pays[0] * mult) + '</td>' +
-                '<td>' + U.fmt(pays[1] * mult) + '</td>' +
-                '<td>' + U.fmt(pays[2] * mult) + ' S</td>' +
+                '<td>' + payCell(pays[0]) + '</td>' +
+                '<td>' + payCell(pays[1]) + '</td>' +
+                '<td>' + payCell(pays[2]) + (pays[2] > 0 ? ' S' : '') + '</td>' +
                 '<td>1 in ' + U.fmt(Math.round(1 / p3row)) + '</td></tr>';
       });
       html += '</table>';
+      // The Weather Dial comparison — every mode's exact par, side by side,
+      // computed live from the same code that spins the reels.
+      html += '<p class="mini"><b>All three weathers</b> (same 7 J spin, Sevens identical everywhere): ' +
+        Object.keys(D.SLOT.MODES).map(function (id) {
+          return D.SLOT.MODES[id].name + ' RTP ' + (T7.slots.enumerateRTP(0, id).ev * 100).toFixed(1) + '%';
+        }).join(' · ') +
+        '. A “—” means that run length simply isn’t a win in this weather.</p>';
+      html += '<p class="mini"><b>Sun Meter:</b> every Seven that lands fills 1 of ' +
+        D.SLOT.SUN_METER.SEGMENTS + ' segments; a full meter guarantees your next spin enters the ' +
+        'Beach Bonus, then resets. It never drains, and it fills on auto-spins too.</p>';
       html += '<p class="mini"><b>Beach Bonus:</b> 3+ Sevens anywhere (odds 1 in ' +
               U.fmt(Math.round(1 / rtp.bonusP)) + ') turn the top screen into a stop-the-counter game. ' +
               'The ladder (' + rtp.ladder.join(' → ') + ' S) steps up and down; whatever you STOP on is yours — ' +
@@ -269,6 +284,27 @@
       });
       ui.sfx('achieve');
     });
+
+    // Weather Dial (Plan II 34.1): one button per published par sheet.
+    var dial = $('mode-dial');
+    Object.keys(D.SLOT.MODES).forEach(function (id) {
+      var m = D.SLOT.MODES[id];
+      var btn = document.createElement('button');
+      btn.className = 'minibtn modebtn';
+      btn.dataset.mode = id;
+      btn.textContent = m.name;
+      btn.title = m.blurb + ' RTP ' + (T7.slots.enumerateRTP(0, id).ev * 100).toFixed(1) +
+                  '% — see the Paytable for the full sheet.';
+      btn.addEventListener('click', function () {
+        if (game.s.slotMode === id) return;
+        game.s.slotMode = id;
+        ui.syncModeDial();
+        ui.sfx('select');
+        ui.toast(m.name + ' — ' + m.blurb + ' Same value, your weather.', 'gold', 'sun');
+      });
+      dial.appendChild(btn);
+    });
+    ui.syncModeDial();
 
     // Juice-Stand orders + Squeeze Combo (Plan II Phase 33)
     T7.orders.ensure(game);
@@ -420,7 +456,7 @@
       charms: 'unique charms', sets: 'complete charm sets', buildings: 'grove plants',
       prestiges: 'Preserves made', playSec: 'seconds played',
       goldens: 'Sun-Ripened fruit cleared', ordersDone: 'Juice-Stand orders filled',
-      squeezes: 'Fresh Squeezes'
+      squeezes: 'Fresh Squeezes', pityBonuses: 'Sun Meter rescues'
     }[a.stat] || a.stat;
     return 'Reach ' + U.fmt(a.at) + ' ' + what + (a.gems ? ' · +' + a.gems + ' G' : '');
   }
@@ -517,6 +553,12 @@
     });
   };
 
+  ui.syncModeDial = function () {
+    document.querySelectorAll('#mode-dial .modebtn').forEach(function (b) {
+      b.classList.toggle('done', b.dataset.mode === game.s.slotMode);
+    });
+  };
+
   // ── Juice-Stand orders (Plan II 33.1) ─────────────────────────────────────
   ui.renderOrders = function () {
     var wrap = $('orders-list');
@@ -551,6 +593,8 @@
       ['Juice-Stand orders filled', U.fmtInt(s.ordersDone)],
       ['Fresh Squeezes', U.fmtInt(s.squeezes)],
       ['Slot spins', U.fmtInt(s.spins)],
+      ['Weather', D.SLOT.MODES[game.s.slotMode || 'classic'].name],
+      ['Sun Meter rescues', U.fmtInt(s.pityBonuses)],
       ['Beach Getaway', 'Level ' + T7.slots.resortLevel(s.spins) + ' — ' +
         D.RESORT.LEVELS[T7.slots.resortLevel(s.spins) - 1].name],
       ['Triple Sevens', U.fmtInt(s.jackpots)],
@@ -672,6 +716,10 @@
         ? 'FRESH ×' + sq.buffLeft : sq.points + '/' + D.SQUEEZE.TARGET;
       var oSig = game.s.orders.slots.map(function (o) { return o.idx + ':' + o.progress; }).join('|');
       if (oSig !== ui._orderSig) { ui._orderSig = oSig; ui.renderOrders(); }
+      // Sun Meter (Plan II 34.2)
+      var sm = game.s.sunMeter, smMax = D.SLOT.SUN_METER.SEGMENTS;
+      $('sunmeter-bar').style.width = U.clamp(sm / smMax * 100, 0, 100) + '%';
+      $('sunmeter-state').textContent = sm >= smMax ? 'BONUS NEXT!' : sm + '/' + smMax;
       $('veil-slots').classList.toggle('hidden', slotsOpen);
       $('veil-dozer').classList.toggle('hidden', dozerOpen);
       if (!slotsOpen) {

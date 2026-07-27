@@ -109,6 +109,56 @@ console.log('  VERDICT: ' + (inflationOK
   ? '✔ fully-maxed slot RTP stays under the ' + pct(RTP_CEILING) + ' ceiling.'
   : '✘ INFLATION CEILING BREACHED — maxed slot RTP exceeds ' + pct(RTP_CEILING) + '!'));
 
+// ── Volatility modes (Plan II 34.1): every weather's par sheet, proved ──────
+console.log('\n  Weather Dial (Plan II 34.1) — three par sheets, Sevens fixed at 2 stops:');
+var modesOK = true;
+var modeRows = [];
+Object.keys(D.SLOT.MODES).forEach(function (id) {
+  var mex = slots.enumerateRTP(0, id);
+  // MC hit rate (200k spins per mode — hit has no closed form across shared cells)
+  var mrng = new rngMod.Rng(777010);
+  var hits = 0, MHN = 200000;
+  for (var i = 0; i < MHN; i++) {
+    var r = slots.resolveSpin(mrng, 0, id);
+    if (r.sun > 0 || r.bonus) hits++;
+  }
+  var sevenW = 0;
+  slots.modeDef(id).reel.forEach(function (w) { if (w.id === 'seven') sevenW = w.w; });
+  var minPay = Infinity;
+  var pays = slots.modeDef(id).pays;
+  Object.keys(pays).forEach(function (sym) {
+    pays[sym].forEach(function (p) { if (p > 0 && p < minPay) minPay = p; });
+  });
+  console.log('    ' + D.SLOT.MODES[id].name.padEnd(18) + ' EV ' + mex.ev.toFixed(5) +
+    ' S/spin (RTP ' + pct(mex.ev) + ')  hit ' + pct(hits / MHN) +
+    '  min positive pay ' + minPay + ' S  seven w=' + sevenW);
+  modeRows.push({ id: id, ev: mex.ev, sevenW: sevenW, minPay: minPay });
+});
+var classicEV = modeRows.filter(function (m) { return m.id === 'classic'; })[0].ev;
+modeRows.forEach(function (m) {
+  if (Math.abs(m.ev - classicEV) > 0.03) { modesOK = false; console.log('    ✘ ' + m.id + ' EV drifts >3 RTP points from classic'); }
+  if (m.sevenW !== modeRows[0].sevenW) { modesOK = false; console.log('    ✘ ' + m.id + ' changes the seven weight — bonus math must be mode-independent'); }
+  if (m.minPay < 2) { modesOK = false; console.log('    ✘ ' + m.id + ' has a positive pay below 2 S — losses disguised as wins (§11.7)'); }
+});
+console.log('  VERDICT: ' + (modesOK
+  ? '✔ all modes within ±3 RTP points, sevens fixed, no sub-stake pays.'
+  : '✘ MODE PARITY VIOLATED — see above.'));
+
+// ── Sun Meter (Plan II 34.2): the pity floor, itemized ──────────────────────
+var p7m = 2 / 64;
+var scatPerSpin = 20 * p7m;
+var meterCadence = D.SLOT.SUN_METER.SEGMENTS / scatPerSpin;
+var forcedRate = (1 - exact.bonusP) / meterCadence;
+var meterEV = forcedRate * exact.bonusBlind;
+console.log('\n  Sun Meter (Plan II 34.2): E[sevens/spin] = ' + scatPerSpin.toFixed(3) +
+  ' → fills every ~' + meterCadence.toFixed(0) + ' spins; forced entries ' +
+  forcedRate.toFixed(5) + '/spin × blind mean ' + exact.bonusBlind.toFixed(3) +
+  ' S = +' + meterEV.toFixed(5) + ' S/spin effective (identical in every mode).');
+var meterOK = meterEV > 0 && meterEV < 0.15;
+console.log('  VERDICT: ' + (meterOK
+  ? '✔ meter EV is a bounded, published floor (+' + pct(meterEV) + ' RTP).'
+  : '✘ METER EV OUT OF BOUNDS: ' + meterEV.toFixed(4)));
+
 // Bonus drought odds (§10.3): published so players can trust the number
 // rather than guess it — a rare event should still be an honestly-stated one.
 console.log('\n  Beach Bonus drought odds (published — honesty over hype):');
@@ -317,6 +367,7 @@ console.log('    losing streaks are bounded by the free Match-3/Grove faucet (no
 console.log('  · No backward conversion exists (G→S→J impossible), so value flows one way.');
 console.log('  · Inflation sink: exponential upgrade costs (growth 1.15–2.6) and charm chests.');
 
-var allOK = slotOK && dozerOK && jPerMove > 1 && inflationOK && geomOK && ordersOK && squeezeOK;
+var allOK = slotOK && dozerOK && jPerMove > 1 && inflationOK && geomOK && ordersOK && squeezeOK &&
+            modesOK && meterOK;
 console.log('\n' + (allOK ? '  ✅ ALL PUBLISHED ECONOMY CLAIMS VERIFIED.' : '  ❌ ECONOMY CHECK FAILED — see above.'));
 process.exit(allOK ? 0 : 1);
