@@ -4,8 +4,10 @@
  * Loop (industry-standard state machine):
  *   swap → find matches → clear (expand bursts) → gravity → refill → re-detect
  * Deadlock: simulate every swap; if none matches, auto-reshuffle (Bejeweled 2 rule).
- * Refill: uniform seeded draw with a single re-roll if the spawn would instantly
- * complete a vertical run (keeps surprise cascades special, not constant).
+ * Refill: uniform seeded draw, re-rolled up to 8 times if the spawn would
+ * instantly complete a run with its already-placed neighbours. That is a bias
+ * against free matches on spawn, NOT a guarantee — the check only sees cells
+ * already filled this pass, so cascades stay possible (and stay a gift).
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
@@ -592,10 +594,15 @@
         if (this.sweepNext <= 0) { this.sweep = { t: 0 }; this.sweepNext = SWEEP_PERIOD; }
       }
     }
-    // Hint after 6 idle seconds.
+    // Hint after 6 idle seconds. WHICH legal move gets highlighted is pure
+    // decoration, so it uses Math.random rather than the seeded match-3
+    // stream — otherwise merely idling long enough to summon a hint would
+    // advance the gameplay stream and change the fruit you'd have been dealt.
+    // (autoMove() below is the opposite case: it actually plays a move, so it
+    // must and does draw from the seeded stream.)
     if (!this.busy && this.time - this.hintAt > 6 && !this.hintMove) {
       var moves = findAllMoves(this.board);
-      if (moves.length) this.hintMove = this.rng.pick(moves);
+      if (moves.length) this.hintMove = moves[Math.floor(Math.random() * moves.length)];
     }
     if (this.time - this.hintAt < 6) this.hintMove = null;
   };

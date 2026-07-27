@@ -196,7 +196,9 @@
       ui.toast('Fresh start. The grove awaits.');
     });
 
-    // Paytable dialog — the public par sheet (5×4, 9 lines, Beach Bonus).
+    // Paytable dialog — the public par sheet (5×4, D.SLOT.LINES, Beach Bonus).
+    // Every figure below is computed live from enumerateRTP()/data.js, never
+    // copied, so the dialog cannot drift from the machine it describes.
     $('btn-paytable').addEventListener('click', function () {
       var rtp = T7.slots.enumerateRTP(game.upLvl('luckysevens'));
       var mult = game.sunMult();
@@ -551,8 +553,11 @@
       var cost = game.buildingCost(b);
       var curName = D.CURRENCIES[b.cur].short;
       card.querySelector('.owned').textContent = owned > 0 ? '×' + owned : '';
+      // Per-building rate must be derived the same way groveRate() derives the
+      // total, or the card lies: this used to hardcode ×1.5^lvl against the
+      // rebalanced ×1.25^lvl the economy actually pays.
       card.querySelector('.rate').textContent =
-        U.fmt(b.rate * Math.pow(1.5, game.upLvl('fertilizer')) * game.multFor(b.earns)) + ' ' +
+        U.fmt(b.rate * game.fertMult() * game.multFor(b.earns)) + ' ' +
         D.CURRENCIES[b.earns].short + '/s each';
       card.querySelector('.cost').textContent = U.fmt(cost) + ' ' + curName;
       card.querySelector('button').disabled = !game.canAfford(b.cur, cost);

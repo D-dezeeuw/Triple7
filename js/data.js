@@ -44,9 +44,10 @@
  *
  * ── MATCH-3 ─────────────────────────────────────────────────────────────────
  *   Each cleared tile = 1 J × cascade multiplier ×(1 + 0.5·(chain−1)).
- *   Measured by simulation (random valid moves, 8×8, 6 fruits): ≈ 4–6 J per
- *   move before upgrades — i.e. a slot spin (7 J) every ~1.5 moves. Free to
+ *   Measured by simulation (random valid moves, 8×8, 6 fruits): ≈ 6.6 J per
+ *   move before upgrades — i.e. a slot spin (7 J) roughly every move. Free to
  *   play, strictly positive: this is the engine of the whole chain.
+ *   (Random-move play is the FLOOR; a human choosing cascades beats it.)
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -83,7 +84,7 @@
   // Sunshine Sevens 2.0: a 5×4 video slot. Every one of the 20 window cells is
   // an independent draw from the same 64-stop weighted distribution (the
   // spinning strips remain pure theater — outcome first, always), evaluated
-  // over 9 fixed paylines plus a scatter-triggered skill-stop bonus.
+  // over the LINES paylines below plus a scatter-triggered skill-stop bonus.
   var SLOT = {
     GRID: { COLS: 5, ROWS: 4 },
     REEL: [
@@ -161,7 +162,12 @@
     COIN_R: 21, MAX_COINS: 90, START_COINS: 42,
     PUSHER_PERIOD: 4.6,             // seconds per full back-forth cycle
     PUSHER_TRAVEL: 118,             // z amplitude of the pusher face
-    SIDE_LOSS_BASE: 0.08,           // gutter length tuned to yield ≈6–8 % side exits
+    // NB: there is no side-loss *constant* — the gutters are pure geometry
+    // (dozer.js's RAIL_END_BASE sets where the rails stop). Measured by
+    // `npm run simulate`: ≈6.6 % of exits at base geometry with no barrier
+    // perk up, falling to ≈1.3 % once the pachinko barrier perk is in play
+    // (and to ~0 % with Bumper Rails maxed). A dead SIDE_LOSS_BASE constant
+    // used to sit here claiming 8 % while nothing read it.
     SPECIAL_CHANCE_BASE: 0.06,
     SPECIALS: [
       { id: 'gemfruit',  w: 44, kind: 'gems',  gems: 7 },
@@ -267,6 +273,14 @@
   // orchard/fountain print higher-tier currency directly — bypassing the
   // whole 7:7:7 chain — so their rates are deliberately a trickle and their
   // growth steep: a pleasant drip while away, never "free drops all day".
+  //
+  // FERT_MULT is the single source of truth for Grove Fertilizer's compounding
+  // factor: state.js's fertMult() raises it to the upgrade level, the upgrade's
+  // own description is built from it below, and the Grove cards in ui.js read
+  // fertMult() rather than re-deriving it. A rebalance changes this one number
+  // and every surface follows (a stale ×1.5 copy in the UI once overstated
+  // every Grove rate the moment Fertilizer was leveled).
+  var GROVE = { FERT_MULT: 1.25 };
   var BUILDINGS = [
     { id: 'sapling',  name: 'Cherry Sapling',    cur: 'juice',   base: 15,    growth: 1.18, rate: 0.07,  earns: 'juice' },
     { id: 'lemontree',name: 'Lemon Tree',        cur: 'juice',   base: 120,   growth: 1.18, rate: 0.4,   earns: 'juice' },
@@ -288,7 +302,7 @@
     // Fertilizer rebalance: the old ×1.5 over 20 levels compounded to 3325×,
     // single-handedly detonating the Grove pacing contract above. ×1.25 over
     // 10 levels caps at ≈9.3× — still transformative, never a printing press.
-    { id: 'fertilizer',   name: 'Grove Fertilizer', desc: 'Grove production ×1.25 per level',       base: 12, growth: 2.2,  max: 10, cur: 'stargem' },
+    { id: 'fertilizer',   name: 'Grove Fertilizer', desc: 'Grove production ×' + GROVE.FERT_MULT + ' per level', base: 12, growth: 2.2,  max: 10, cur: 'stargem' },
     { id: 'battery',      name: 'Offline Battery', desc: '+4h offline cap, +10% offline rate per level', base: 25, growth: 2.4, max: 4, cur: 'stargem' },
     { id: 'autojuicer',   name: 'Auto-Juicer',    desc: 'Plays a Match-3 move automatically',       base: 77,  growth: 2.5, max: 8,  cur: 'stargem', auto: true },
     { id: 'autospinner',  name: 'Auto-Spinner',   desc: 'Spins the slots when Juice allows',        base: 111, growth: 2.5, max: 8,  cur: 'stargem', auto: true },
@@ -357,7 +371,7 @@
     MATCH3: MATCH3, SLOT: SLOT, RESORT: RESORT, DOZER: DOZER,
     CHARM_SETS: CHARM_SETS, CHARMS: CHARMS, RARITY_WEIGHT: RARITY_WEIGHT,
     CHARM_CHEST_COST_G: CHARM_CHEST_COST_G, CHARM_MAXED_DUPE_GEMS: CHARM_MAXED_DUPE_GEMS,
-    BUILDINGS: BUILDINGS, UPGRADES: UPGRADES, AUTO: AUTO, OFFLINE: OFFLINE,
+    GROVE: GROVE, BUILDINGS: BUILDINGS, UPGRADES: UPGRADES, AUTO: AUTO, OFFLINE: OFFLINE,
     PRESTIGE: PRESTIGE, ACHIEVEMENTS: ACHIEVEMENTS, ACH_GLOBAL_BONUS: ACH_GLOBAL_BONUS,
     DESTINATIONS: DESTINATIONS
   };

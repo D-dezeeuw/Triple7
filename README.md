@@ -12,8 +12,10 @@ No ads. No accounts. No purchases. Just fruit.
 ## Play
 
 - **Hosted:** enable GitHub Pages for this repo (Settings → Pages → *Deploy from
-  a branch* → your branch, root folder). No build step, no GitHub Actions —
-  `index.html` and its `js/`/`css/` files are the whole game.
+  a branch* → your branch, root folder). Nothing is compiled, bundled or
+  generated at deploy time — `index.html` and its `js/`/`css/` files *are* the
+  whole game. (The single workflow in `.github/` only runs the tests and the
+  economy proof on a PR; it never builds or publishes anything.)
 - **Local:** open `index.html` in a browser, or `npm start` for a tiny dev
   server at `http://localhost:7777`.
 
@@ -26,17 +28,24 @@ Match-3  ──earn──▶  JUICE ─7:1─▶  SLOTS  ──win──▶  SUN
 ```
 
 Every stage is **deliberately player-positive** (this is a cozy idle, so the
-house edge is inverted): the slot pays an exact, enumerable **118.4 % RTP**
-(3 reels × 64 weighted virtual stops — the same par-sheet model real slots
-use), and the dozer returns ~**131 %** per drop at steady state (conservation:
-coins in ≈ coins out, minus the side gutters, plus rare higher-value coin
-denominations). Match-3 is free to play and the grove drips Juice passively,
-so the chain can never dead-end. Exponential upgrade costs are the sink that
-keeps numbers meaningful.
+house edge is inverted): the slot is a 5×4 video machine paying an exact,
+enumerable **145.6 % RTP** — 1.45613 Suncoins per 7-Juice spin across
+**6 paylines**, every one of its 20 window cells an independent draw from 64
+weighted virtual stops, the same par-sheet model real slots use — with a
+**44.5 %** hit rate and a skill-stop Beach Bonus on 3+ scattered Sevens
+(1 in 43). The dozer returns ~**204 %** per drop at steady state (~247 % fully
+upgraded): conservation says coins in ≈ coins out, minus the side gutters
+(≈6.6 % of exits at bare geometry), plus rare higher-value denominations, the
+pachinko chute's perks and its bonus pins. Match-3 is free to play (≈6.6 Juice
+per move, so a spin roughly every move) and the grove drips Juice passively, so
+the chain can never dead-end. Exponential upgrade costs are the sink that keeps
+numbers meaningful.
 
 Don't take the numbers on faith — every odds table is written down in full in
 [`docs/fairness.md`](docs/fairness.md), and both of these commands run the
-*exact* code the browser runs, not a separate model:
+*exact* code the browser runs, not a separate model. `npm test` also asserts
+that the figures quoted in this README and in the fairness contract still match
+what the code computes, so the prose cannot quietly drift away from the game:
 
 ```
 npm run simulate   # exact slot par sheet + Monte Carlo, match-3 EV, full dozer physics sim

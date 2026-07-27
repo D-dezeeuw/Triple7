@@ -54,6 +54,20 @@ made before this change simply seeds all four streams fresh from
 `crypto.getRandomValues`, identical in spirit to how the single shared
 stream always worked.
 
+### Decoration never spends a gameplay stream
+
+A seeded stream is a queue: anything that draws from it moves every later
+outcome along. So purely cosmetic randomness — particle directions, cloud
+drift, the slot's weather, the order of symbols painted on the spinning
+strips, which of several legal moves the idle hint highlights — uses plain
+`Math.random()` and never touches the four seeded streams. The rule is that
+**only things which decide an outcome may draw from an outcome stream.**
+Otherwise merely opening the Slots tab (which builds the visual strips) or
+sitting still long enough to summon a match-3 hint would silently change the
+result you were about to get. Actions that genuinely resolve something — the
+Auto-Juicer *playing* a move, a spin, a drop, a charm draw — do of course
+draw from their proper seeded stream.
+
 ## Slots — "Sunshine Sevens" (5×4)
 
 A 5-reel, 4-row video slot with **6 fixed paylines**. Every one of the 20
@@ -196,9 +210,14 @@ the same code to measure slot rates (≈27% ×2, ≈23% double, ≈18% barrier,
 ≈32% quake with a centered aim spread).
 
 Physics then decides, honestly, which coins reach the front edge (paid) and
-which fall into a side gutter (lost — this is the "house edge",
-measured at roughly 6–8% of exits at base geometry when no barrier is up,
-lower with the Bumper Rails upgrade). Coins can also climb onto a jammed
+which fall into a side gutter (lost — this is the "house edge"). `npm run
+simulate` measures it two ways, because the two numbers answer different
+questions and it would be easy to mistake one for a contradiction:
+**≈6.6% of exits at bare gutter geometry** (the chute bypassed, so no barrier
+perk can ever seal the sides — this is the edge the table itself imposes), but
+only **≈1.3% in real play**, because the pachinko barrier perk has the gutters
+sealed for a meaningful share of drops. Bumper Rails drives the bare-geometry
+figure to nearly zero. Coins can also climb onto a jammed
 pile and ride on top — a second layer, purely mechanical. `npm run
 simulate` runs the *actual* physics — the same `js/dozer.js` the browser
 runs, pachinko included — for thousands of simulated drops and measures
@@ -210,12 +229,15 @@ computation.
 
 ## Match-3 — "Juicy Grove"
 
-Refills are uniform over the six fruits, with a **single reroll** if the
+Refills are uniform over the six fruits, **re-rolled up to 8 times** if the
 freshly spawned fruit would *immediately* complete a 3-run with its already
-placed neighbors. This is a mild bias against instant matches, not a
-guarantee against them — cascades stay possible and are meant to feel like
-a gift, per genre convention (Bejewela-likes call this "no free matches on
-spawn," not "no cascades ever"). Deadlock is handled honestly too: after
+placed neighbors. This is a bias against instant matches, not a guarantee
+against them: the check can only see cells already filled during that refill
+pass, so a spawn can still land into a match once the rest of the column
+arrives. Cascades stay possible and are meant to feel like a gift, per genre
+convention (Bejeweled-likes call this "no free matches on spawn," not "no
+cascades ever") — `npm run simulate` prints the resulting cascade-depth
+histogram if you want to see how often they actually fire. Deadlock is handled honestly too: after
 every settle, the game tests all ~112 possible swaps against the real board;
 if literally none produce a match, it reshuffles rather than trap you in an
 unplayable board.

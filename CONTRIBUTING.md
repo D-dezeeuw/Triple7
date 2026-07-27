@@ -73,6 +73,15 @@ number, rerun both before opening a PR.
    npm test                          # logic
    npm run simulate                  # economy (only if you touched data.js/economy code)
    ```
+   `.github/workflows/verify.yml` runs all three on every push and PR. It is
+   the repo's only workflow and it builds and deploys nothing — Pages still
+   serves the repository as-is, exactly as the "no build step" invariant
+   requires. If it's red, the change isn't ready.
+7. **If you change a published number, change the prose in the same commit.**
+   `npm test` reads `README.md` and `docs/fairness.md` and fails if the slot EV
+   or payline count quoted there no longer matches what the code computes.
+   That gate exists because the README once advertised a retired 118.4% RTP
+   for a 3-reel machine months after the game became a 5×4 at 145.6%.
 
 ## Style
 

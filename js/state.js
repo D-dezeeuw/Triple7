@@ -19,6 +19,19 @@
 
   function now() { return Date.now(); }
 
+  // A genuinely fresh save adopts the operating system's reduced-motion
+  // preference, so a player who already asked their OS for less animation
+  // gets it without having to discover the toggle. An existing save always
+  // wins: mergeInto() overwrites this default with whatever was stored, so
+  // an explicit in-game choice is never second-guessed by the OS setting.
+  // Guarded for Node, where defaultState() runs under tools/test.js.
+  function prefersReducedMotion() {
+    try {
+      return typeof matchMedia === 'function' &&
+             !!matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch (e) { return false; }
+  }
+
   function defaultState() {
     return {
       v: SAVE_VERSION,
@@ -43,7 +56,9 @@
       achievements: {},  // achId -> true
       seeds: 0,          // prestige currency
       settings: {
-        sfx: true, music: true, reducedMotion: false, particles: true, theme: 'day',
+        // No `music`/`theme` keys: both were dead flags no code ever read.
+        // (Old saves carrying them merge through harmlessly and are ignored.)
+        sfx: true, reducedMotion: prefersReducedMotion(), particles: true,
         // Automation reserves (Phase 18.5): Auto-Spinner/Auto-Dropper never
         // spend a currency below its reserve floor, so idle automation can
         // never eat into Juice/Suncoins a player is manually saving up.
@@ -233,8 +248,15 @@
   };
 
   // ── Grove (passive income) ────────────────────────────────────────────────
+  // Grove Fertilizer's compounding factor, from the one constant in data.js.
+  // Every surface that shows or applies a Grove rate must go through this —
+  // ui.js's Grove cards once re-derived it with a stale ×1.5 literal, which
+  // silently overstated every displayed rate the moment Fertilizer was bought.
+  Game.prototype.fertMult = function () {
+    return Math.pow(D.GROVE.FERT_MULT, this.upLvl('fertilizer'));
+  };
   Game.prototype.groveRate = function (cur) {
-    var rate = 0, fert = Math.pow(1.25, this.upLvl('fertilizer'));
+    var rate = 0, fert = this.fertMult();
     for (var i = 0; i < D.BUILDINGS.length; i++) {
       var b = D.BUILDINGS[i];
       if (b.earns !== cur) continue;
@@ -368,9 +390,13 @@
     ['juice', 'suncoin', 'stargem'].forEach(function (c) {
       var r = self.groveRate(c);   // already multiplier-adjusted
       if (r > 0) {
-        var amt = r * effSec;
-        self.s.cur[c] += amt;
-        self.s.lifetime[c] += amt;
+        // Route through gain() (raw: the rate already carries the multiplier)
+        // so offline Grove income is credited EXACTLY like the live per-frame
+        // Grove income in main.js — same lifetime totals, same juiceEarned/
+        // sunEarned/gemsEarned stats, same 'currency' event. Hand-rolling the
+        // credit here used to skip the stats, so hours of offline earnings
+        // never counted toward the lifetime-earned milestones.
+        var amt = self.gain(c, r * effSec, true);
         gains[c] = amt; any = true;
       }
     });

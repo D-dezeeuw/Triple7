@@ -215,6 +215,42 @@ var base = runDozer({}, N_DROPS, 777003, 'Base table');
 var tuned = runDozer({ railLvl: 5, pusherLvl: 5, magnetLvl: 7 }, N_DROPS, 777004,
   'Maxed rails/pusher/magnet');
 
+// Raw gutter geometry, measured with the pachinko chute bypassed entirely so
+// no barrier perk can ever seal the sides. docs/fairness.md quotes this figure
+// as the dozer's "house edge"; the runs above necessarily measure something
+// different (barriers are up for a meaningful share of drops), so without this
+// probe the published 6–8% looks like it contradicts what the simulator prints.
+function geometrySideLoss(params, drops, seed) {
+  var drng = new rngMod.Rng(seed);
+  var world = new dozer.World(drng, params);
+  var front = 0, side = 0, done = 0, tNext = 3, warmup = Math.floor(drops * 0.15);
+  var step = 1 / 60, tEnd = 3 + drops * 1.15 + 40;
+  for (var t = 0; t < tEnd; t += step) {
+    if (t >= tNext && done < drops) {
+      world.drop(D.DOZER.TABLE_W / 2 + (drng.float() - 0.5) * 200);   // no perk applied
+      tNext += 1.15; done++;
+    }
+    var evs = world.step(step);
+    for (var e = 0; e < evs.length; e++) {
+      if (done <= warmup) continue;
+      if (evs[e].type === 'front' && evs[e].coin.kind === 'coin') front++;
+      else if (evs[e].type === 'side') side++;
+    }
+  }
+  return side / Math.max(1, front + side);
+}
+var geomBase = geometrySideLoss({}, N_DROPS, 777003);
+var geomMaxed = geometrySideLoss({ railLvl: 5, pusherLvl: 5, magnetLvl: 7 }, N_DROPS, 777004);
+console.log('  Gutter geometry alone (pachinko bypassed, so no barrier perk ever seals');
+console.log('  the sides — this is the figure docs/fairness.md publishes as the edge):');
+console.log('    base geometry      side-loss = ' + pct(geomBase));
+console.log('    Bumper Rails maxed side-loss = ' + pct(geomMaxed));
+console.log('    (with perks in play the effective rate is far lower — see the runs above)\n');
+var geomOK = geomBase > 0.03 && geomBase < 0.12;
+console.log('  VERDICT: ' + (geomOK
+  ? '✔ base gutter loss sits in the published 6–8% band.'
+  : '✘ base gutter loss ' + pct(geomBase) + ' is outside the published 6–8% band — update docs/fairness.md!'));
+
 var dozerOK = base.evG > 1.0;
 console.log('  VERDICT: ' + (dozerOK
   ? '✔ steady-state E[G/drop] > 1 G stake — stage is EV-positive, and upgrades widen it.'
@@ -236,6 +272,6 @@ console.log('    losing streaks are bounded by the free Match-3/Grove faucet (no
 console.log('  · No backward conversion exists (G→S→J impossible), so value flows one way.');
 console.log('  · Inflation sink: exponential upgrade costs (growth 1.15–2.6) and charm chests.');
 
-var allOK = slotOK && dozerOK && jPerMove > 1 && inflationOK;
+var allOK = slotOK && dozerOK && jPerMove > 1 && inflationOK && geomOK;
 console.log('\n' + (allOK ? '  ✅ ALL PUBLISHED ECONOMY CLAIMS VERIFIED.' : '  ❌ ECONOMY CHECK FAILED — see above.'));
 process.exit(allOK ? 0 : 1);

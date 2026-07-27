@@ -5,6 +5,7 @@
  */
 'use strict';
 var path = require('path');
+var fs = require('fs');
 var U = require(path.join(__dirname, '..', 'js', 'util.js'));
 var rngMod = require(path.join(__dirname, '..', 'js', 'rng.js'));
 var D = require(path.join(__dirname, '..', 'js', 'data.js'));
@@ -201,6 +202,50 @@ t('prestige seeds = floor(sqrt(lifetimeG/77)) and resets the run', function () {
   eq(g.s.cur.stargem, 0);
   ok(!g.s.buildings.sapling);
   near(g.allMult(), 1.7, 1e-9, '7 seeds → ×1.7');
+});
+t('fertilizer multiplier has exactly one source of truth', function () {
+  // Regression: ui.js's Grove cards used to re-derive this as 1.5^lvl while
+  // groveRate() paid 1.25^lvl, so every displayed rate overstated the real
+  // income once Fertilizer was bought. Both now go through fertMult().
+  var g = new st.Game();
+  eq(g.fertMult(), 1, 'level 0 must be a no-op multiplier');
+  g.s.upgrades.fertilizer = 4;
+  near(g.fertMult(), Math.pow(D.GROVE.FERT_MULT, 4), 1e-12);
+  // groveRate must scale by exactly fertMult() and nothing else.
+  var g2 = new st.Game();
+  g2.s.buildings.sapling = 10;
+  var flat = g2.groveRate('juice');
+  g2.s.upgrades.fertilizer = 3;
+  near(g2.groveRate('juice'), flat * g2.fertMult(), 1e-9,
+       'groveRate must scale by exactly fertMult()');
+  // The shop description must quote the same number it applies.
+  var fert = D.UPGRADES.filter(function (u) { return u.id === 'fertilizer'; })[0];
+  ok(fert.desc.indexOf(String(D.GROVE.FERT_MULT)) >= 0,
+     'fertilizer description must quote FERT_MULT, got: ' + fert.desc);
+});
+t('offline grove income credits the same stats as live grove income', function () {
+  // Regression: applyOffline() hand-rolled its credit and skipped the
+  // juiceEarned/sunEarned/gemsEarned stats, so hours away never counted
+  // toward the lifetime-earned milestones that live play advances.
+  var g = new st.Game();
+  g.s.buildings.sapling = 20;
+  g.s.lastSeen = Date.now() - 3600 * 1000;      // an hour away
+  var beforeStat = g.s.stats.juiceEarned;
+  var beforeLife = g.s.lifetime.juice;
+  var off = g.applyOffline();
+  ok(off && off.gains.juice > 0, 'an hour with a stocked grove must pay out');
+  near(g.s.stats.juiceEarned - beforeStat, off.gains.juice, 1e-9,
+       'offline juice must advance stats.juiceEarned');
+  near(g.s.lifetime.juice - beforeLife, off.gains.juice, 1e-9,
+       'offline juice must advance lifetime juice');
+  near(g.s.cur.juice, off.gains.juice, 1e-9, 'offline juice must land in the wallet');
+});
+t('settings carry no dead flags, and reduced motion is a real boolean', function () {
+  var s = st.defaultState();
+  ok(!('music' in s.settings), 'the dead `music` flag must not return');
+  ok(!('theme' in s.settings), 'the dead `theme` flag must not return');
+  eq(typeof s.settings.reducedMotion, 'boolean',
+     'reducedMotion must be a boolean even where matchMedia is absent (Node)');
 });
 t('charm set bonus activates only on completion', function () {
   var g = new st.Game();
@@ -531,5 +576,37 @@ t('personal RTP source stats sanitize corrupted values to finite non-negative nu
   ok(isFinite(g2.s.stats.slotSunWon) && g2.s.stats.slotSunWon >= 0, 'negative slotSunWon must sanitize to >=0');
   ok(isFinite(g2.s.stats.dozerGemsWon) && g2.s.stats.dozerGemsWon >= 0, 'NaN dozerGemsWon must sanitize to a finite >=0 number');
 });
+console.log('published docs');
+// This project's whole promise is that its published numbers are true, so the
+// docs are treated as code: if the machine's math moves, the prose must move
+// with it. The README once advertised a retired 118.4% RTP for a 3-reel
+// machine long after the shipped game became a 5×4 at 145.6%.
+function doc(name) {
+  return fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
+}
+t('README and fairness.md quote the slot EV the code actually computes', function () {
+  var ev = slots.enumerateRTP(0).ev.toFixed(5);           // "1.45613"
+  var rtp = (slots.enumerateRTP(0).ev * 100).toFixed(1);  // "145.6"
+  ['README.md', 'docs/fairness.md'].forEach(function (f) {
+    var text = doc(f);
+    ok(text.indexOf(ev) >= 0, f + ' must quote the exact slot EV ' + ev);
+    ok(text.indexOf(rtp) >= 0, f + ' must quote the slot RTP ' + rtp + '%');
+  });
+});
+t('README and fairness.md agree with the code on the payline count', function () {
+  var n = String(D.SLOT.LINES.length);
+  ['README.md', 'docs/fairness.md'].forEach(function (f) {
+    var text = doc(f);
+    ok(new RegExp('\\b' + n + '\\s+(fixed\\s+)?paylines\\b').test(text),
+       f + ' must state "' + n + ' paylines" to match D.SLOT.LINES');
+  });
+});
+t('no shipped source still claims the retired 9-payline machine', function () {
+  ['js/slots.js', 'js/data.js', 'js/ui.js', 'README.md', 'docs/fairness.md'].forEach(function (f) {
+    ok(!/9\s+(fixed\s+)?(pay)?lines/i.test(doc(f)),
+       f + ' still references 9 paylines; the machine has ' + D.SLOT.LINES.length);
+  });
+});
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

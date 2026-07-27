@@ -1,5 +1,6 @@
 /* Triple7 — slots.js  ("Sunshine Sevens 2.0")
- * 5×4 video slot, 9 fixed paylines, scatter-triggered skill-stop bonus.
+ * 5×4 video slot, 6 fixed paylines (D.SLOT.LINES: 4 flat rows paying runs
+ * anywhere + V/Λ anchored at reel 1), scatter-triggered skill-stop bonus.
  * Every window cell is an independent draw from one 64-stop weighted
  * distribution — outcome is decided the instant you spin; the reels are pure
  * theater. Pure resolve + exact analytic RTP are UMD-exported for the Node
@@ -206,11 +207,18 @@
     // so what scrolls past honestly represents the distribution. Each spin
     // splices its drawn column in at the landing window (see spin()), which
     // keeps the strip converging to the same weighted mix over time.
+    // The shuffle is DECORATIVE (it only orders what scrolls past; the landed
+    // symbols are spliced in from resolveSpin), so it uses Math.random — the
+    // seeded slots stream must be spent only on actual outcomes, or simply
+    // opening the Slots tab would shift the next spin's result.
     this.strips = [];
     for (var r = 0; r < COLS; r++) {
       var strip = [];
       S.REEL.forEach(function (s) { for (var i = 0; i < s.w; i++) strip.push(s.id); });
-      rng.shuffle(strip);
+      for (var i = strip.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = strip[i]; strip[i] = strip[j]; strip[j] = tmp;
+      }
       this.strips.push(strip);
     }
     this.pos = [0, 0, 0, 0, 0];           // strip position of the window's top row
