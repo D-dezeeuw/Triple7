@@ -400,3 +400,12 @@ dialog h2 { margin-top: 0; }
 .orderprog { min-width: 4em; text-align: right; opacity: 0.85; }
 .orderpay { color: var(--sun); font-weight: 700; }
 .orderreroll { padding: 4px 10px; }
+
+/* ── Plan II Phase 34: Weather Dial & Sun Meter ─────────────────────────── */
+.modebtn { opacity: 0.78; }
+.modebtn.done {
+  background: linear-gradient(180deg, #ffe28a, var(--sun) 70%);
+  color: #7a2c00; opacity: 1; font-weight: 800;
+}
+#mode-dial { padding-top: 0; gap: 8px; }
+.sunmeterstat b { min-width: 3.4em; text-align: right; }

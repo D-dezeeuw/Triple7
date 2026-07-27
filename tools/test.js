@@ -573,6 +573,94 @@ t('resolveSpin returns a well-formed 5×4 grid of known symbols', function () {
   }
 });
 
+console.log('choose your sunshine (Plan II Phase 34)');
+t('all weather modes hold RTP parity, fixed sevens, and no sub-stake pays', function () {
+  var classic = slots.enumerateRTP(0, 'classic');
+  near(classic.ev, slots.enumerateRTP(0).ev, 1e-12, 'classic must equal the default sheet');
+  var sevenW = null;
+  Object.keys(D.SLOT.MODES).forEach(function (id) {
+    var ev = slots.enumerateRTP(0, id).ev;
+    ok(Math.abs(ev - classic.ev) <= 0.03,
+       id + ' EV ' + ev.toFixed(5) + ' drifts >3 RTP points from classic ' + classic.ev.toFixed(5));
+    var def = slots.modeDef(id);
+    var w = 0;
+    def.reel.forEach(function (r) { if (r.id === 'seven') w = r.w; });
+    if (sevenW === null) sevenW = w;
+    eq(w, sevenW, id + ' changes the seven weight — bonus math must be mode-independent');
+    var total = 0;
+    def.reel.forEach(function (r) { total += r.w; });
+    eq(total, 64, id + ' must keep 64 virtual stops');
+    Object.keys(def.pays).forEach(function (sym) {
+      def.pays[sym].forEach(function (p) {
+        ok(p === 0 || p >= 2, id + '/' + sym + ' pay ' + p + ' is positive but below the 2 S floor');
+      });
+    });
+  });
+});
+t('zero-pay runs are not wins (Storm\'s low fruit need 4+)', function () {
+  var grid = [
+    ['cherry', 'star',  'berry', 'melon'],
+    ['cherry', 'melon', 'lemon', 'star'],
+    ['cherry', 'star',  'berry', 'melon'],
+    ['star',   'melon', 'lemon', 'star'],
+    ['lemon',  'star',  'berry', 'melon']
+  ];
+  var classic = slots.evaluate(grid, 'classic');
+  eq(classic.lineWins.length, 1, 'classic pays the cherry 3-run');
+  eq(classic.sun, D.SLOT.PAYS.cherry[0]);
+  var storm = slots.evaluate(grid, 'storm');
+  eq(storm.lineWins.length, 0, 'storm must not count a zero-pay 3-run as a win');
+  eq(storm.sun, 0);
+  // …but a 4-run of cherries pays in storm.
+  grid[3][0] = 'cherry';
+  var storm4 = slots.evaluate(grid, 'storm');
+  eq(storm4.lineWins.length, 1, 'storm pays the cherry 4-run');
+  eq(storm4.sun, D.SLOT.MODES.storm.pays.cherry[1]);
+});
+t('resolveSpin without a mode is byte-identical to explicit classic', function () {
+  var a = slots.resolveSpin(new rngMod.Rng(3434), 0);
+  var b = slots.resolveSpin(new rngMod.Rng(3434), 0, 'classic');
+  eq(JSON.stringify(a), JSON.stringify(b), 'legacy call sites must be unchanged');
+});
+t('sun meter fills from decided sevens, forces a bonus at 77, and resets honestly', function () {
+  var g = new st.Game();
+  g.applySunMeter({ scatters: 2, bonus: false });
+  eq(g.s.sunMeter, 2, 'sevens fill the meter');
+  g.applySunMeter({ scatters: 0, bonus: false });
+  eq(g.s.sunMeter, 2, 'no sevens, no change');
+  // Full meter + no natural bonus → forced pity entry, meter consumed.
+  g.s.sunMeter = D.SLOT.SUN_METER.SEGMENTS;
+  var res = { scatters: 1, bonus: false };
+  g.applySunMeter(res);
+  eq(res.bonus, true, 'full meter guarantees the bonus');
+  eq(res.pity, true, 'forced entry is marked');
+  eq(g.s.stats.pityBonuses, 1);
+  eq(g.s.sunMeter, 1, 'meter consumed, then this spin\'s sevens count anew');
+  // Full meter + natural bonus → no pity, still resets (the promise was kept).
+  g.s.sunMeter = D.SLOT.SUN_METER.SEGMENTS;
+  var res2 = { scatters: 4, bonus: true };
+  g.applySunMeter(res2);
+  ok(!res2.pity, 'a natural bonus is never marked pity');
+  eq(g.s.stats.pityBonuses, 1, 'no extra pity counted');
+  eq(g.s.sunMeter, 4, 'reset then refilled by the natural trigger\'s sevens');
+});
+t('slot mode and sun meter survive saves and sanitize corruption', function () {
+  var g = new st.Game();
+  g.s.slotMode = 'storm';
+  g.s.sunMeter = 33;
+  var g2 = new st.Game();
+  g2.importSave(g.exportSave());
+  eq(g2.s.slotMode, 'storm');
+  eq(g2.s.sunMeter, 33);
+  var g3 = new st.Game();
+  g3.s.slotMode = 'hurricane';
+  g3.s.sunMeter = 9999;
+  var g4 = new st.Game();
+  g4.importSave(g3.exportSave());
+  eq(g4.s.slotMode, 'classic', 'unknown mode sanitizes to classic');
+  eq(g4.s.sunMeter, D.SLOT.SUN_METER.SEGMENTS, 'meter clamps to one legitimate fill');
+});
+
 console.log('dozer');
 t('world starts stocked and coins stay finite & in-bounds', function () {
   var rng = new rngMod.Rng(5);
@@ -769,6 +857,20 @@ t('no shipped source still claims the retired 9-payline machine', function () {
     ok(!/9\s+(fixed\s+)?(pay)?lines/i.test(doc(f)),
        f + ' still references 9 paylines; the machine has ' + D.SLOT.LINES.length);
   });
+});
+t('fairness.md quotes every weather mode\'s exact EV and the sun meter size', function () {
+  var text = doc('docs/fairness.md');
+  Object.keys(D.SLOT.MODES).forEach(function (id) {
+    var ev = slots.enumerateRTP(0, id).ev;
+    ok(text.indexOf(ev.toFixed(5)) >= 0,
+       'fairness.md must quote ' + id + '\'s exact EV ' + ev.toFixed(5));
+    ok(text.indexOf((ev * 100).toFixed(1) + '%') >= 0,
+       'fairness.md must quote ' + id + '\'s RTP ' + (ev * 100).toFixed(1) + '%');
+  });
+  ok(text.indexOf(D.SLOT.SUN_METER.SEGMENTS + ' segments') >= 0 ||
+     text.indexOf('of ' + D.SLOT.SUN_METER.SEGMENTS + '\nsegments') >= 0 ||
+     /1 of 77\s*\n?segments/.test(text),
+     'fairness.md must state the ' + D.SLOT.SUN_METER.SEGMENTS + '-segment meter');
 });
 t('fairness.md quotes the golden-fruit odds and multipliers the code actually uses', function () {
   var text = doc('docs/fairness.md');

@@ -46,6 +46,8 @@
         charms: 0, sets: 0, buildings: 0, prestiges: 0, playSec: 0,
         // Plan II Phase 33 (Grove of Decisions)
         goldens: 0, ordersDone: 0, squeezes: 0,
+        // Plan II Phase 34 (Choose Your Sunshine)
+        pityBonuses: 0,
         // Personal RTP (Phase 28.7 / §11.11): Suncoins credited specifically
         // by slot settlements, and Stargems credited specifically by dozer
         // front-exits/specials — separate from sunEarned/gemsEarned, which
@@ -98,7 +100,13 @@
       // Squeeze Combo (Plan II 33.5): meter points + armed Fresh Squeeze
       // moves remaining. No decay, no expiry — a half-full meter waits
       // forever (§II.2 meter rules).
-      squeeze: { points: 0, buffLeft: 0 }
+      squeeze: { points: 0, buffLeft: 0 },
+      // Weather Dial (Plan II 34.1): the active slot par sheet. Free switch,
+      // every mode's numbers published (D.SLOT.MODES).
+      slotMode: 'classic',
+      // Sun Meter (Plan II 34.2): sevens seen toward the guaranteed bonus.
+      // Survives prestige on purpose — variance insurance, not progress.
+      sunMeter: 0
     };
   }
 
@@ -177,9 +185,15 @@
       return o && typeof o.kind === 'string' && isFinite(o.n) && o.n > 0 &&
              isFinite(o.reward) && o.reward >= 0 && isFinite(o.progress);
     }).slice(0, D.ORDERS.SLOTS);
-    ['goldens', 'ordersDone', 'squeezes'].forEach(function (k) {
+    ['goldens', 'ordersDone', 'squeezes', 'pityBonuses'].forEach(function (k) {
       if (!isFinite(s.stats[k]) || s.stats[k] < 0) s.stats[k] = 0;
     });
+    // Weather Dial: the mode must be one the data actually defines.
+    if (typeof s.slotMode !== 'string' || !D.SLOT.MODES[s.slotMode]) s.slotMode = 'classic';
+    // Sun Meter: finite, 0..SEGMENTS (a hand-edited eternal guarantee clamps
+    // to one legitimate full meter — the design maximum).
+    if (!isFinite(s.sunMeter) || s.sunMeter < 0) s.sunMeter = 0;
+    s.sunMeter = Math.min(Math.floor(s.sunMeter), D.SLOT.SUN_METER.SEGMENTS);
     // A corrupted/hand-edited save must never crash the dozer on load — drop
     // any record missing the fields World.deserialize needs.
     if (!Array.isArray(s.dozerTable)) {
@@ -391,6 +405,28 @@
     var sq = this.s.squeeze;
     if (sq.buffLeft > 0) { sq.buffLeft--; return D.SQUEEZE.BUFF_MULT; }
     return 1;
+  };
+
+  // ── Sun Meter (Plan II Feature 34.2) ──────────────────────────────────────
+  // Honest pity: sevens from every DECIDED window fill the meter; full =
+  // the next spin's Beach Bonus is guaranteed. Called once per spin with the
+  // freshly resolved result, at stake time, before presentation begins.
+  Game.prototype.sunMeterFull = function () {
+    return this.s.sunMeter >= D.SLOT.SUN_METER.SEGMENTS;
+  };
+  Game.prototype.applySunMeter = function (res) {
+    if (this.sunMeterFull()) {
+      if (!res.bonus) {
+        res.bonus = true;
+        res.pity = true;                    // forced entry — the meter's promise
+        this.s.stats.pityBonuses++;
+      }
+      this.s.sunMeter = 0;                  // consumed by this spin's bonus
+    }
+    this.s.sunMeter = Math.min(D.SLOT.SUN_METER.SEGMENTS,
+                               this.s.sunMeter + (res.scatters || 0));
+    this.emit('sunmeter', this.s.sunMeter);
+    return res;
   };
 
   // ── Achievements ──────────────────────────────────────────────────────────

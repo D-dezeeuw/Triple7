@@ -168,7 +168,67 @@
       STEP_MS: 110,
       AUTO_CYCLES: 3,
       PEAK_GEMS: 7
-    }
+    },
+    // ── Volatility modes (Plan II Feature 34.1): the Weather Dial ────────────
+    // Three complete par sheets, switchable free at any time. The SEVEN keeps
+    // its 2 stops in every mode, so the scatter/Beach-Bonus math (and the Sun
+    // Meter below) is identical everywhere — only the fruit economy changes.
+    // A pay of 0 means that run length simply isn't a win (Storm's low fruit
+    // need 4+); every POSITIVE pay stays ≥ 2 S (never below the 1 S stake —
+    // no losses disguised as wins, §11.7). `classic` uses REEL/PAYS above.
+    // Exact EVs (slots.enumerateRTP, verified by npm run simulate):
+    //   classic 1.45613 · gentle 1.44678 · storm 1.47305 S/spin —
+    //   all within ±1 RTP point; hit rates ≈44.5% / ≈45.9% / ≈22.6%.
+    MODES: {
+      classic: { name: 'Classic Sunshine', blurb: 'The original par sheet.' },
+      gentle: {
+        name: 'Gentle Breeze', blurb: 'Same rhythm, tiny waves — wins stay small and steady.',
+        reel: [
+          { id: 'seven',  w: 2  },
+          { id: 'star',   w: 7  },
+          { id: 'berry',  w: 9  },
+          { id: 'melon',  w: 14 },
+          { id: 'lemon',  w: 15 },
+          { id: 'cherry', w: 17 }
+        ],
+        pays: {
+          cherry: [2, 2, 2],
+          lemon:  [2, 2, 2],
+          melon:  [2, 2, 3],
+          berry:  [2, 2, 4],
+          star:   [2, 3, 7],
+          seven:  [7, 21, 777]
+        }
+      },
+      storm: {
+        name: 'Storm Surf', blurb: 'Long quiet swells, then a big one — low fruit need 4+.',
+        reel: [
+          { id: 'seven',  w: 2  },
+          { id: 'star',   w: 8  },
+          { id: 'berry',  w: 10 },
+          { id: 'melon',  w: 12 },
+          { id: 'lemon',  w: 15 },
+          { id: 'cherry', w: 17 }
+        ],
+        pays: {
+          cherry: [0, 3, 21],
+          lemon:  [0, 3, 28],
+          melon:  [2, 5, 49],
+          berry:  [3, 10, 77],
+          star:   [5, 17, 245],
+          seven:  [21, 210, 2100]
+        }
+      }
+    },
+    // ── Sun Meter (Plan II Feature 34.2): honest pity ────────────────────────
+    // Every Seven landing anywhere in the decided window fills one of 77
+    // segments; a full meter guarantees the next spin enters the Beach Bonus
+    // (then resets). No decay, no expiry, survives prestige — it is variance
+    // insurance, not progress, and it fills on auto-spins too (a floor for
+    // everyone, not a skill bonus). E[sevens/spin] = 20·(2/64) = 0.625 →
+    // fills every ≈123 spins; forced entries add ≈0.108 S/spin of EV on top
+    // of the published base par (itemized by npm run simulate).
+    SUN_METER: { SEGMENTS: 77 }
     /* Exact base EV (enumerated analytically in slots.enumerateRTP, verified by
      * `npm run simulate`): lines (4 flat anywhere-rule + 2 shaped) 1.137696 S,
      * plus P(3+ scatter Sevens) 0.023371 × blind-stop ladder mean 13.625 =
@@ -389,7 +449,9 @@
     { id: 'golden7',       name: 'Sun-Kissed',      stat: 'goldens',    at: 7,      gems: 2 },
     { id: 'golden77',      name: 'Golden Harvest',  stat: 'goldens',    at: 77,     gems: 7 },
     { id: 'order7',        name: 'Regular Customer', stat: 'ordersDone', at: 7,     gems: 3 },
-    { id: 'squeeze7',      name: 'Fresh Squeezed',  stat: 'squeezes',   at: 7,      gems: 3 }
+    { id: 'squeeze7',      name: 'Fresh Squeezed',  stat: 'squeezes',   at: 7,      gems: 3 },
+    // Plan II Phase 34 — Choose Your Sunshine
+    { id: 'pity1',         name: 'Saved by the Sun', stat: 'pityBonuses', at: 1,    gems: 3 }
   ];
   var ACH_GLOBAL_BONUS = 0.01;
 
