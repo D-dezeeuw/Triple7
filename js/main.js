@@ -23,14 +23,16 @@
     match3: openStream(savedRng.match3),
     slots: openStream(savedRng.slots),
     dozer: openStream(savedRng.dozer),
-    charms: openStream(savedRng.charms)
+    charms: openStream(savedRng.charms),
+    tidepool: openStream(savedRng.tidepool)
   };
   function persistRngStreams() {
     game.s.rng = {
       match3: { seed: rngs.match3.seed, a: rngs.match3.getState() },
       slots: { seed: rngs.slots.seed, a: rngs.slots.getState() },
       dozer: { seed: rngs.dozer.seed, a: rngs.dozer.getState() },
-      charms: { seed: rngs.charms.seed, a: rngs.charms.getState() }
+      charms: { seed: rngs.charms.seed, a: rngs.charms.getState() },
+      tidepool: { seed: rngs.tidepool.seed, a: rngs.tidepool.getState() }
     };
   }
   // Every save site funnels through here so stream positions (and the dozer
@@ -107,7 +109,7 @@
       onCharm: function (award) { T7.ui.charmToast(award); }
     }, game.s.dozerTable);
 
-    T7.ui.init(game, views, rngs.charms);
+    T7.ui.init(game, views, rngs.charms, rngs);
     // Public handle for debugging, testing and modding. `rng` aliases the
     // charms stream (the one external scripts have historically drawn from
     // for awardRandomCharm); `rngs` exposes every named stream.

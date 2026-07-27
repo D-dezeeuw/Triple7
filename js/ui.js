@@ -10,7 +10,7 @@
   var RARITY_NAME = { 1: 'Common', 2: 'Uncommon', 3: 'Rare', 4: 'Legendary' };
 
   var ui = {};
-  var game, views, rng;
+  var game, views, rng, rngs;
   var hudTimer = 0, listTimer = 0;
   var groveEls = {}, shopEls = {}, achEls = {}, charmEls = {};
   // Displayed HUD values ease toward the real currency totals (Phase 20.5)
@@ -21,8 +21,8 @@
   var displayedCur = { juice: 0, suncoin: 0, stargem: 0 };
   var COUNTUP_TAU = 0.4;   // seconds to close ~99% of the gap
 
-  ui.init = function (g, v, r) {
-    game = g; views = v; rng = r;
+  ui.init = function (g, v, r, allRngs) {
+    game = g; views = v; rng = r; rngs = allRngs || {};
 
     // Tabs
     var tabBtns = Array.prototype.slice.call(document.querySelectorAll('#tabs .tab'));
@@ -35,6 +35,8 @@
       document.querySelectorAll('main .panel').forEach(function (p) { p.classList.remove('active'); });
       $('panel-' + tab).classList.add('active');
       ui.activeTab = tab;
+      // The night (Plan II 39.6): visiting the Tidepool turns the sky itself.
+      document.body.classList.toggle('night', tab === 'tidepool');
       T7.audio.unlock();
     }
     // Shop menu (Grove/Charms/Shop): a hamburger disclosure standing in for
@@ -337,6 +339,39 @@
     });
     ui.syncCurrentDial();
 
+    // The Moonlit Tidepool (Plan II Phase 39)
+    var zDial = $('zone-dial');
+    Object.keys(D.TIDEPOOL.ZONES).forEach(function (id) {
+      var zone = D.TIDEPOOL.ZONES[id];
+      var btn = document.createElement('button');
+      btn.className = 'minibtn modebtn';
+      btn.dataset.zone = id;
+      btn.textContent = zone.name;
+      btn.title = zone.blurb + ' Hosts: ' + zone.sets.map(function (s) {
+        return D.TIDEPOOL.SETS[s].name;
+      }).join(' & ') + '. Same expected Pearls as every zone.';
+      btn.addEventListener('click', function () {
+        game.s.tidepool.zone = id;
+        ui.syncZoneDial();
+        ui.sfx('select');
+      });
+      zDial.appendChild(btn);
+    });
+    ui.syncZoneDial();
+    $('btn-cast').addEventListener('click', function () {
+      var res = game.castTidepool(rngs.tidepool || rng);
+      if (!res) { ui.sfx('bad'); return; }
+      ui.sfx(res.creature.rarity >= 3 ? 'jackpot' : 'special');
+      var el = $('cast-result');
+      el.classList.remove('hidden');
+      el.innerHTML = '<b>' + (res.isNew ? 'NEW — ' : '') + res.creature.name + '</b> (' +
+        RARITY_NAME[res.creature.rarity] + ') bites in ' + D.TIDEPOOL.ZONES[res.zone].name + '! ' +
+        (res.refined ? 'Maxed soul refines into +' + res.credited + ' Pearls.'
+                     : '+' + res.credited + ' Pearls · Lv' + res.level + '.');
+      ui.renderAquarium();
+    });
+    ui.renderAquarium();
+
     // The Chain Reforged (Plan II Phase 36): resonance + hand-off toasts.
     game.on('resonance', function () {
       ui.toast('RESONANCE! The chain sings — your next ' + D.CHAIN.RESONANCE_ACTIONS +
@@ -505,7 +540,8 @@
       goldens: 'Sun-Ripened fruit cleared', ordersDone: 'Juice-Stand orders filled',
       squeezes: 'Fresh Squeezes', pityBonuses: 'Sun Meter rescues',
       storms: 'Gem Storms', pelicans: 'pelican visits',
-      resonances: 'Resonances', freeSpinsEarned: 'free spins bottled'
+      resonances: 'Resonances', freeSpinsEarned: 'free spins bottled',
+      casts: 'Tidepool casts', creaturesFound: 'aquarium souls'
     }[a.stat] || a.stat;
     return 'Reach ' + U.fmt(a.at) + ' ' + what + (a.gems ? ' · +' + a.gems + ' G' : '');
   }
@@ -630,6 +666,67 @@
       b.classList.toggle('done', b.dataset.current === game.s.harborCurrent);
     });
   };
+  ui.syncZoneDial = function () {
+    document.querySelectorAll('#zone-dial .modebtn').forEach(function (b) {
+      b.classList.toggle('done', b.dataset.zone === game.s.tidepool.zone);
+    });
+  };
+
+  // ── The Aquarium (Plan II 39.5) ───────────────────────────────────────────
+  ui.renderAquarium = function () {
+    var wrap = $('aquarium-sets');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    var found = 0;
+    Object.keys(D.TIDEPOOL.SETS).forEach(function (setId) {
+      var set = D.TIDEPOOL.SETS[setId];
+      var block = document.createElement('div');
+      block.className = 'setblock';
+      var grid = document.createElement('div');
+      grid.className = 'charmgrid';
+      var owned = 0, total = 0;
+      D.TIDEPOOL.CREATURES.forEach(function (c) {
+        if (c.set !== setId) return;
+        total++;
+        var lvl = game.s.creatures[c.id] || 0;
+        if (lvl > 0) { owned++; found++; }
+        var el = document.createElement('div');
+        el.className = 'charm r' + c.rarity + (lvl > 0 ? '' : ' unowned');
+        el.title = c.name + ' (' + RARITY_NAME[c.rarity] + ')' +
+          (lvl > 0 ? ' — Lv' + lvl : ' — still out in the dark water');
+        el.innerHTML = '<span class="glyph creatureglyph">' + (lvl > 0 ? '◉' : '·') + '</span>' +
+          '<span class="cname">' + (lvl > 0 ? c.name : '???') + '</span>' +
+          (lvl > 0 ? '<span class="lvl">Lv' + lvl + '</span>' : '');
+        grid.appendChild(el);
+      });
+      var blessName = { juice: 'Juice', suncoin: 'Suncoins', stargem: 'Stargems', all: 'everything' }[set.blesses];
+      var h = document.createElement('h3');
+      h.innerHTML = set.name + ' <small>' + owned + '/' + total +
+        (owned === total
+          ? ' · <b>MOONLIGHT BLESSING +' + Math.round(set.blessing * 100) + '% ' + blessName + ' ACTIVE</b>'
+          : ' · complete to bless the day: +' + Math.round(set.blessing * 100) + '% ' + blessName) + '</small>';
+      block.appendChild(h);
+      block.appendChild(grid);
+      wrap.appendChild(block);
+    });
+    $('aquarium-count').textContent = '— ' + found + '/' + D.TIDEPOOL.CREATURES.length +
+      ' souls · all 28 = +' + Math.round(D.TIDEPOOL.FULL_AQUARIUM_ALL * 100) + '% everything';
+    // Habitats: the night's only Pearl sink — cosmetic, terminal, forever.
+    var row = $('habitat-row');
+    row.innerHTML = '<span class="tip">Habitats (cosmetic, the only Pearl sink):</span>';
+    D.TIDEPOOL.HABITATS.forEach(function (hab) {
+      var btn = document.createElement('button');
+      btn.className = 'minibtn';
+      var ownedH = !!game.s.tidepool.habitats[hab.id];
+      btn.textContent = ownedH ? hab.name + ' ✓' : hab.name + ' — ' + hab.cost + ' P';
+      btn.disabled = ownedH || !game.canAfford('pearl', hab.cost);
+      btn.addEventListener('click', function () {
+        if (game.buyHabitat(hab.id)) { ui.sfx('buy'); ui.renderAquarium(); }
+        else ui.sfx('bad');
+      });
+      row.appendChild(btn);
+    });
+  };
 
   // ── Juice-Stand orders (Plan II 33.1) ─────────────────────────────────────
   ui.renderOrders = function () {
@@ -678,6 +775,9 @@
       ['Lifetime Suncoins', U.fmt(game.s.lifetime.suncoin)],
       ['Lifetime Stargems', U.fmt(game.s.lifetime.stargem)],
       ['Golden Seeds', U.fmtInt(game.s.seeds)],
+      ['Tidepool casts · souls · sets', U.fmtInt(s.casts) + ' · ' +
+        U.fmtInt(s.creaturesFound) + '/28 · ' + U.fmtInt(s.aquariumSets) + '/4'],
+      ['Lifetime Pearls', U.fmt(game.s.lifetime.pearl || 0)],
       ['Resonances · free spins · free drops',
         U.fmtInt(s.resonances) + ' · ' + U.fmtInt(s.freeSpinsEarned) + ' · ' + U.fmtInt(s.freeDropsEarned)],
       ['Global multiplier', '×' + game.allMult().toFixed(2)]
@@ -788,6 +888,7 @@
     $('cur-juice').textContent = U.fmtInt(displayedCur.juice);
     $('cur-suncoin').textContent = U.fmtInt(displayedCur.suncoin);
     $('cur-stargem').textContent = U.fmtInt(displayedCur.stargem);
+    $('cur-pearl').textContent = U.fmtInt(game.s.cur.pearl);
     if (hudTimer >= 0.2) {
       hudTimer = 0;
       ['juice', 'suncoin', 'stargem'].forEach(function (c) {
@@ -799,6 +900,11 @@
       var dozerOpen = game.s.lifetime.suncoin >= D.CONVERSION.DROP_COST_S;
       $('lock-slots').classList.toggle('hidden', slotsOpen);
       $('lock-dozer').classList.toggle('hidden', dozerOpen);
+      var nightOpen = game.tidepoolUnlocked();
+      $('lock-tidepool').classList.toggle('hidden', nightOpen);
+      $('veil-tidepool').classList.toggle('hidden', nightOpen);
+      $('pill-pearl').classList.toggle('hidden', !nightOpen && game.s.cur.pearl <= 0);
+      $('btn-cast').disabled = !nightOpen || !game.canAfford('stargem', D.TIDEPOOL.CAST_COST_G);
       $('btn-daily').classList.toggle('hidden', !game.dailyBonusInfo().available);
       $('stat-bestchain').textContent = '×' + game.s.stats.bestChain;
       $('stat-besttiles').textContent = U.fmtInt(game.s.stats.bestClear);

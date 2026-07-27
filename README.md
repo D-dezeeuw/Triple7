@@ -5,7 +5,10 @@ for your browser: match glass fruit to squeeze **Juice**, feed 7 Juice to a
 sunny **slot machine** to win **Suncoins**, drop 7 Suncoins into a pseudo-3D
 **coin dozer** to push **Stargems** off the edge — then spend those on
 collectible glass charms, grove buildings and upgrades that make the whole loop
-faster. Great as a 15-minute time-killer, built to run near-endlessly.
+faster. Great as a 15-minute time-killer, built to run near-endlessly. And
+after your first Preserve, the night side opens: the **Moonlit Tidepool**, a
+hands-only fishing pool where 7 Stargems casts for **Pearls** and glass
+sea-creatures whose completed sets bless the day.
 
 No ads. No accounts. No purchases. Just fruit.
 

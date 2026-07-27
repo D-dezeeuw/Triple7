@@ -1065,6 +1065,126 @@ t('serialize round-trips coin layer and pachinko boost', function () {
   eq(w2.coins[0].boost, 2, 'boost survives the save');
 });
 
+console.log('the moonlit tidepool (Plan II Phase 39)');
+t('the night roster is 28 souls in 4 sets of 7, each set the charm rarity pattern', function () {
+  eq(D.TIDEPOOL.CREATURES.length, 28);
+  Object.keys(D.TIDEPOOL.SETS).forEach(function (setId) {
+    var members = D.TIDEPOOL.CREATURES.filter(function (c) { return c.set === setId; });
+    eq(members.length, 7, setId + ' must hold exactly 7 souls');
+    var run = members.map(function (c) { return c.rarity; }).sort().join(',');
+    eq(run, '1,1,1,2,2,3,4', setId + ' must mirror the charm rarity run');
+  });
+});
+t('every zone pays the same exact E[P/cast], and it clears the 1.0 floor', function () {
+  var g = new st.Game();
+  var evs = Object.keys(D.TIDEPOOL.ZONES).map(function (zoneId) {
+    var table = g.zoneTable(zoneId);
+    eq(table.length, 14, zoneId + ' hosts two full sets');
+    var wsum = 0, ev = 0;
+    table.forEach(function (e) {
+      wsum += e.w;
+      ev += e.w * D.TIDEPOOL.PEARLS_BY_RARITY[e.c.rarity];
+    });
+    return ev / wsum;
+  });
+  evs.forEach(function (ev, i) {
+    near(ev, evs[0], 1e-12, 'zone ' + i + ' must pay exactly like every other');
+    ok(ev >= 1.0, 'E[P/cast] ' + ev.toFixed(4) + ' must clear the 1.0 stake floor');
+  });
+  near(evs[0], 55 / 35, 1e-12, 'the published 55/35 ≈ 1.571 P/cast');
+});
+t('casting: prestige-locked, costs 7 G, always bites, levels to 7, then refines', function () {
+  var g = new st.Game();
+  var rng = new rngMod.Rng(3901);
+  g.gain('stargem', 1000, true);
+  eq(g.castTidepool(rng), null, 'the night is locked before the first preserve');
+  g.s.stats.prestiges = 1;
+  g.checkAchievements();               // settle gem milestones so the balance check is clean
+  var before = g.s.cur.stargem;
+  var res = g.castTidepool(rng);
+  ok(res && res.creature, 'one soul always bites');
+  near(g.s.cur.stargem, before - D.TIDEPOOL.CAST_COST_G, 1e-9, 'cast costs 7 G');
+  eq(res.credited, D.TIDEPOOL.PEARLS_BY_RARITY[res.creature.rarity], 'pearls by rarity, RAW');
+  eq(g.s.creatures[res.creature.id], 1);
+  eq(g.s.stats.casts, 1);
+  // Max a soul and confirm the refine path.
+  g.s.creatures[res.creature.id] = 7;
+  var dupes = 0, refined = null;
+  while (dupes++ < 500 && !refined) {
+    var r2 = g.castTidepool(rng);
+    if (r2.creature.id === res.creature.id) refined = r2;
+  }
+  ok(refined, 'a maxed soul eventually re-bites');
+  eq(refined.refined, D.TIDEPOOL.MAXED_DUPE_PEARLS, 'maxed dupes refine into bonus pearls');
+  eq(g.s.creatures[res.creature.id], 7, 'level never passes 7');
+});
+t('pearls stay outside the day pipeline and never convert backward', function () {
+  var g = new st.Game();
+  g.s.seeds = 50;                      // a big day multiplier...
+  near(g.multFor('pearl'), 1, 1e-12, '...never touches pearls');
+  g.gain('pearl', 10);
+  eq(g.s.cur.pearl, 10, 'pearl gains are raw by construction');
+  // No API converts P back: spending pearls only works on habitats.
+  eq(g.buyHabitat('kelp'), false, 'cannot afford yet');
+  g.gain('pearl', 100, true);
+  ok(g.buyHabitat('kelp'), 'habitat is the only sink');
+  eq(g.buyHabitat('kelp'), false, 'and it is one-time');
+});
+t('moonlight blessings: a complete set blesses its day stage; all 28 add +7% all', function () {
+  var g = new st.Game();
+  near(g.blessingBonus('juice'), 0, 1e-12, 'no blessing before a set completes');
+  D.TIDEPOOL.CREATURES.forEach(function (c) {
+    if (c.set === 'shorewalkers') g.s.creatures[c.id] = 1;
+  });
+  near(g.blessingBonus('juice'), D.TIDEPOOL.SETS.shorewalkers.blessing, 1e-12, 'shorewalkers bless Juice');
+  near(g.blessingBonus('suncoin'), 0, 1e-12, 'other stages unblessed');
+  D.TIDEPOOL.CREATURES.forEach(function (c) { g.s.creatures[c.id] = 1; });
+  near(g.blessingBonus('all'),
+       D.TIDEPOOL.SETS.moonkin.blessing + D.TIDEPOOL.FULL_AQUARIUM_ALL, 1e-12,
+       'the full glass: moonkin +2% all plus the +7% aquarium bonus');
+  // And the multipliers actually carry it.
+  var withBless = g.juiceMult();
+  g.s.creatures = {};
+  ok(withBless > g.juiceMult(), 'blessings flow into the day multipliers');
+});
+t('tidepool state survives saves; corruption sanitizes clean', function () {
+  var g = new st.Game();
+  g.s.creatures.moonjelly = 3;
+  g.s.tidepool.zone = 'deepglass';
+  g.s.tidepool.habitats.kelp = true;
+  g.s.cur.pearl = 42;
+  var g2 = new st.Game();
+  g2.importSave(g.exportSave());
+  eq(g2.s.creatures.moonjelly, 3);
+  eq(g2.s.tidepool.zone, 'deepglass');
+  eq(g2.s.tidepool.habitats.kelp, true);
+  eq(g2.s.cur.pearl, 42);
+  var g3 = new st.Game();
+  g3.s.creatures = { kraken: 99, moonjelly: 99 };
+  g3.s.tidepool = { zone: 'the-abyss', habitats: { castle: true } };
+  g3.s.cur.pearl = -5;
+  var g4 = new st.Game();
+  g4.importSave(g3.exportSave());
+  eq(g4.s.creatures.kraken, undefined, 'unknown souls vanish');
+  eq(g4.s.creatures.moonjelly, 7, 'levels clamp to 7');
+  eq(g4.s.tidepool.zone, 'shallows', 'unknown zones sanitize home');
+  eq(g4.s.tidepool.habitats.castle, undefined, 'unknown habitats vanish');
+  eq(g4.s.cur.pearl, 0, 'negative pearls sanitize to zero');
+});
+t('a pre-pearl save migrates in with zeroed pearls and nothing else changed', function () {
+  var g = new st.Game();
+  g.gain('juice', 100, true);
+  delete g.s.cur.pearl;
+  delete g.s.lifetime.pearl;
+  delete g.s.creatures;
+  delete g.s.tidepool;
+  var g2 = new st.Game();
+  g2.importSave(g.exportSave());
+  eq(g2.s.cur.pearl, 0);
+  eq(g2.s.cur.juice, 100, 'day balances untouched');
+  ok(g2.s.tidepool && g2.s.tidepool.zone === 'shallows');
+});
+
 console.log('personal rtp');
 t('personal slot/dozer RTP withholds a ratio until the minimum sample size, then computes it', function () {
   var g = new st.Game();

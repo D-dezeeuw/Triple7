@@ -37,8 +37,8 @@
       v: SAVE_VERSION,
       created: now(),
       lastSeen: now(),
-      cur: { juice: 0, suncoin: 0, stargem: 0 },
-      lifetime: { juice: 0, suncoin: 0, stargem: 0 },
+      cur: { juice: 0, suncoin: 0, stargem: 0, pearl: 0 },
+      lifetime: { juice: 0, suncoin: 0, stargem: 0, pearl: 0 },
       stats: {
         matches: 0, bestChain: 0, bestClear: 0, juiceEarned: 0,
         spins: 0, jackpots: 0, sunEarned: 0,
@@ -52,6 +52,8 @@
         storms: 0, surges: 0, pelicans: 0,
         // Plan II Phase 36 (The Chain Reforged)
         resonances: 0, freeSpinsEarned: 0, freeDropsEarned: 0,
+        // Plan II Phase 39 (The Moonlit Tidepool)
+        casts: 0, creaturesFound: 0, aquariumSets: 0,
         // Personal RTP (Phase 28.7 / §11.11): Suncoins credited specifically
         // by slot settlements, and Stargems credited specifically by dozer
         // front-exits/specials — separate from sunEarned/gemsEarned, which
@@ -82,7 +84,7 @@
       // by main.js so match3/slots/dozer/charms draws stay independent across
       // a save/load instead of reseeding. Absent/null on old saves — main.js
       // seeds fresh streams from crypto in that case, same as v1 behavior.
-      rng: { match3: null, slots: null, dozer: null, charms: null },
+      rng: { match3: null, slots: null, dozer: null, charms: null, tidepool: null },
       // Dozer table snapshot (Phase 12.9): World.serialize() array, written by
       // main.js's persist(). Null/empty on old or fresh saves — the dozer
       // view then restocks the table fresh (original v1 behavior).
@@ -125,6 +127,10 @@
       lap: { startG: 0, startSec: 0, warmLeft: 0 },
       // The jar shelf (Plan II 38.4): one compact tuple per preserved lap.
       jars: [],
+      // The Moonlit Tidepool (Plan II 39): creatureId -> level (1..7), the
+      // chosen zone, and owned cosmetic habitats. Unlocks at first prestige.
+      creatures: {},
+      tidepool: { zone: 'shallows', habitats: {} },
       // The Sunline (Plan II 36.1): chain-wide resonance meter + armed
       // resonance actions. No decay, no expiry (§II.2 meter rules).
       sunline: { points: 0, actionsLeft: 0 },
@@ -149,7 +155,9 @@
   }
 
   function sanitize(s) {
-    ['juice', 'suncoin', 'stargem'].forEach(function (c) {
+    ['juice', 'suncoin', 'stargem', 'pearl'].forEach(function (c) {
+      if (s.cur[c] === undefined) s.cur[c] = 0;             // pre-pearl saves
+      if (s.lifetime[c] === undefined) s.lifetime[c] = 0;
       if (!isFinite(s.cur[c]) || s.cur[c] < 0) s.cur[c] = 0;
       if (!isFinite(s.lifetime[c]) || s.lifetime[c] < 0) s.lifetime[c] = 0;
     });
@@ -264,6 +272,27 @@
     s.jars = s.jars.filter(function (j) {
       return j && isFinite(j.n) && isFinite(j.lapG) && j.lapG >= 0 && isFinite(j.sec) && j.sec >= 0;
     }).slice(-D.JARS.MAX_JARS);
+    // Tidepool (Plan II 39): creature levels 0..7 over known ids only; zone
+    // and habitats must be ones the data defines.
+    if (!s.creatures || typeof s.creatures !== 'object') s.creatures = {};
+    var knownCreature = {};
+    D.TIDEPOOL.CREATURES.forEach(function (c) { knownCreature[c.id] = true; });
+    Object.keys(s.creatures).forEach(function (id) {
+      var lvl = s.creatures[id];
+      if (!knownCreature[id] || !isFinite(lvl) || lvl <= 0) delete s.creatures[id];
+      else s.creatures[id] = Math.min(Math.floor(lvl), 7);
+    });
+    if (!s.tidepool || typeof s.tidepool !== 'object') s.tidepool = { zone: 'shallows', habitats: {} };
+    if (typeof s.tidepool.zone !== 'string' || !D.TIDEPOOL.ZONES[s.tidepool.zone]) s.tidepool.zone = 'shallows';
+    if (!s.tidepool.habitats || typeof s.tidepool.habitats !== 'object') s.tidepool.habitats = {};
+    var knownHab = {};
+    D.TIDEPOOL.HABITATS.forEach(function (h) { knownHab[h.id] = true; });
+    Object.keys(s.tidepool.habitats).forEach(function (id) {
+      if (!knownHab[id]) delete s.tidepool.habitats[id];
+    });
+    ['casts', 'creaturesFound', 'aquariumSets'].forEach(function (k) {
+      if (!isFinite(s.stats[k]) || s.stats[k] < 0) s.stats[k] = 0;
+    });
     // Weather Dial: the mode must be one the data actually defines.
     if (typeof s.slotMode !== 'string' || !D.SLOT.MODES[s.slotMode]) s.slotMode = 'classic';
     // Sun Meter: finite, 0..SEGMENTS (a hand-edited eternal guarantee clamps
@@ -354,25 +383,46 @@
     return Math.min(seeds, cap) * D.PRESTIGE.SEED_BONUS +
            Math.max(0, seeds - cap) * D.PRESTIGE.SEED_BONUS_SOFT;
   };
+  // Moonlight Blessings (Plan II 39.5): each completed aquarium set blesses
+  // one DAY stage with its small published bonus; the full aquarium adds
+  // +7% to everything. The night's gift to the day, capped by construction.
+  Game.prototype.blessingBonus = function (boosts) {
+    var bonus = 0, T = D.TIDEPOOL, s = this.s;
+    var all = true;
+    for (var setId in T.SETS) {
+      var set = T.SETS[setId], done = true;
+      for (var i = 0; i < T.CREATURES.length; i++) {
+        var c = T.CREATURES[i];
+        if (c.set !== setId) continue;
+        if (!(s.creatures[c.id] > 0)) { done = false; all = false; }
+      }
+      if (done && set.blesses === boosts) bonus += set.blessing;
+    }
+    if (all && boosts === 'all') bonus += T.FULL_AQUARIUM_ALL;
+    return bonus;
+  };
   Game.prototype.allMult = function () {
-    return (1 + this.charmBonus('all')) *
+    return (1 + this.charmBonus('all') + this.blessingBonus('all')) *
            (1 + this.achCount() * D.ACH_GLOBAL_BONUS) *
            (1 + this.seedBonus());
   };
   Game.prototype.juiceMult = function () {
-    return (1 + this.charmBonus('juice')) *
+    return (1 + this.charmBonus('juice') + this.blessingBonus('juice')) *
            (1 + 0.25 * this.upLvl('juicerblades')) * this.allMult();
   };
   Game.prototype.sunMult = function () {
-    return (1 + this.charmBonus('suncoin')) *
+    return (1 + this.charmBonus('suncoin') + this.blessingBonus('suncoin')) *
            (1 + 0.05 * this.upLvl('sunreels')) * this.allMult();
   };
   Game.prototype.gemMult = function () {
-    return (1 + this.charmBonus('stargem')) * this.allMult();
+    return (1 + this.charmBonus('stargem') + this.blessingBonus('stargem')) * this.allMult();
   };
   Game.prototype.multFor = function (cur) {
     if (cur === 'juice') return this.juiceMult();
     if (cur === 'suncoin') return this.sunMult();
+    // Pearls live outside the day's multiplier pipeline entirely: the night
+    // pays its published E[P/cast] exactly, never inflated (Plan II 39.2).
+    if (cur === 'pearl') return 1;
     return this.gemMult();
   };
 
@@ -653,6 +703,69 @@
     s.lap = { startG: s.lifetime.stargem, startSec: s.stats.playSec,
               warmLeft: D.PRESTIGE.WARM_JUICE };
     this.emit('prestige', total);
+    return true;
+  };
+
+  // ── The Moonlit Tidepool (Plan II Phase 39) ───────────────────────────────
+  Game.prototype.tidepoolUnlocked = function () {
+    return this.s.stats.prestiges >= D.TIDEPOOL.UNLOCK_PRESTIGES;
+  };
+  // The zone's catch table: every creature of its two sets at rarity weight.
+  Game.prototype.zoneTable = function (zoneId) {
+    var zone = D.TIDEPOOL.ZONES[zoneId];
+    if (!zone) return [];
+    return D.TIDEPOOL.CREATURES.filter(function (c) {
+      return zone.sets.indexOf(c.set) >= 0;
+    }).map(function (c) { return { c: c, w: D.RARITY_WEIGHT[c.rarity] }; });
+  };
+  Game.prototype.completeAquariumSets = function () {
+    var n = 0, s = this.s;
+    for (var setId in D.TIDEPOOL.SETS) {
+      var done = true;
+      D.TIDEPOOL.CREATURES.forEach(function (c) {
+        if (c.set === setId && !(s.creatures[c.id] > 0)) done = false;
+      });
+      if (done) n++;
+    }
+    return n;
+  };
+  // One cast: 7 G in, one creature always bites (decided right here, at
+  // commit — the reveal is theater over a settled catch). Pearls credit RAW
+  // (multFor('pearl') is 1): the night pays its published number exactly.
+  Game.prototype.castTidepool = function (rng) {
+    if (!this.tidepoolUnlocked()) return null;
+    if (!this.spend('stargem', D.TIDEPOOL.CAST_COST_G)) return null;
+    var zoneId = this.s.tidepool.zone;
+    var picked = rng.weighted(this.zoneTable(zoneId)).c;
+    var pearls = D.TIDEPOOL.PEARLS_BY_RARITY[picked.rarity];
+    var lvl = this.s.creatures[picked.id] || 0;
+    var result = { creature: picked, zone: zoneId, pearls: pearls };
+    if (lvl >= 7) {
+      result.refined = D.TIDEPOOL.MAXED_DUPE_PEARLS;
+      pearls += D.TIDEPOOL.MAXED_DUPE_PEARLS;
+      result.level = 7;
+    } else {
+      this.s.creatures[picked.id] = lvl + 1;
+      result.level = lvl + 1;
+      result.isNew = lvl === 0;
+    }
+    result.credited = this.gain('pearl', pearls, true);
+    this.s.stats.casts++;
+    var unique = 0;
+    for (var k in this.s.creatures) if (this.s.creatures[k] > 0) unique++;
+    this.s.stats.creaturesFound = unique;
+    this.s.stats.aquariumSets = this.completeAquariumSets();
+    this.checkAchievements();
+    this.emit('cast', result);
+    return result;
+  };
+  Game.prototype.buyHabitat = function (id) {
+    var hab = null;
+    D.TIDEPOOL.HABITATS.forEach(function (h) { if (h.id === id) hab = h; });
+    if (!hab || this.s.tidepool.habitats[id]) return false;
+    if (!this.spend('pearl', hab.cost)) return false;
+    this.s.tidepool.habitats[id] = true;
+    this.emit('habitat', hab);
     return true;
   };
 
