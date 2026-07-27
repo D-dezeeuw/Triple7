@@ -48,6 +48,8 @@
         goldens: 0, ordersDone: 0, squeezes: 0,
         // Plan II Phase 34 (Choose Your Sunshine)
         pityBonuses: 0,
+        // Plan II Phase 35 (Star Harbor Mastery)
+        storms: 0, surges: 0, pelicans: 0,
         // Personal RTP (Phase 28.7 / §11.11): Suncoins credited specifically
         // by slot settlements, and Stargems credited specifically by dozer
         // front-exits/specials — separate from sunEarned/gemsEarned, which
@@ -106,7 +108,9 @@
       slotMode: 'classic',
       // Sun Meter (Plan II 34.2): sevens seen toward the guaranteed bonus.
       // Survives prestige on purpose — variance insurance, not progress.
-      sunMeter: 0
+      sunMeter: 0,
+      // Harbor Current (Plan II 35.2): the active specials-mix preset.
+      harborCurrent: 'balanced'
     };
   }
 
@@ -185,9 +189,14 @@
       return o && typeof o.kind === 'string' && isFinite(o.n) && o.n > 0 &&
              isFinite(o.reward) && o.reward >= 0 && isFinite(o.progress);
     }).slice(0, D.ORDERS.SLOTS);
-    ['goldens', 'ordersDone', 'squeezes', 'pityBonuses'].forEach(function (k) {
+    ['goldens', 'ordersDone', 'squeezes', 'pityBonuses',
+     'storms', 'surges', 'pelicans'].forEach(function (k) {
       if (!isFinite(s.stats[k]) || s.stats[k] < 0) s.stats[k] = 0;
     });
+    // Harbor Current: must be one the data defines.
+    if (typeof s.harborCurrent !== 'string' || !D.DOZER.CURRENTS[s.harborCurrent]) {
+      s.harborCurrent = 'balanced';
+    }
     // Weather Dial: the mode must be one the data actually defines.
     if (typeof s.slotMode !== 'string' || !D.SLOT.MODES[s.slotMode]) s.slotMode = 'classic';
     // Sun Meter: finite, 0..SEGMENTS (a hand-edited eternal guarantee clamps

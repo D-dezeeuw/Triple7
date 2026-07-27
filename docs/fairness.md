@@ -249,17 +249,60 @@ simulate` measures it two ways, because the two numbers answer different
 questions and it would be easy to mistake one for a contradiction:
 **≈6.6% of exits at bare gutter geometry** (the chute bypassed, so no barrier
 perk can ever seal the sides — this is the edge the table itself imposes), but
-only **≈1.3% in real play**, because the pachinko barrier perk has the gutters
-sealed for a meaningful share of drops. Bumper Rails drives the bare-geometry
-figure to nearly zero. Coins can also climb onto a jammed
-pile and ride on top — a second layer, purely mechanical. `npm run
-simulate` runs the *actual* physics — the same `js/dozer.js` the browser
-runs, pachinko included — for thousands of simulated drops and measures
-steady-state E[Stargems per drop] directly; it currently measures
-**≈204% RTP at base geometry, ≈247% fully upgraded** (the pachinko perks
-are most of the raise over the old ≈130%/166%). There is no hidden
-"decide payout, then animate a fake table" step: the table you watch is the
-computation.
+**under ≈1% in real play**, because the pachinko barrier perk *and* tide
+surges (below) have the gutters sealed for a meaningful share of drops.
+Bumper Rails drives the bare-geometry figure to nearly zero. Coins can also
+climb onto a jammed pile and ride on top — a second layer, purely mechanical.
+`npm run simulate` runs the *actual* physics — the same `js/dozer.js` the
+browser runs, pachinko included — for thousands of simulated drops and
+measures steady-state E[Stargems per drop] directly; it currently measures
+**≈234% RTP at base geometry, ≈267% fully upgraded** (pachinko perks plus
+the earned events below). There is no hidden "decide payout, then animate a
+fake table" step: the table you watch is the computation.
+
+### Earned table events (Plan II Phase 35) — counters, never clocks
+
+Three celebrations trigger from **play counters**, never from wall-clock
+time — there is nothing to log in for, nothing to miss, and they fire for
+the Auto-Dropper exactly as for your hands (celebration floors, not skill
+bonuses):
+
+- **Gem Storm** — every **77th coin** pushed off the edge rains **7 bonus
+  coins** across the table (free coins, no stake; the conservation math
+  above includes them).
+- **Tide Surge** — every **49th drop** seals the side gutters for the next
+  **7 drops**.
+- **Pelican visit** — each drop has a **1 in 77** chance a pelican delivers
+  one bonus special from your active current's pool.
+
+### Harbor Currents (Plan II Phase 35) — choose what the tide brings
+
+The specials pool is now a choice. Each current keeps the **same
+specialChance and the same coin tiers** — the core coin economy never
+moves — and reweights only *which* specials wash in. Published mix values
+(nominal per-special worths: gemfruit 7 G · charm ≈5 G · bottle ≈1 G ·
+sunpouch 3 G):
+
+| Current | gemfruit | charm | bottle | sunpouch | E[special] |
+|---|---|---|---|---|---|
+| Balanced Tide (classic) | 44% | 18% | 22% | 16% | 4.68 G |
+| Gemgrass Drift | 62% | 8% | 14% | 16% | 5.36 G |
+| Charm Waters | 26% | 40% | 18% | 16% | 4.48 G |
+| Juice Current | 30% | 12% | 42% | 16% | 3.60 G |
+
+The best-vs-worst swing is ≈0.11 G/drop at the base special chance — a
+flavor preference (collectors vs earners vs chain-feeders), never a trap;
+`npm run simulate` asserts the band. Switch free, any time.
+
+### Drop timing does not matter — measured, published
+
+We tested whether timing your drop against the pusher cycle changes your
+return (one drop per cycle at six fixed phases, multiple seeds): the
+differences were **within seed noise**. The conservation physics owes you
+the same coins whenever you drop — so drop on your own rhythm. Triple7
+will not invent a fake timing meter where the physics has none; if a future
+change makes timing real, it will arrive as a published envelope, not a
+vibe.
 
 ## Match-3 — "Juicy Grove"
 

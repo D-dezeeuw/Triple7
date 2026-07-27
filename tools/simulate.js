@@ -252,6 +252,10 @@ function runDozer(params, drops, seed, label) {
   var slotHits = {}, pachSun = 0, pinHits = 0;
   var dropInterval = 1.15, tNext = 3, done = 0, warmFront = 0, warmup = Math.floor(drops * 0.15);
   var step = 1 / 60;
+  // Earned events (Plan II 35.3), replicated exactly as the View fires them:
+  // counters, never clocks. Storm rains ride the same conservation math.
+  var E = D.DOZER.EVENTS;
+  var fallen = 0, storms = 0, surges = 0, pelicans = 0;
   // Run until we've dropped `drops` coins and let the table settle after.
   var tEnd = 3 + drops * dropInterval + 40;
   for (var t = 0; t < tEnd; t += step) {
@@ -264,6 +268,14 @@ function runDozer(params, drops, seed, label) {
       var kind = D.DOZER.PACHINKO.SLOTS[pach.slot];
       slotHits[kind] = (slotHits[kind] || 0) + 1;
       if (done >= warmup) { pachSun += pach.sun; pinHits += pach.hits.length; }
+      if ((done + 1) % E.SURGE_EVERY_DROPS === 0) {
+        world.surgeDrops = Math.max(world.surgeDrops, E.SURGE_SEAL_DROPS + 1);
+        surges++;
+      }
+      if (drng.chance(E.PELICAN_CHANCE) && world.coins.length < D.DOZER.MAX_COINS) {
+        world.spawnRandomSpecial();
+        pelicans++;
+      }
       if (kind === 'x2') world.drop(pach.exitX, 2);
       else { world.drop(pach.exitX); world.applyPerk(kind); }
       tNext += dropInterval; done++;
@@ -272,6 +284,10 @@ function runDozer(params, drops, seed, label) {
     for (var e = 0; e < evs.length; e++) {
       var ev = evs[e];
       if (ev.type === 'front') {
+        if (ev.coin.kind === 'coin') {
+          fallen++;
+          if (fallen % E.STORM_EVERY_FALLEN === 0) { world.rainCoins(E.STORM_COINS); storms++; }
+        }
         if (done <= warmup) { warmFront++; continue; }
         if (ev.coin.kind === 'coin') {
           front++;
@@ -281,6 +297,8 @@ function runDozer(params, drops, seed, label) {
       } else if (ev.type === 'side' && done > warmup) side++;
     }
   }
+  console.log('  earned events: ' + storms + ' gem storms · ' + surges + ' tide surges · ' +
+    pelicans + ' pelican visits (counters, never clocks)');
   var counted = drops - warmup;
   console.log('  pachinko slots hit: ' + Object.keys(slotHits).map(function (k) {
     return k + ' ' + pct(slotHits[k] / drops);
@@ -309,6 +327,40 @@ function runDozer(params, drops, seed, label) {
 var base = runDozer({}, N_DROPS, 777003, 'Base table');
 var tuned = runDozer({ railLvl: 5, pusherLvl: 5, magnetLvl: 7 }, N_DROPS, 777004,
   'Maxed rails/pusher/magnet');
+
+// ── Harbor Currents (Plan II 35.2): per-current specials value, published ───
+console.log('  Harbor Currents (Plan II 35.2) — specials mix per current');
+console.log('  (same specialChance & coin tiers everywhere; value uses the same');
+console.log('   nominal per-special worths as the runs above):');
+var CUR_VALUE = { gemfruit: D.DOZER.SPECIALS[0].gems, charm: 5, bottle: 1, sunpouch: 21 / 7 };
+var curEVs = [];
+Object.keys(D.DOZER.CURRENTS).forEach(function (id) {
+  var cur = D.DOZER.CURRENTS[id];
+  var wsum = 0, ev = 0;
+  Object.keys(cur.weights).forEach(function (k) { wsum += cur.weights[k]; });
+  Object.keys(cur.weights).forEach(function (k) { ev += (cur.weights[k] / wsum) * CUR_VALUE[k]; });
+  curEVs.push({ id: id, ev: ev });
+  console.log('    ' + cur.name.padEnd(16) + ' E[special] = ' + ev.toFixed(2) + ' G  (' +
+    Object.keys(cur.weights).map(function (k) { return k + ' ' + cur.weights[k] + '%'; }).join(' · ') + ')');
+});
+var curMin = Math.min.apply(null, curEVs.map(function (c) { return c.ev; }));
+var curMax = Math.max.apply(null, curEVs.map(function (c) { return c.ev; }));
+// The per-drop swing between best and worst current, at the base 6% chance:
+var curSwing = (curMax - curMin) * D.DOZER.SPECIAL_CHANCE_BASE;
+console.log('    best-vs-worst swing: ' + curSwing.toFixed(3) + ' G/drop at base specialChance — a');
+console.log('    flavor choice (collectors vs earners), never a trap: every current keeps');
+console.log('    the stage far above 1.0 G/drop.');
+var currentsOK = curSwing < 0.2 && curMin > 3;
+console.log('  VERDICT: ' + (currentsOK
+  ? '✔ current mixes stay within the published band; no dominant/trap current.'
+  : '✘ CURRENT MIX OUT OF BAND — swing ' + curSwing.toFixed(3) + ' G/drop or floor ' + curMin.toFixed(2)));
+
+// Drop-timing neutrality (Plan II 35.1, measured negative result): one drop
+// per pusher cycle at fixed phases showed E[G/drop] differences within seed
+// noise (≈1.00-1.06 across phases 0/0.2/0.4/0.5/0.6/0.8, two seeds each) —
+// the conservation physics owes you the same coins whenever you drop. The
+// published claim is therefore the OPPOSITE of a skill envelope: timing does
+// not matter, and docs/fairness.md says so.
 
 // Raw gutter geometry, measured with the pachinko chute bypassed entirely so
 // no barrier perk can ever seal the sides. docs/fairness.md quotes this figure
@@ -368,6 +420,6 @@ console.log('  · No backward conversion exists (G→S→J impossible), so value
 console.log('  · Inflation sink: exponential upgrade costs (growth 1.15–2.6) and charm chests.');
 
 var allOK = slotOK && dozerOK && jPerMove > 1 && inflationOK && geomOK && ordersOK && squeezeOK &&
-            modesOK && meterOK;
+            modesOK && meterOK && currentsOK;
 console.log('\n' + (allOK ? '  ✅ ALL PUBLISHED ECONOMY CLAIMS VERIFIED.' : '  ❌ ECONOMY CHECK FAILED — see above.'));
 process.exit(allOK ? 0 : 1);
