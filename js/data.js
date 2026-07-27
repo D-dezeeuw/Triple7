@@ -410,6 +410,14 @@
   var RARITY_WEIGHT = { 1: 8, 2: 4, 3: 2, 4: 1 };
   var CHARM_CHEST_COST_G = 77;
   var CHARM_MAXED_DUPE_GEMS = 3;
+  // The Charm Bracelet (Plan II Feature 37.1): equip up to 7 charms — an
+  // equipped charm's per-level bonus counts DOUBLE, and a bracelet holding
+  // one complete set (each set is exactly 7 charms) doubles that set's
+  // completion bonus too. Strictly additive: every owned charm keeps its
+  // full ordinary passive whether equipped or not (invariant 11), re-equip
+  // is free and instant forever (invariant 10). Which seven get the
+  // spotlight is the build.
+  var BRACELET_SLOTS = 7;
 
   // ── Grove buildings (passive income — the idle layer) ─────────────────────
   // cost(level) = base · growth^owned  (classic incremental curve)
@@ -532,6 +540,7 @@
     SLOT: SLOT, RESORT: RESORT, DOZER: DOZER,
     CHARM_SETS: CHARM_SETS, CHARMS: CHARMS, RARITY_WEIGHT: RARITY_WEIGHT,
     CHARM_CHEST_COST_G: CHARM_CHEST_COST_G, CHARM_MAXED_DUPE_GEMS: CHARM_MAXED_DUPE_GEMS,
+    BRACELET_SLOTS: BRACELET_SLOTS,
     GROVE: GROVE, BUILDINGS: BUILDINGS, UPGRADES: UPGRADES, AUTO: AUTO, OFFLINE: OFFLINE,
     PRESTIGE: PRESTIGE, ACHIEVEMENTS: ACHIEVEMENTS, ACH_GLOBAL_BONUS: ACH_GLOBAL_BONUS,
     DESTINATIONS: DESTINATIONS

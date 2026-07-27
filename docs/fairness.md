@@ -354,6 +354,26 @@ and bounds them on every run:
   over a session (measured); robots earn exactly +0% of it. That asymmetry
   is deliberate and permanent: *hands beat robots, gently.*
 
+## Builds (Plan II Phase 37) — the Charm Bracelet
+
+Up to **7 charms** go on the bracelet. An equipped charm's per-level bonus
+counts **double**, and a bracelet holding one *complete* set (each set is
+exactly seven charms) doubles that set's completion bonus too. The rules
+that keep this a choice instead of a chore:
+
+- **Strictly additive.** Every owned charm keeps its full ordinary passive
+  whether equipped or not — the bracelet only ever adds. A save migrating
+  in from before the bracelet is auto-fitted with its best seven, so nobody
+  loads in weaker than yesterday.
+- **Free forever.** Re-equipping costs nothing, has no cooldown, and never
+  will. "You picked wrong three hours ago" is not a Triple7 sentence.
+- **Bounded by construction.** The focus is exactly 2× a level-capped,
+  finite base — the worst case (a full maxed celestial bracelet) is printed
+  by `npm run simulate` for the inflation ledger.
+
+New charms auto-equip while slots are free; the build begins the moment all
+seven are contested.
+
 ## The Chain (Plan II Phase 36) — machines that talk to each other
 
 - **The Sunline.** One chain-wide 77-point meter, charged by great *hand*

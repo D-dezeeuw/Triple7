@@ -506,6 +506,15 @@
     var wrap = $('charm-sets');
     wrap.innerHTML = '';
     charmEls = {};
+    // The Charm Bracelet (Plan II 37.1): the build strip above the cabinet.
+    var br = game.s.bracelet || [];
+    var strip = document.createElement('div');
+    strip.className = 'braceletbar';
+    strip.innerHTML = '<b>Bracelet ' + br.length + '/' + D.BRACELET_SLOTS + '</b> ' +
+      '<span class="mini">— tap a charm to equip it. Equipped charms count <b>double</b>; ' +
+      'a bracelet holding one complete set doubles its set bonus too. ' +
+      'Re-equip is free, forever.</span>';
+    wrap.appendChild(strip);
     Object.keys(D.CHARM_SETS).forEach(function (setId) {
       var set = D.CHARM_SETS[setId];
       var block = document.createElement('div');
@@ -518,13 +527,22 @@
         totalInSet++;
         var lvl = game.s.charms[c.id] || 0;
         if (lvl > 0) ownedInSet++;
+        var eq = game.isEquipped(c.id);
         var el = document.createElement('div');
-        el.className = 'charm r' + c.rarity + (lvl > 0 ? '' : ' unowned');
+        el.className = 'charm r' + c.rarity + (lvl > 0 ? '' : ' unowned') + (eq ? ' equipped' : '');
         el.title = c.name + ' (' + RARITY_NAME[c.rarity] + ')' +
-          (lvl > 0 ? ' — Lv' + lvl : ' — not found yet');
+          (lvl > 0 ? ' — Lv' + lvl + (eq ? ' · EQUIPPED (counts double) — tap to unequip'
+                                        : ' — tap to equip') : ' — not found yet');
         el.innerHTML = '<span class="glyph"><img src="assets/sprites/charms/' + c.id + '.png" alt=""></span>' +
           '<span class="cname">' + (lvl > 0 ? c.name : '???') + '</span>' +
-          (lvl > 0 ? '<span class="lvl">Lv' + lvl + '</span>' : '');
+          (lvl > 0 ? '<span class="lvl">Lv' + lvl + '</span>' : '') +
+          (eq ? '<span class="eqmark">★</span>' : '');
+        if (lvl > 0) {
+          el.addEventListener('click', function () {
+            if (game.equipCharm(c.id)) { ui.sfx('select'); ui.renderCharms(); }
+            else ui.sfx('bad');   // bracelet full — unequip something first
+          });
+        }
         grid.appendChild(el);
         charmEls[c.id] = el;
       });

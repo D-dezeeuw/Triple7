@@ -59,6 +59,12 @@
         slotSunWon: 0, dozerGemsWon: 0
       },
       charms: {},        // charmId -> level (1..7)
+      // Charm Bracelet (Plan II 37.1): equipped charm ids, ≤ 7. `null` means
+      // "never initialized" — sanitize() then auto-picks the player's best
+      // seven so a migrating save is never weaker than yesterday. A player
+      // who deliberately empties the bracelet keeps [] (autofill never
+      // second-guesses a choice).
+      bracelet: null,
       upgrades: {},      // upgradeId -> level
       buildings: {},     // buildingId -> count
       achievements: {},  // achId -> true
@@ -205,6 +211,27 @@
     if (typeof s.harborCurrent !== 'string' || !D.DOZER.CURRENTS[s.harborCurrent]) {
       s.harborCurrent = 'balanced';
     }
+    // Charm Bracelet: keep only owned, unique, known charm ids (≤ 7 slots);
+    // a never-initialized bracelet (null) auto-picks the best seven owned —
+    // celestial charms boost everything, so they rank double for the pick.
+    if (Array.isArray(s.bracelet)) {
+      var seen = {};
+      s.bracelet = s.bracelet.filter(function (id) {
+        if (typeof id !== 'string' || seen[id] || !(s.charms[id] > 0)) return false;
+        for (var i = 0; i < D.CHARMS.length; i++) if (D.CHARMS[i].id === id) { seen[id] = true; return true; }
+        return false;
+      }).slice(0, D.BRACELET_SLOTS);
+    } else {
+      var ranked = [];
+      D.CHARMS.forEach(function (c) {
+        var lvl = s.charms[c.id] || 0;
+        if (lvl <= 0) return;
+        var set = D.CHARM_SETS[c.set];
+        ranked.push({ id: c.id, val: set.perLevel * lvl * (set.boosts === 'all' ? 2 : 1) });
+      });
+      ranked.sort(function (a, b) { return b.val - a.val; });
+      s.bracelet = ranked.slice(0, D.BRACELET_SLOTS).map(function (r) { return r.id; });
+    }
     // Sunline + hand-off banks: finite, non-negative, resonance clamped to
     // one legitimate arming (a hand-edited eternal resonance never ships).
     if (!s.sunline || typeof s.sunline !== 'object') s.sunline = { points: 0, actionsLeft: 0 };
@@ -240,6 +267,9 @@
 
   function Game(state) {
     this.s = state || defaultState();
+    // A genuinely fresh state never passed through sanitize(): its bracelet
+    // is still null and it owns no charms — an empty bracelet is correct.
+    if (!Array.isArray(this.s.bracelet)) this.s.bracelet = [];
     this.listeners = {};      // event -> [fn]
   }
 
@@ -254,22 +284,45 @@
   // ── Multipliers ───────────────────────────────────────────────────────────
   Game.prototype.upLvl = function (id) { return this.s.upgrades[id] || 0; };
 
+  // Bracelet check (Plan II 37.1). The bracelet may be null before the first
+  // sanitize() (a fresh Game() built directly in tests) — treat as empty.
+  Game.prototype.isEquipped = function (id) {
+    return !!this.s.bracelet && this.s.bracelet.indexOf(id) >= 0;
+  };
   Game.prototype.charmBonus = function (boosts) {
-    var bonus = 0, s = this.s, setDone;
+    var bonus = 0, s = this.s, setDone, setFocus;
     for (var setId in D.CHARM_SETS) {
       var set = D.CHARM_SETS[setId];
       if (set.boosts !== boosts) continue;
-      setDone = true;
+      setDone = true; setFocus = true;
       for (var i = 0; i < D.CHARMS.length; i++) {
         var c = D.CHARMS[i];
         if (c.set !== setId) continue;
         var lvl = s.charms[c.id] || 0;
-        if (lvl > 0) bonus += set.perLevel * lvl;
+        var eq = this.isEquipped(c.id);
+        // The bracelet's focus: an equipped charm's bonus counts double —
+        // strictly on top of the unchanged base passive (invariant 11).
+        if (lvl > 0) bonus += set.perLevel * lvl * (eq ? 2 : 1);
         else setDone = false;
+        if (!eq) setFocus = false;
       }
-      if (setDone) bonus += set.setBonus;
+      // A bracelet holding the complete set (all 7) doubles its set bonus.
+      if (setDone) bonus += set.setBonus * (setFocus ? 2 : 1);
     }
     return bonus;
+  };
+  // Free, instant equip toggle (invariant 10). Returns false only when the
+  // charm isn't owned or the bracelet is full.
+  Game.prototype.equipCharm = function (id) {
+    if (!(this.s.charms[id] > 0)) return false;
+    if (!Array.isArray(this.s.bracelet)) this.s.bracelet = [];
+    var b = this.s.bracelet;
+    var idx = b.indexOf(id);
+    if (idx >= 0) { b.splice(idx, 1); this.emit('bracelet'); return true; }
+    if (b.length >= D.BRACELET_SLOTS) return false;
+    b.push(id);
+    this.emit('bracelet');
+    return true;
   };
 
   Game.prototype.achCount = function () {
@@ -409,6 +462,13 @@
     this.s.charms[picked.id] = lvl + 1;
     this.s.stats.charms = this.uniqueCharms();
     this.s.stats.sets = this.completeSets();
+    // QoL: a new charm slips onto the bracelet automatically while there's
+    // room — the choice only starts once all seven slots are contested.
+    if (Array.isArray(this.s.bracelet) && this.s.bracelet.length < D.BRACELET_SLOTS &&
+        this.s.bracelet.indexOf(picked.id) < 0) {
+      this.s.bracelet.push(picked.id);
+      this.emit('bracelet');
+    }
     this.emit('charm', { charm: picked, level: lvl + 1 });
     return { charm: picked, level: lvl + 1 };
   };
