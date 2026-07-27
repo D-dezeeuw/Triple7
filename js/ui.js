@@ -329,6 +329,22 @@
     });
     ui.syncCurrentDial();
 
+    // The Chain Reforged (Plan II Phase 36): resonance + hand-off toasts.
+    game.on('resonance', function () {
+      ui.toast('RESONANCE! The chain sings — your next ' + D.CHAIN.RESONANCE_ACTIONS +
+               ' actions pay +' + Math.round((D.CHAIN.RESONANCE_MULT - 1) * 100) + '%.', 'gold', 'star');
+      ui.sfx('jackpot');
+    });
+    game.on('freespin', function () {
+      ui.toast('Pressed Juice ×' + D.CHAIN.PRESS_TOKENS_FOR_SPIN +
+               ' — a FREE SPIN is bottled and waiting!', 'gold', 'droplet');
+      ui.sfx('buy');
+    });
+    game.on('freedrop', function () {
+      ui.toast('Jackpot splash! A FREE DROP rolls down to the harbor.', 'gold', 'suncoin');
+      ui.sfx('buy');
+    });
+
     // Juice-Stand orders + Squeeze Combo (Plan II Phase 33)
     T7.orders.ensure(game);
     game.on('orderDone', function (o) {
@@ -480,7 +496,8 @@
       prestiges: 'Preserves made', playSec: 'seconds played',
       goldens: 'Sun-Ripened fruit cleared', ordersDone: 'Juice-Stand orders filled',
       squeezes: 'Fresh Squeezes', pityBonuses: 'Sun Meter rescues',
-      storms: 'Gem Storms', pelicans: 'pelican visits'
+      storms: 'Gem Storms', pelicans: 'pelican visits',
+      resonances: 'Resonances', freeSpinsEarned: 'free spins bottled'
     }[a.stat] || a.stat;
     return 'Reach ' + U.fmt(a.at) + ' ' + what + (a.gems ? ' · +' + a.gems + ' G' : '');
   }
@@ -635,6 +652,8 @@
       ['Lifetime Suncoins', U.fmt(game.s.lifetime.suncoin)],
       ['Lifetime Stargems', U.fmt(game.s.lifetime.stargem)],
       ['Golden Seeds', U.fmtInt(game.s.seeds)],
+      ['Resonances · free spins · free drops',
+        U.fmtInt(s.resonances) + ' · ' + U.fmtInt(s.freeSpinsEarned) + ' · ' + U.fmtInt(s.freeDropsEarned)],
       ['Global multiplier', '×' + game.allMult().toFixed(2)]
     ];
     // Personal RTP (Phase 28.7 / fairness.md): each player's own measured
@@ -767,15 +786,26 @@
       }
       // During the Beach Bonus the SPIN button becomes the STOP button —
       // same element, same click handler (views.slots.spin() routes to
-      // stopBonus while a bonus is live).
+      // stopBonus while a bonus is live). Banked free actions (36.2) show
+      // right on the buttons.
+      if (!ui._spinHTML) ui._spinHTML = $('btn-spin').innerHTML;
+      if (!ui._dropHTML) ui._dropHTML = $('btn-drop').innerHTML;
       var stopMode = !!(views.slots.bonus && views.slots.bonus.phase === 'count');
-      if (stopMode !== ui._stopMode) {
-        ui._stopMode = stopMode;
-        if (!ui._spinHTML) ui._spinHTML = $('btn-spin').innerHTML;
-        $('btn-spin').innerHTML = stopMode ? 'STOP!' : ui._spinHTML;
-      }
+      var spinHTML = stopMode ? 'STOP!' :
+        (game.s.freeSpins > 0 ? 'SPIN — FREE ×' + game.s.freeSpins : ui._spinHTML);
+      if ($('btn-spin').innerHTML !== spinHTML) $('btn-spin').innerHTML = spinHTML;
+      var dropHTML = game.s.freeDrops > 0 ? 'DROP — FREE ×' + game.s.freeDrops : ui._dropHTML;
+      if ($('btn-drop').innerHTML !== dropHTML) $('btn-drop').innerHTML = dropHTML;
       $('btn-spin').disabled = stopMode ? false : !views.slots.canSpin();
       $('btn-drop').disabled = !views.dozer.canDrop();
+      // The Sunline (36.1)
+      var sl = game.s.sunline;
+      $('sunline-bar').style.width =
+        (sl.actionsLeft > 0 ? 100 : U.clamp(sl.points / D.CHAIN.SUNLINE_TARGET * 100, 0, 100)) + '%';
+      $('sunline-state').textContent = sl.actionsLeft > 0
+        ? 'RESONANCE ×' + sl.actionsLeft
+        : 'Sunline ' + sl.points + '/' + D.CHAIN.SUNLINE_TARGET;
+      document.getElementById('sunline').classList.toggle('resonant', sl.actionsLeft > 0);
     }
     if (listTimer >= 0.5) {
       listTimer = 0;

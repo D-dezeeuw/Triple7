@@ -61,6 +61,7 @@
       if (c.special) rec.special = c.special.id;
       if (c.layer) rec.l = c.layer;
       if (c.boost > 1) rec.b = c.boost;
+      if (c.res > 1) rec.rs = c.res;
       return rec;
     });
   };
@@ -78,6 +79,7 @@
       c.vx = rec.vx || 0; c.vz = rec.vz || 0;
       c.layer = rec.l === 1 ? 1 : 0;
       if (rec.b > 1) c.boost = rec.b;
+      if (rec.rs > 1) c.res = rec.rs;
       if (rec.special) c.special = findById(C.SPECIALS, rec.special);
     });
     return w;
@@ -510,7 +512,8 @@
   };
 
   View.prototype.canDrop = function () {
-    return this.g.canAfford('suncoin', D.CONVERSION.DROP_COST_S) &&
+    return (this.g.s.freeDrops > 0 ||
+            this.g.canAfford('suncoin', D.CONVERSION.DROP_COST_S)) &&
            this.world.coins.length < C.MAX_COINS &&
            this.balls.length < 3;
   };
@@ -522,10 +525,16 @@
       if (this.hooks.sfx && !this.g.canAfford('suncoin', D.CONVERSION.DROP_COST_S)) this.hooks.sfx('bad');
       return false;
     }
-    this.g.spend('suncoin', D.CONVERSION.DROP_COST_S);
+    // Free drops (Plan II 36.2) roll before Suncoins are touched.
+    if (this.g.s.freeDrops > 0) this.g.s.freeDrops--;
+    else this.g.spend('suncoin', D.CONVERSION.DROP_COST_S);
     this.syncParams();
-    this.balls.push(new Pachinko(this.rng,
-      x === undefined ? C.PACHINKO.W / 2 + this.rng.range(-80, 80) : x));
+    var ball = new Pachinko(this.rng,
+      x === undefined ? C.PACHINKO.W / 2 + this.rng.range(-80, 80) : x);
+    // Resonance (36.1): every drop is an action; the multiplier rides the
+    // ball and lands on its coin, so the boost pays exactly this drop.
+    ball.resMult = this.g.resonanceMult();
+    this.balls.push(ball);
     this.g.s.stats.drops++;
     // Earned events (Plan II 35.3): counters, never clocks — and they fire
     // for the Auto-Dropper too (celebration floors for everyone).
@@ -565,13 +574,15 @@
   View.prototype.settleBall = function (ball) {
     this.slotFlash = { i: ball.slot, x: ball.exitX, t: 0 };
     var kind = C.PACHINKO.SLOTS[ball.slot];
+    var coin;
     if (kind === 'x2') {
-      this.world.drop(ball.exitX, 2);
+      coin = this.world.drop(ball.exitX, 2);
       this.world.events.push({ type: 'perk', kind: 'x2' });
     } else {
-      this.world.drop(ball.exitX);
+      coin = this.world.drop(ball.exitX);
       this.world.applyPerk(kind);
     }
+    if (ball.resMult > 1) coin.res = ball.resMult;   // resonance rides the coin
   };
 
   // Lifecycle safety (main.js calls this on tab-hide/close): balls still in
@@ -647,7 +658,8 @@
       if (c.kind === 'coin') {
         // Face value × the coin's own pachinko boost × an active double-pay
         // window — both perks are visible on the table before they pay.
-        var face = (c.tier ? c.tier.gems : 1) * (c.boost || 1) * (ev.doubled ? 2 : 1);
+        var face = (c.tier ? c.tier.gems : 1) * (c.boost || 1) * (ev.doubled ? 2 : 1) *
+                   (c.res || 1);
         var got = g.gain('stargem', face);
         g.s.stats.coinsFallen++;
         g.s.stats.dozerGemsWon += got;
@@ -698,6 +710,7 @@
       var Ws = this.cv.clientWidth, Hs = this.cv.clientHeight;
       this.floaters.push({ x: Ws / 2, y: Hs * 0.3, text: 'GEM STORM! +' + ev.count + ' coins', t: 0, big: true });
       this.shake = 0.35;
+      g.sunlineCharge('storm');   // the Sunline (36.1): storms sing to the chain
       if (this.hooks.sfx) this.hooks.sfx('jackpot');
     } else if (ev.type === 'surge') {
       var Wu = this.cv.clientWidth, Hu = this.cv.clientHeight;

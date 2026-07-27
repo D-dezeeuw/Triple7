@@ -470,13 +470,21 @@
     // Juice; the Auto-Juicer neither consumes nor charges the meter. Consume
     // BEFORE charging so the move that fills the meter isn't itself buffed.
     var buff = isAuto ? 1 : g.squeezeMult();
-    var credited = g.gain('juice', res.juice * buff);
+    // Resonance (36.1) is consumed by every move — once earned, autos shine
+    // too; only the CHARGING below is hand-gated.
+    var resMult = g.resonanceMult();
+    var credited = g.gain('juice', res.juice * buff * resMult);
     g.s.stats.matches++;
     if (res.goldens) g.s.stats.goldens += res.goldens;
     if (res.chain > g.s.stats.bestChain) g.s.stats.bestChain = res.chain;
     if (res.tiles > g.s.stats.bestClear) g.s.stats.bestClear = res.tiles;
     if (!isAuto) {
       g.squeezeCharge(res.chain);
+      // The Sunline (36.1): big hand cascades and goldens charge the chain.
+      if (res.chain >= 4) g.sunlineCharge('cascade4');
+      if (res.goldens) g.sunlineCharge('golden', res.goldens);
+      // Pressed Juice (36.2): a hand cascade of 5+ bottles a token.
+      if (res.chain >= D.CHAIN.PRESS_CHAIN) g.bottlePressedJuice();
       // Juice-Stand orders (Feature 33.1): hand moves only — directed play is
       // for hands, the robot just keeps the grove warm.
       if (typeof T7 !== 'undefined' && T7.orders) T7.orders.apply(g, res);

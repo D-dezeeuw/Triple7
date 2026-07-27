@@ -83,7 +83,7 @@ lands on `main`; audit code before trusting a checkbox.
 | 33 Grove of Decisions | 🟡 | 33.1 orders + 33.2 goldens + 33.5 squeeze SHIPPED (sims, tests, fairness chapter, doc-gates); 33.3 Press, 33.4 layouts, 33.6 reads/sandbox unbuilt; 33.7 gate partially (no Playwright journey/fixture corpus file) |
 | 34 Choose Your Sunshine | 🟡 | 34.1 Weather Dial (3 enumerated par sheets) + 34.2 Sun Meter SHIPPED (sims, tests, fairness tables, doc-gates); 34.3 Sungrowth, 34.4 Bonus II, 34.5 held reels, 34.6 amenities unbuilt; 34.7 gate partial |
 | 35 Star Harbor Mastery | 🟡 | 35.3 earned events (storms/surges/pelicans) + 35.2 Harbor Currents SHIPPED; 35.1 resolved as a measured NEGATIVE result (timing is physics-neutral — published in fairness.md, no fake dial built); 35.4-35.7 chute builds/geometry/runs/full gate unbuilt |
-| 36 Chain Reforged | 🔭 | Chain exists only as 7:1 checkout; zero cross-machine mechanics |
+| 36 Chain Reforged | 🟡 | 36.1 Sunline/Resonance + 36.2 hand-offs (Pressed Juice free spins, Jackpot Splash free drops) SHIPPED with sims/tests/fairness chapter; 36.3 itineraries, 36.4 Golden Hour, 36.5 hub flows, 36.6 pours, 36.7 full gate unbuilt |
 | 37 Builds & Loadouts | 🔭 | 28 charms / 12 upgrades all passively additive; no loadout, spec or branch anywhere |
 | 38 The Long Game | 🔭 | A sliver of 28.7 (personal RTP stat) shipped in Plan I; the other 9½ features of Phase 28 are unbuilt |
 | 39 Moonlit Tidepool | 🔭 | Nothing exists; Feature 30.10's RFC is unresolved — 39.1 resolves it |
@@ -409,6 +409,18 @@ simulated, and the ledger tells the truth.
 - [x] §11.8 ceiling sweep re-run (unchanged at 456%/500% — Phase 33 spends J-faucet budget, not RTP ceiling headroom; recorded here)
 - [ ] Playwright journey: unlock a layout, complete an order, birth a Press, fill the combo meter — committed as a repeatable script
 - [x] Status Ledger II updated with an audit-trail paragraph (see ledger table + the audit note below)
+
+**Phase 36 audit trail (2026-07-27, verified against code):** 36.1 shipped — the Sunline
+(77 points; hand charges: cascade4 +7, golden +3, hand bonus +7, storm +7; charging pauses during
+resonance) arming RESONANCE (+7% × 21 actions, consumed by every action incl. autos once earned;
+a resonant drop's boost rides its coin via `c.res`, table-save safe). 36.2 shipped both
+hand-offs — Pressed Juice (hand chain ≥5 bottles a token, 7 pour a banked free spin; free spins
+bypass the auto reserve floor by design and are consumed before paid) and Jackpot Splash (peak
+catch → 1 free drop; intrinsically hand-earned since the blind auto-stop lands on rung 1).
+Measured: resonance uplift ≈+0.6%, pressed juice ≈+0.1% — seasoning, simulator-bounded (≤3%/≤2%).
+Charge sources drafted as "any Beach Bonus / 7+ coin push" narrowed to hand-bonus/storm (a
+pity-forced bonus on an auto spin must not charge a hand meter). Not built: 36.3–36.7. `npm test`
+69/69, simulate verified.
 
 **Phase 35 audit trail (2026-07-27, verified against code):** 35.3 shipped whole — Gem Storm
 (7 bonus coins per 77 fallen), Tide Surge (gutters sealed 7-of-49 drops via its own seal counter),
